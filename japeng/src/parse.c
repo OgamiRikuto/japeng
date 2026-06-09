@@ -43,6 +43,19 @@ void parse(const char* dir_path)
                     yyin = file;
                     current_filename = strdup(full_path);
 
+                    extern int linecounter;
+                    extern int yylineno;
+                    void yyrestart(FILE *input_file); // Flexの内部バッファリセット関数
+                    
+                    current_filename = strdup(full_path); 
+                    
+                    // Lexerに新しいファイルを渡し、内部状態を完全に初期化する
+                    yyrestart(file);
+                    
+                    // 行番号を1にリセットする
+                    linecounter = 1;
+                    yylineno = 1;
+
                     yyparse();
 
                     fclose(file);
