@@ -1,0 +1,122 @@
+// クラス定義
+
+<cdc_program> ::= <class_def>
+
+/* ---------------------------------------------------
+   1. クラス定義 (NEWLINE でヘッダが終わり、インデントで中身を表現)
+--------------------------------------------------- */
+<class_def> ::= "class" CLASS_NAME <type_list_opt> NEWLINE <member_list> 
+              | "class" CLASS_NAME <type_list_opt> "based" <type_expr> NEWLINE <member_list>
+              | "class" CLASS_NAME <type_list_opt> "from" <class_list> NEWLINE <member_list>
+
+/* ---------------------------------------------------
+   2. クラスメンバー (フィールド or メソッド)
+--------------------------------------------------- */
+<member_list> ::= <member>
+                | <member_list> <member>
+
+<member> ::= <field_decl>
+
+/* ---------------------------------------------------
+   3. フィールド宣言 (is / are / from の使い分け)
+--------------------------------------------------- */
+<field_decl> ::= IDENTIFIER ":" <type_expr> "."
+               | IDENTIFIER ":" <type_expr> "is" <expression> "."
+               | IDENTIFIER ":" <type_expr> "are" <expression_list> "."
+               | IDENTIFIER ":" <type_expr> "from" <type_expr> "."
+
+/* ---------------------------------------------------
+   4. メソッド内のステートメント (.cdc のみ代入とリターンが許される)
+--------------------------------------------------- */
+<block> ::= "[" <statement_list> "]"
+            | "[" "arg" <arg_list> "." <statement_list> "]"
+            | "[" "ret" <type_expr> "." <statement_list> "]"
+            | "[" "arg" <arg_list> "." "ret" <type_expr> "." <statement_list> "]"
+
+<statement_list> ::= <statement>
+                   | <statement_list> <statement>
+
+<statement> ::= <variable_decl> "."
+              | <assignment_stmt> "."
+              | <return_stmt> "."
+              | <expression_stmt> "."
+
+<variable_decl> ::= IDENTIFIER ":" <type_expr>
+<assignment_stmt> ::= IDENTIFIER "is" <expression>
+                     | IDENTIFIER "are" <expression_list>
+                     | <variable_decl> "is" <expression>
+                     | <variable_decl> "are" <expression_list>
+<return_stmt> ::= "return" <expression>
+                  | "return"
+<expression_stmt> ::= <expression>
+
+
+動作記述
+<cd_program> ::= <cd_stmt_list>
+
+<cd_stmt_list> ::= <cd_stmt>
+                 | <cd_stmt_list> <cd_stmt>
+
+/* .cd で許されるのは、宣言と式（メッセージ送信）のみ */
+<cd_stmt> ::= <variable_decl>
+            | <expression_stmt>
+            | <implicit_receiver_stmt>
+
+/* 宣言 (is による初期化代入は禁止。newなどで生成したオブジェクトを紐付ける) */
+<variable_decl> ::= IDENTIFIER ":" <type_expr> <expression> "."
+
+<implicit_receiver_stmt> ::= IDENTIFIER <argument_values> "."
+
+<expression_stmt> ::= <expression> "."
+
+/* ---------------------------------------------------
+   式 (Expression)
+--------------------------------------------------- */
+<expression> ::= <message_send>
+               | <primary>
+
+/* ---------------------------------------------------
+   メッセージ送信 
+--------------------------------------------------- */
+<message_send> ::= <primary> IDENTIFIER                        /* 引数なし (例: result get_result .) */
+                 | <primary> IDENTIFIER <argument_values>      /* 引数あり (例: calc add 10 20 .) */
+                 | <primary> SP_IDENTIFIER <expression>             /* 演算子   (例: now > 0 .) */
+                 | <message_send> IDENTIFIER                  /* (例: calc add 10 . print .) */
+                 | <message_send> IDENTIFIER <argument_values>
+                 | <message_send> SP_IDENTIFIER <expression>
+                 
+/* ---------------------------------------------------
+   プリミティブ・ブロック
+--------------------------------------------------- */
+<primary> ::= IDENTIFIER
+            | INTEGER
+            | FLOAT
+            | FRACTION
+            | STRING
+            | <block>
+            | "(" <expression> ")"
+
+
+/* ---------------------------------------------------
+   リスト系の補助ルール
+--------------------------------------------------- */
+<argument_values> ::= <expression>
+                    | <argument_values> "," <expression>
+                    
+<arg_list> ::= IDENTIFIER ":" <type_expr>
+             | <arg_list> "," IDENTIFIER ":" <type_expr>
+
+<expression_list> ::= <expression>
+                    | <expression_list> "," <expression>
+
+<type_expr> ::= CLASS_NAME
+              | CLASS_NAME <type_list>
+
+<type_list_opt> ::= /* 空 */
+                  | <type_list>
+
+<type_list> ::= CLASS_NAME
+              | <type_list> "," CLASS_NAME
+
+<class_list> ::= <type_expr>
+               | <class_list> "," <type_expr>

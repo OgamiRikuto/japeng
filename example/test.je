@@ -1,0 +1,6 @@
+x: Integer make 10.
+y: Integer make 20.
+
+ans: Integer make x + y.
+
+print ans.

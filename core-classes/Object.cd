@@ -1,0 +1,12 @@
+class Object
+    name:String.
+
+    =:Functioin is [ arg another:Object.
+    ].
+
+    toString:Function is [
+        "<Object>".
+    ].
+
+    delete:Function is [].
+    

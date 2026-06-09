@@ -1,0 +1,12 @@
+プロジェクトのディレクトリ構造
+japeng/
+-include/
+--ast.h
+--literal.h
+-src/
+--ast.c
+-defs.h
+-main.c
+-parser.y
+-rex.l
+-Makefile

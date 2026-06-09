@@ -1,0 +1,417 @@
+<!DOCTYPE html
+  PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+   <head>
+      <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+      <meta name="generator" content="Railroad Diagram Generator 2.6">
+      <style type="text/css">
+    ::-moz-selection
+    {
+      color: #FFFCF0;
+      background: #0F0C00;
+    }
+    ::selection
+    {
+      color: #FFFCF0;
+      background: #0F0C00;
+    }
+    body
+    {
+      font: normal 12px Verdana, sans-serif;
+      color: #0F0C00;
+      background: #FFFCF0;
+    }
+    .ebnf a
+    {
+      text-decoration: none;
+    }
+    .ebnf a:hover
+    {
+      color: #050400;
+      text-decoration: underline;
+    }
+    .signature
+    {
+      color: #806600;
+      font-size: 11px;
+      text-align: right;
+    }
+    a:link, a:visited
+    {
+      color: #0F0C00;
+    }
+    a:link.signature, a:visited.signature
+    {
+      color: #806600;
+    }
+    div.ebnf
+    {
+      padding: 10px;
+      background: #FFF6D1;
+      width: 992px;
+    }
+    .ebnf div
+    {
+      padding-left: 13ch;
+      text-indent: -13ch;
+    }
+    .ebnf code
+    {
+      font:12px SFMono-Regular,Consolas,Liberation Mono,Menlo,Courier,monospace;
+    }
+  </style>
+   </head>
+   <body>
+      <p style="font-size: 14px; font-weight:bold"><a name="program">program:</a></p><img border="0" src="diagram/program.png" height="81" width="211" usemap="#program.map"><map name="program.map"><area shape="rect" coords="49,1,161,33" href="#statement_list" title="statement_list"><area shape="rect" coords="49,45,129,77" href="#class_def" title="class_def"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#program" title="program">program</a>&nbsp;&nbsp;::= <a href="#statement_list" title="statement_list">statement_list</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| <a href="#class_def" title="class_def">class_def</a></div></code></div>
+      </p>
+      <p>no references</p><br><p style="font-size: 14px; font-weight:bold"><a name="statement_list">statement_list:</a></p><img border="0" src="diagram/statement_list.png" height="53" width="185" usemap="#statement_list.map"><map name="statement_list.map"><area shape="rect" coords="49,17,135,49" href="#statement" title="statement"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#statement_list" title="statement_list">statement_list</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;::= <a href="#statement" title="statement">statement</a>+</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#block" title="block">block</a></li>
+            <li><a href="#program" title="program">program</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="statement">statement:</a></p><img border="0" src="diagram/statement.png" height="169" width="239" usemap="#statement.map"><map name="statement.map"><area shape="rect" coords="49,1,127,33" href="#message" title="message"><area shape="rect" coords="49,45,145,77" href="#return_stmt" title="return_stmt"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#statement" title="statement">statement</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;::= ( <a href="#message" title="message">message</a> | <a href="#return_stmt" title="return_stmt">return_stmt</a> | 'break' | 'continue' ) '.'</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#statement_list" title="statement_list">statement_list</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="class_def">class_def:</a></p><img border="0" src="diagram/class_def.png" height="53" width="331" usemap="#class_def.map"><map name="class_def.map"><area shape="rect" coords="29,17,113,49" href="#class_decl" title="class_decl"><area shape="rect" coords="209,17,281,49" href="#member" title="member"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#class_def" title="class_def">class_def</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;::= <a href="#class_decl" title="class_decl">class_decl</a> '\n' <a href="#member" title="member">member</a>+</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#program" title="program">program</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="message">message:</a></p><img border="0" src="diagram/message.png" height="85" width="345" usemap="#message.map"><map name="message.map"><area shape="rect" coords="49,49,119,81" href="#receiver" title="receiver"><area shape="rect" coords="179,17,295,49" href="#message_send" title="message_send"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#message" title="message">message</a>&nbsp;&nbsp;::= <a href="#receiver" title="receiver">receiver</a>? <a href="#message_send" title="message_send">message_send</a>+</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#expression" title="expression">expression</a></li>
+            <li><a href="#member" title="member">member</a></li>
+            <li><a href="#receiver" title="receiver">receiver</a></li>
+            <li><a href="#statement" title="statement">statement</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="class_decl">class_decl:</a></p><img border="0" src="diagram/class_decl.png" height="135" width="563" usemap="#class_decl.map"><map name="class_decl.map"><area shape="rect" coords="29,1,113,33" href="#name_def" title="name_def"><area shape="rect" coords="285,67,337,99" href="#class" title="class"><area shape="rect" coords="461,1,513,33" href="#class" title="class"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#class_decl" title="class_decl">class_decl</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;::= <a href="#name_def" title="name_def">name_def</a> ( ( 'based' | 'from' ( <a href="#class" title="class">class</a> ',' )* ) <a href="#class" title="class">class</a> )?</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#class_def" title="class_def">class_def</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="name_def">name_def:</a></p><img border="0" src="diagram/name_def.png" height="37" width="183" usemap="#name_def.map"><map name="name_def.map"><area shape="rect" coords="101,1,153,33" href="#class" title="class"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#name_def" title="name_def">name_def</a>&nbsp;::= 'class' <a href="#class" title="class">class</a></div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#class_decl" title="class_decl">class_decl</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="class">class:</a></p><img border="0" src="diagram/class.png" height="69" width="287" usemap="#class.map"><map name="class.map"><area shape="rect" coords="29,1,123,33" href="#class_name" title="class_name"><area shape="rect" coords="163,33,237,65" href="#type_list" title="type_list"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#class" title="class">class</a>&nbsp;&nbsp;&nbsp;&nbsp;::= <a href="#class_name" title="class_name">class_name</a> <a href="#type_list" title="type_list">type_list</a>?</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#class_decl" title="class_decl">class_decl</a></li>
+            <li><a href="#identifier_decl" title="identifier_decl">identifier_decl</a></li>
+            <li><a href="#name_def" title="name_def">name_def</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="class_name">class_name:</a></p><img border="0" src="diagram/class_name.png" height="203" width="243"><p>
+         <div class="ebnf"><code>
+               <div><a href="#class_name" title="class_name">class_name</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;::= [A-Z] [a-zA-Z0-9_]*</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#class" title="class">class</a></li>
+            <li><a href="#field_decl" title="field_decl">field_decl</a></li>
+            <li><a href="#receiver" title="receiver">receiver</a></li>
+            <li><a href="#type_list" title="type_list">type_list</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="type_list">type_list:</a></p><img border="0" src="diagram/type_list.png" height="81" width="193" usemap="#type_list.map"><map name="type_list.map"><area shape="rect" coords="49,45,143,77" href="#class_name" title="class_name"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#type_list" title="type_list">type_list</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;::= <a href="#class_name" title="class_name">class_name</a> ( ',' <a href="#class_name" title="class_name">class_name</a> )*</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#class" title="class">class</a></li>
+            <li><a href="#rets" title="rets">rets</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="member">member:</a></p><img border="0" src="diagram/member.png" height="81" width="339" usemap="#member.map"><map name="member.map"><area shape="rect" coords="165,1,245,33" href="#field_decl" title="field_decl"><area shape="rect" coords="165,45,243,77" href="#message" title="message"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#member" title="member">member</a>&nbsp;&nbsp;&nbsp;::= 'static'? ( <a href="#field_decl" title="field_decl">field_decl</a> | <a href="#message" title="message">message</a> ) '.'</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#class_def" title="class_def">class_def</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="field_decl">field_decl:</a></p><img border="0" src="diagram/field_decl.png" height="69" width="395" usemap="#field_decl.map"><map name="field_decl.map"><area shape="rect" coords="29,1,139,33" href="#identifier_decl" title="identifier_decl"><area shape="rect" coords="251,33,345,65" href="#class_name" title="class_name"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#field_decl" title="field_decl">field_decl</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;::= <a href="#identifier_decl" title="identifier_decl">identifier_decl</a> ( 'from' <a href="#class_name" title="class_name">class_name</a> )?</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#member" title="member">member</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="identifier_decl">identifier_decl:</a></p><img border="0" src="diagram/identifier_decl.png" height="37" width="263" usemap="#identifier_decl.map"><map name="identifier_decl.map"><area shape="rect" coords="29,1,117,33" href="#decl_name" title="decl_name"><area shape="rect" coords="181,1,233,33" href="#class" title="class"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#identifier_decl" title="identifier_decl">identifier_decl</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;::= <a href="#decl_name" title="decl_name">decl_name</a> ':' <a href="#class" title="class">class</a></div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#args" title="args">args</a></li>
+            <li><a href="#field_decl" title="field_decl">field_decl</a></li>
+            <li><a href="#receiver" title="receiver">receiver</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="decl_name">decl_name:</a></p><img border="0" src="diagram/decl_name.png" height="81" width="197" usemap="#decl_name.map"><map name="decl_name.map"><area shape="rect" coords="49,1,125,33" href="#identifier" title="identifier"><area shape="rect" coords="49,45,147,77" href="#sp_identifier" title="sp_identifier"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#decl_name" title="decl_name">decl_name</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;::= <a href="#identifier" title="identifier">identifier</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| <a href="#sp_identifier" title="sp_identifier">sp_identifier</a></div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#identifier_decl" title="identifier_decl">identifier_decl</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="identifier">identifier:</a></p><img border="0" src="diagram/identifier.png" height="247" width="281"><p>
+         <div class="ebnf"><code>
+               <div><a href="#identifier" title="identifier">identifier</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;::= [a-z_] [a-zA-Z0-9_]*</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#decl_name" title="decl_name">decl_name</a></li>
+            <li><a href="#message_send" title="message_send">message_send</a></li>
+            <li><a href="#primary" title="primary">primary</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="expression">expression:</a></p><img border="0" src="diagram/expression.png" height="81" width="177" usemap="#expression.map"><map name="expression.map"><area shape="rect" coords="49,1,117,33" href="#primary" title="primary"><area shape="rect" coords="49,45,127,77" href="#message" title="message"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#expression" title="expression">expression</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;::= <a href="#primary" title="primary">primary</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| <a href="#message" title="message">message</a></div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#expression_list" title="expression_list">expression_list</a></li>
+            <li><a href="#message_send" title="message_send">message_send</a></li>
+            <li><a href="#primary" title="primary">primary</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="primary">primary:</a></p><img border="0" src="diagram/primary.png" height="389" width="281" usemap="#primary.map"><map name="primary.map"><area shape="rect" coords="49,1,125,33" href="#identifier" title="identifier"><area shape="rect" coords="49,45,113,77" href="#integer" title="integer"><area shape="rect" coords="49,89,97,121" href="#float" title="float"><area shape="rect" coords="49,133,117,165" href="#fraction" title="fraction"><area shape="rect" coords="49,177,109,209" href="#binary" title="binary"><area shape="rect" coords="49,221,149,253" href="#hexadecimal" title="hexadecimal"><area shape="rect" coords="49,265,105,297" href="#string" title="string"><area shape="rect" coords="49,309,101,341" href="#block" title="block"><area shape="rect" coords="95,353,185,385" href="#expression" title="expression"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#primary" title="primary">primary</a>&nbsp;&nbsp;::= <a href="#identifier" title="identifier">identifier</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| <a href="#integer" title="integer">integer</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| <a href="#float" title="float">float</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| <a href="#fraction" title="fraction">fraction</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| <a href="#binary" title="binary">binary</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| <a href="#hexadecimal" title="hexadecimal">hexadecimal</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| <a href="#string" title="string">string</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| <a href="#block" title="block">block</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| '(' <a href="#expression" title="expression">expression</a> ')'</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#expression" title="expression">expression</a></li>
+            <li><a href="#receiver" title="receiver">receiver</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="integer">integer:</a></p><img border="0" src="diagram/integer.png" height="53" width="161"><p>
+         <div class="ebnf"><code>
+               <div><a href="#integer" title="integer">integer</a>&nbsp;&nbsp;::= [0-9]+</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#primary" title="primary">primary</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="float">float:</a></p><img border="0" src="diagram/float.png" height="71" width="327"><p>
+         <div class="ebnf"><code>
+               <div><a href="#float" title="float">float</a>&nbsp;&nbsp;&nbsp;&nbsp;::= [0-9]* '.' [0-9]+</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#primary" title="primary">primary</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="fraction">fraction:</a></p><img border="0" src="diagram/fraction.png" height="71" width="331"><p>
+         <div class="ebnf"><code>
+               <div><a href="#fraction" title="fraction">fraction</a>&nbsp;::= [0-9]* '/' [0-9]+</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#primary" title="primary">primary</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="binary">binary:</a></p><img border="0" src="diagram/binary.png" height="97" width="223"><p>
+         <div class="ebnf"><code>
+               <div><a href="#binary" title="binary">binary</a>&nbsp;&nbsp;&nbsp;::= '0b' [0-1]+</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#primary" title="primary">primary</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="hexadecimal">hexadecimal:</a></p><img border="0" src="diagram/hexadecimal.png" height="141" width="257"><p>
+         <div class="ebnf"><code>
+               <div><a href="#hexadecimal" title="hexadecimal">hexadecimal</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;::= '0x' [0-9a-fA-F]+</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#primary" title="primary">primary</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="string">string:</a></p><img border="0" src="diagram/string.png" height="71" width="263"><p>
+         <div class="ebnf"><code>
+               <div><a href="#string" title="string">string</a>&nbsp;&nbsp;&nbsp;::= '"' [^'"\n]* '"'</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#primary" title="primary">primary</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="block">block:</a></p><img border="0" src="diagram/block.png" height="145" width="603" usemap="#block.map"><map name="block.map"><area shape="rect" coords="115,33,159,65" href="#rets" title="rets"><area shape="rect" coords="115,77,163,109" href="#args" title="args"><area shape="rect" coords="247,109,291,141" href="#rets" title="rets"><area shape="rect" coords="415,1,527,33" href="#statement_list" title="statement_list"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#block" title="block">block</a>&nbsp;&nbsp;&nbsp;&nbsp;::= '[' ( ( <a href="#rets" title="rets">rets</a> | <a href="#args" title="args">args</a> ( '.' <a href="#rets" title="rets">rets</a> )? ) '.' )? <a href="#statement_list" title="statement_list">statement_list</a> ']'</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#primary" title="primary">primary</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="args">args:</a></p><img border="0" src="diagram/args.png" height="81" width="271" usemap="#args.map"><map name="args.map"><area shape="rect" coords="111,45,221,77" href="#identifier_decl" title="identifier_decl"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#args" title="args">args</a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;::= 'arg' <a href="#identifier_decl" title="identifier_decl">identifier_decl</a> ( ',' <a href="#identifier_decl" title="identifier_decl">identifier_decl</a> )*</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#block" title="block">block</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="rets">rets:</a></p><img border="0" src="diagram/rets.png" height="37" width="191" usemap="#rets.map"><map name="rets.map"><area shape="rect" coords="87,1,161,33" href="#type_list" title="type_list"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#rets" title="rets">rets</a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;::= 'ret' <a href="#type_list" title="type_list">type_list</a></div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#block" title="block">block</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="receiver">receiver:</a></p><img border="0" src="diagram/receiver.png" height="213" width="269" usemap="#receiver.map"><map name="receiver.map"><area shape="rect" coords="49,1,117,33" href="#primary" title="primary"><area shape="rect" coords="95,45,173,77" href="#message" title="message"><area shape="rect" coords="49,89,159,121" href="#identifier_decl" title="identifier_decl"><area shape="rect" coords="49,133,143,165" href="#class_name" title="class_name"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#receiver" title="receiver">receiver</a>&nbsp;::= <a href="#primary" title="primary">primary</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| '(' <a href="#message" title="message">message</a> ')'</div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| <a href="#identifier_decl" title="identifier_decl">identifier_decl</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| <a href="#class_name" title="class_name">class_name</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| 'self'</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#message" title="message">message</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="message_send">message_send:</a></p><img border="0" src="diagram/message_send.png" height="157" width="373" usemap="#message_send.map"><map name="message_send.map"><area shape="rect" coords="49,1,125,33" href="#identifier" title="identifier"><area shape="rect" coords="165,33,281,65" href="#expression_list" title="expression_list"><area shape="rect" coords="49,77,147,109" href="#sp_identifier" title="sp_identifier"><area shape="rect" coords="187,77,277,109" href="#expression" title="expression"><area shape="rect" coords="187,121,303,153" href="#expression_list" title="expression_list"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#message_send" title="message_send">message_send</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;::= <a href="#identifier" title="identifier">identifier</a> <a href="#expression_list" title="expression_list">expression_list</a>?</div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| <a href="#sp_identifier" title="sp_identifier">sp_identifier</a> ( <a href="#expression" title="expression">expression</a> | <a href="#expression_list" title="expression_list">expression_list</a> )</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#message" title="message">message</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="expression_list">expression_list:</a></p><img border="0" src="diagram/expression_list.png" height="81" width="189" usemap="#expression_list.map"><map name="expression_list.map"><area shape="rect" coords="49,45,139,77" href="#expression" title="expression"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#expression_list" title="expression_list">expression_list</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;::= <a href="#expression" title="expression">expression</a> ( ',' <a href="#expression" title="expression">expression</a> )*</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#message_send" title="message_send">message_send</a></li>
+            <li><a href="#return_stmt" title="return_stmt">return_stmt</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="sp_identifier">sp_identifier:</a></p><img border="0" src="diagram/sp_identifier.png" height="653" width="141"><p>
+         <div class="ebnf"><code>
+               <div><a href="#sp_identifier" title="sp_identifier">sp_identifier</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;::= '+'</div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| '-'</div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| '*'</div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| '/'</div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| '%'</div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| '='</div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| '!='</div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| '&gt;'</div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| '&lt;'</div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| '&gt;='</div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| '&lt;='</div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| 'is'</div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| 'are'</div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| '&lt;&lt;'</div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| '&gt;&gt;'</div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#decl_name" title="decl_name">decl_name</a></li>
+            <li><a href="#message_send" title="message_send">message_send</a></li>
+         </ul>
+      </p><br><p style="font-size: 14px; font-weight:bold"><a name="return_stmt">return_stmt:</a></p><img border="0" src="diagram/return_stmt.png" height="37" width="257" usemap="#return_stmt.map"><map name="return_stmt.map"><area shape="rect" coords="111,1,227,33" href="#expression_list" title="expression_list"></map><p>
+         <div class="ebnf"><code>
+               <div><a href="#return_stmt" title="return_stmt">return_stmt</a></div>
+               <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;::= 'return' <a href="#expression_list" title="expression_list">expression_list</a></div></code></div>
+      </p>
+      <p>referenced by:
+         
+         <ul>
+            <li><a href="#statement" title="statement">statement</a></li>
+         </ul>
+      </p><br><hr>
+      <p>
+         <table border="0" class="signature">
+            <tr>
+               <td style="width: 100%">&nbsp;</td>
+               <td valign="top">
+                  <nobr class="signature">... generated by <a name="Railroad-Diagram-Generator" class="signature" title="https://www.bottlecaps.de/rr/ui" href="https://www.bottlecaps.de/rr/ui" target="_blank">RR - Railroad Diagram Generator</a></nobr>
+               </td>
+               <td><a name="Railroad-Diagram-Generator" title="https://www.bottlecaps.de/rr/ui" href="https://www.bottlecaps.de/rr/ui" target="_blank"><img border="0" src="diagram/rr-2.6.png" height="16" width="16"></a></td>
+            </tr>
+         </table>
+      </p>
+   </body>
+</html>

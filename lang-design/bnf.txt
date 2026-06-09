@@ -1,0 +1,74 @@
+JapEng:BNF
+
+<program> ::= <statement_list> | <class_def>
+
+<statement_list> ::= <statement> | <statement_list> <statement>
+
+<statement> ::= <message> "." | <return_stmt> "." | <break_stmt> "." | <continue_stmt> "."
+
+<class_def> ::= <class_decl> NEWLINE <member_list>
+
+<message> ::= <receiver> <message_send> | <message_send> | <message> <message_send>
+
+<class_decl> ::= <name_def> | <name_def> "based" <class> | <name_def> "from" <class_list>
+
+<name_def> ::= "class" <class>
+
+<class> ::= <class_name> | <class_name> <type_list>
+
+<class_name> ::= [A-Z][a-zA-z0-9_]*
+
+<type_list> ::= <class_name> | <type_list> "," <class_name>
+
+<class_list> ::= <class> | <class_list> "," <class>
+
+<member_list> ::= <member> | <member_list> <member>
+
+<member> ::= "static" <field_decl> "." | <field_decl> "." | "static" <message> "." | <message> "."
+
+<field_decl> ::= <identifier_decl> | <identifier_decl> "from" <class_name>
+
+<identifier_decl> ::= <decl_name> ":" <class>
+
+<decl_name> ::= <identifier> | <sp_identifier>
+
+<identifier> ::= [a-z_][a-zA-Z0-9_]*
+
+<expression> ::= <primary> | <message>
+
+<primary> ::= <identifier> | <integer> | <float> | <fraction> | <binary> | <hexadecimal> | <string> | <block> | "(" <expression> ")"
+
+<integer> ::= [0-9]+
+
+<float> ::= [0-9]*"."[0-9]+
+
+<fraction> ::= [0-9]*"/"[0-9]+
+
+<binary> ::= 0b[01]+
+
+<hexadecimal> ::= 0x[0-9a-fA-F]+
+
+<string> ::= \"[^\"\n]\"
+
+<block> ::= "[" <statement_list> "]" | "[" <args> "." <statement_list> "]" 
+            | "[" <rets> "." <statement_list> "]" | "[" <args> "." <rets> "." <statement_list> "]"
+
+<args> ::= "arg" <identifier_decl_list>
+
+<rets> ::= "ret" <type_list>
+
+<identifier_decl_list> ::= <identifier_decl> | <identifier_decl_list> "," <identifier_decl>
+
+<receiver> ::= <primary> | "(" <message> ")" | <identifier_decl> | <class_name> | "self" 
+
+<message_send> ::= <identifier> | <identifier> <expression_list> | <sp_identifier> <expression> | <sp_identifier> <expression_list>
+
+<expression_list> ::= <expression> | <expression_list> "," <expression>
+
+<sp_identifier> ::= + | - | * | / | % | = | != | < | > | <= | >= | is | are | << | >>  
+
+<return_stmt> ::= "return" <expression_list>
+
+<break_stmt> ::= "break"
+
+<continue_stmt> ::= "continue"
