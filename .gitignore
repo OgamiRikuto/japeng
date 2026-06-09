@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+
+# 実行ファイル
+jpen
+*.out
+
+# オブジェクトファイル・中間ファイル
+*.o
+*.s
+*.i
+*.bc
+
+# デバッグシンボル (macOS)
+*.dSYM/
+
+# Flex/Bison の自動生成ファイル
+# (これらはソースからmakeで生成できるため、Git管理から外すのが一般的です)
+lex.yy.c
+y.tab.c
+y.tab.h
