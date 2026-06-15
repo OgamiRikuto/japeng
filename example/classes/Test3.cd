@@ -1,0 +1,6 @@
+class Test3 from Test1 Integer, Test2 :
+    x: Integer from Test1.
+    y: Integer from Test2.
+    z: List Integer are 1, 2, 3.
+
+    test:Functioin is [] from Test1.

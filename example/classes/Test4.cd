@@ -1,0 +1,8 @@
+class Test4 Key Value :
+    key: Key.
+    value: Value.
+
+    test:Function is [
+        ret Integer.
+        return key.
+    ].

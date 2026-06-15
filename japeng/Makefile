@@ -13,7 +13,7 @@ CCFLAGS = -Wall -I$(INCDIR) -I. -g
 CCTEMPS	= *.o *.s *.i *.bc
 
 LEX	= flex
-YAC	= bison --yacc
+YAC	= bison --yacc -v
 
 SRCS = $(wildcard $(SRCDIR)/*.c)
 OBJS = y.tab.o main.o $(SRCS:$(SRCDIR)/%.c=%.o)
@@ -51,6 +51,6 @@ $(YACC): $(SYNS) $(LEXC) $(DEFS)
 	@$(YAC) $(SYNS)
 
 clean:
-	@rm -f $(TARGET) $(OBJS) $(LEXC) $(YACC) $(TMP) $(CCTEMPS) 
+	@rm -f $(TARGET) $(OBJS) $(LEXC) $(YACC) $(TMP) $(CCTEMPS) y.output
 
 .PHONY: all clean

@@ -71,6 +71,7 @@ ASTNode* create_block_node(ASTNode* args, ASTNode* rets, ASTNode* body)
 ASTNode* create_vardecl_node(ASTNode* identifier, ASTNode* type)
 {
     ASTNode* node = alloc_node(AST_VAR_DECL);
+    node->var_decl.is_static = false;
     node->var_decl.identifier = identifier;
     node->var_decl.type = type;
     return node;

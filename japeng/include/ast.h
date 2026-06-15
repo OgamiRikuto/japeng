@@ -59,8 +59,8 @@ struct ASTNode {
             ASTNode* body;
         } block;
 
-        
         struct {
+            bool is_static;
             ASTNode* identifier;
             ASTNode* type;
         } var_decl;

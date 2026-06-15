@@ -1,0 +1,7 @@
+class Test2 based Object :
+    x: Integer.
+
+    test:Function is [
+        arg n:Integer.
+        x + n.
+    ].

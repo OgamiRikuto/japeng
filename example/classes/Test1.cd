@@ -1,0 +1,4 @@
+class Test1 Type :
+    x: Type is 0.
+    
+    test:Function is [].

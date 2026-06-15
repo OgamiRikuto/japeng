@@ -99,6 +99,10 @@ void print_ast(ASTNode* node, int depth)
             printf("[FIELD_DECL] (static: %s)\n", node->field_decl.is_static ? "true" : "false");
             print_ast(node->field_decl.identifier, depth + 1);
             print_ast(node->field_decl.type, depth + 1);
+            if (node->field_decl.from_class) {
+                printf("  └─ [From]:\n");
+                print_ast(node->field_decl.from_class, depth + 1);
+            }
             if(node->field_decl.default_data) {
                 for (int i = 0; i <= depth; i++) printf("  | ");
                 printf(" [DEFAULT]\n");
