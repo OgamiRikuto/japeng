@@ -1,5 +1,5 @@
-#ifndef __LITERAL_H__
-#define __LITERAL_H__
+#ifndef LITERAL_H
+#define LITERAL_H
 #include <stdint.h>
 #include <stdbool.h>
 

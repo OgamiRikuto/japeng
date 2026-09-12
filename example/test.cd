@@ -1,5 +1,5 @@
 class Test :
-    n: Integer.
+    sum: Integer.
 
     test:Function is [
         arg x: Integer.
