@@ -1,4 +1,5 @@
 #include "chunk.h"
+#include "literal.h"
 #include <stdlib.h>
 
 void init_chunk(Chunk* chunk)

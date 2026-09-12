@@ -2,9 +2,10 @@
 #define CHUNK_H
 
 #include <stdint.h>
-#include <literal.h>
 
-typedef struct {
+typedef uint64_t Value;
+
+typedef struct chunk{
     int count;
     int capacity;
     uint32_t* code;
