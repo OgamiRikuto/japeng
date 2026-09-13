@@ -27,5 +27,8 @@ InterpretResult interpret(VM* vm, Chunk* chunk);
 void push(VM* vm, Value value);
 Value pop(VM* vm);
 
+static inline Value peek(VM* vm, int distance) {
+    return vm->stack_top[-1 - distance];
+}
 
 #endif

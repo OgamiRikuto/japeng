@@ -31,7 +31,7 @@ static inline Value make_int(int32_t i) {
 }
 
 static inline Value make_obj(void* ptr) {
-    return NAN_MASK | (TAG_OBJ << 48) | (uint64_t)(uintptr_t)ptr;
+    return NAN_MASK | (TAG_OBJ << 48) | ((uint64_t)(uintptr_t)ptr & 0xFFFFFFFFFFFFULL);
 }
 
 // チェック
