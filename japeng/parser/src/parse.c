@@ -92,6 +92,11 @@ void print_ast(ASTNode* node, int depth)
                 printf(" [SUPER]\n");
                 print_ast(node->class_def.super_class, depth + 2);
             }
+            if (node->class_def.from_classes) {
+                for (int i = 0; i <= depth; i++) printf("  | ");
+                printf(" [FROM_CLASSES]\n");
+                print_ast(node->class_def.from_classes, depth + 2);
+            }
             print_ast(node->class_def.members, depth + 1);
             break;
             
@@ -100,6 +105,7 @@ void print_ast(ASTNode* node, int depth)
             print_ast(node->field_decl.identifier, depth + 1);
             print_ast(node->field_decl.type, depth + 1);
             if (node->field_decl.from_class) {
+                for (int i = 0; i <= depth; i++) printf("  | ");
                 printf("  └─ [From]:\n");
                 print_ast(node->field_decl.from_class, depth + 1);
             }
@@ -200,6 +206,7 @@ void dump_ast(ASTNode* node, int depth)
             printf("CLASS_DEF\n");
             dump_ast(node->class_def.class, depth + 1);
             if (node->class_def.super_class) dump_ast(node->class_def.super_class, depth + 1);
+            if (node->class_def.from_classes) dump_ast(node->class_def.from_classes, depth + 1);
             dump_ast(node->class_def.members, depth + 1);
             break;
 
