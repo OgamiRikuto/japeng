@@ -7,7 +7,8 @@
 
 bool dispatch_send(VM* vm, uint8_t arg_count, uint16_t msg_index)
 {
-    Value msg_val = vm->chunk->constants[msg_index];
+    CallFrame* frame = &vm->frames[vm->frame_count - 1];
+    Value msg_val = frame->chunk->constants[msg_index];
     const char* method_name = (const char*)as_obj(msg_val);
 
     Value receiver = peek(vm, arg_count);

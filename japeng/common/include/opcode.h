@@ -11,6 +11,7 @@ typedef enum {
     OP_JUMP_IF_FALSE,
     OP_LOOP,
     OP_SEND,
+    OP_CALL,
     OP_POP,
     OP_RETURN,
     OP_MAX

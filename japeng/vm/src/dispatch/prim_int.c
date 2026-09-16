@@ -51,7 +51,7 @@ bool dispatch_integer(VM* vm, const char* method, uint8_t arg_count)
             return false;
         }
 
-         Value b_val = pop(vm);
+        Value b_val = pop(vm);
         Value a_val = pop(vm);
 
         if (!is_int(b_val) || !is_int(a_val)) {

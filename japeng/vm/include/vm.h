@@ -6,19 +6,29 @@
 typedef struct chunk Chunk;
 typedef uint64_t Value;
 
-#define STACK_MAX 256
+#define FRAME_MAX 64
+#define STACK_MAX (FRAME_MAX * 256)
 
-typedef enum {
-    INTERPRET_OK,
-    INTERPRET_RUNTIME_ERROR
-} InterpretResult;
-
-typedef struct vm{
+typedef struct callframe{
     Chunk* chunk;
     uint32_t* ip;
+    Value* slots;
+} CallFrame;
+
+typedef struct vm{
+    CallFrame frames[FRAME_MAX];
+    int frame_count;
+
     Value stack[STACK_MAX];
     Value* stack_top;
 } VM;
+
+typedef enum {
+    INTERPRET_OK,
+    INTERPRET_COMPILE_ERROR,
+    INTERPRET_RUNTIME_ERROR,
+} InterpretResult;
+
 
 void init_vm(VM* vm);
 void free_vm(VM* vm);

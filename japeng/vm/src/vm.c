@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DEBUG_TRACE_EXECUTION 0
+#define DEBUG_TRACE_EXECUTION 1
 
 #if DEBUG_TRACE_EXECUTION 
 static void print_stack(VM* vm);
@@ -14,6 +14,7 @@ const char* op_kind[OP_MAX] = {
     [OP_GET_LOCAL]     = "OP_GET_LOCAL",
     [OP_SET_LOCAL]     = "OP_SET_LOCAL",
     [OP_SEND]          = "OP_SEND",
+    [OP_CALL]          = "OP_CALL",
     [OP_POP]           = "OP_POP",
     [OP_RETURN]        = "OP_RETURN",
     [OP_JUMP]          = "OP_JUMP",
@@ -50,55 +51,71 @@ Value pop(VM* vm)
     return *vm->stack_top;
 }
 
+static bool push_frame(VM* vm, Chunk* chunk, uint8_t arg_count)
+{
+    if (vm->frame_count >= FRAME_MAX) {
+        fprintf(stderr, "Stack overflow: frame limit exceeded.\n");
+        return false;
+    }
+
+    CallFrame* frame = &vm->frames[vm->frame_count++];
+    frame->chunk = chunk;
+    frame->ip = chunk->code;
+    frame->slots = vm->stack_top - arg_count;
+
+    return true;
+}
+
 static inline bool is_falsy(Value value) {
     return is_nil(value) || (is_bool(value) && !as_bool(value));
 }
 
 static InterpretResult run(VM* vm)
 {
+    CallFrame* frame = &vm->frames[vm->frame_count - 1]; 
     for(;;) {
 #if DEBUG_TRACE_EXECUTION
         print_stack(vm);
-        uint32_t current_ip = (uint32_t)(vm->ip - vm->chunk->code);
-        uint32_t instruction_preview = *vm->ip;
+        uint32_t current_ip = (uint32_t)(frame->ip - frame->chunk->code);
+        uint32_t instruction_preview = *frame->ip;
         Opcode op_preview = get_op(instruction_preview);
         printf("%04d  op: %s (operand: %u)\n", 
                current_ip, op_kind[op_preview], get_operand(instruction_preview));
 #endif
-        uint32_t instruction = *vm->ip++;
+        uint32_t instruction = *frame->ip++;
         Opcode op = get_op(instruction);
 
         switch(op) {
             case OP_CONSTANT: {
                 uint32_t index = get_operand(instruction);
-                Value constant = vm->chunk->constants[index];
+                Value constant = frame->chunk->constants[index];
                 push(vm, constant);
                 break;
             }
             case OP_GET_LOCAL: {
                 uint32_t slot = get_operand(instruction);
-                push(vm, vm->stack[slot]);
+                push(vm, frame->slots[slot]);
                 break;
             }
             case OP_SET_LOCAL: {
                 uint32_t slot = get_operand(instruction);
-                vm->stack[slot] = peek(vm ,0);
+                frame->slots[slot] = peek(vm ,0);
                 break;
             }
             case OP_JUMP: {
                 uint32_t offset = get_operand(instruction);
-                vm->ip += offset;
+                frame->ip += offset;
                 break;
             }
             case OP_JUMP_IF_FALSE: {
                 uint32_t offset = get_operand(instruction);
                 Value condition = pop(vm);
-                if (is_falsy(condition)) vm->ip += offset;
+                if (is_falsy(condition)) frame->ip += offset;
                 break;
             }
             case OP_LOOP: {
                 uint32_t offset = get_operand(instruction);
-                vm->ip -= offset;
+                frame->ip -= offset;
                 break;
             }
             case OP_SEND: {
@@ -110,19 +127,41 @@ static InterpretResult run(VM* vm)
                 }
                 break;
             }
+            case OP_CALL: {
+                uint8_t arg_count = get_operand(instruction);
+
+                Chunk* callee_chunk = (Chunk*)as_obj(pop(vm));
+
+                if (!push_frame(vm, callee_chunk, arg_count)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                frame = &vm->frames[vm->frame_count - 1];
+                break;
+            }
             case OP_POP:
                 pop(vm);
                 break;
             case OP_RETURN: {
                 Value result = pop(vm);
-                if (is_int(result)) {
-                    printf("Result: %d\n", as_int(result));
-                } else if (is_float(result)) {
-                    printf("Result: %g\n", as_float(result));
-                } else if (is_bool(result)) {
-                    printf("Result: %s\n", as_bool(result) ? "true" : "false");
+
+                vm->frame_count--;
+
+                if (vm->frame_count == 0) {
+                    if (is_int(result)) {
+                        printf("Result: %d\n", as_int(result));
+                    } else if (is_float(result)) {
+                        printf("Result: %g\n", as_float(result));
+                    } else if (is_bool(result)) {
+                        printf("Result: %s\n", as_bool(result) ? "true" : "false");
+                    }
+                    return INTERPRET_OK;
                 }
-                return INTERPRET_OK;
+                vm->stack_top = frame->slots;
+
+                push(vm ,result);
+                frame = &vm->frames[vm->frame_count - 1];
+                break;
             }
             default: 
                 fprintf(stderr, "Unknown opcode: %d\n", op);
@@ -133,15 +172,26 @@ static InterpretResult run(VM* vm)
 
 InterpretResult interpret(VM* vm, Chunk* chunk)
 {
-    vm->chunk = chunk;
-    vm->ip = vm->chunk->code;
+    CallFrame* frame = &vm->frames[vm->frame_count++];
+    frame->chunk = chunk;
+    frame->ip = chunk->code;
+    frame->slots = vm->stack;
     return run(vm);
 }
 
 #if DEBUG_TRACE_EXECUTION
 static void print_stack(VM* vm) {
-    printf("          ");
+    printf("\n          ");
+    if (vm->stack == vm->stack_top) {
+        printf("[ empty ]\n");
+        return;
+    }
     for (Value* slot = vm->stack; slot < vm->stack_top; slot++) {
+        for (int f = 0; f < vm->frame_count; f++) {
+            if (slot == vm->frames[f].slots) {
+                printf("| f%d: ", f);
+            }
+        }
         printf("[ ");
         if (is_int(*slot)) {
             printf("%d", as_int(*slot));
@@ -158,6 +208,6 @@ static void print_stack(VM* vm) {
         }
         printf(" ]");
     }
-    printf("\n");
+    printf("\n\n");
 }
 #endif
