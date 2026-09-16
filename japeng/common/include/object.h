@@ -22,6 +22,14 @@ typedef struct obj {
     ObjType type;
 } Obj;
 
+// 文字列オブジェクト(シンボル)
+typedef struct objString {
+    Obj header;
+    uint32_t hash;
+    int length;
+    char chars[];
+} ObjString;
+
 // 関数オブジェクト
 typedef struct objFunc {
     Obj header;

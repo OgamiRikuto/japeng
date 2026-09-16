@@ -1,9 +1,159 @@
 #include "class.h"
+#include "table.h" 
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
-TypeInfo* new_type_info(const char* name, int type_arg_count)
+#if DEBUG_MODE
+// 型メタデータ（ジェネリクス対応）の再帰表示
+static void print_type_info(const TypeInfo* type)
+{
+    if (type == NULL) {
+        printf("Any");
+        return;
+    }
+    printf("%s", type->name ? type->name->chars : "Unknown");
+    if (type->type_arg_count > 0 && type->type_args != NULL) {
+        for (int i = 0; i < type->type_arg_count; i++) {
+            printf(" ");
+            print_type_info(type->type_args[i]);
+        }
+    }
+}
+
+// 初期値（NaN Boxing Value）の簡易フォーマッタ
+static void print_value_repr(Value value)
+{
+    if (is_nil(value)) {
+        printf("nil");
+    } else if (is_bool(value)) {
+        printf("%s", as_bool(value) ? "true" : "false");
+    } else if (is_int(value)) {
+        printf("%lld", (long long)as_int(value));
+    } else if (is_float(value)) {
+        printf("%g", as_float(value));
+    } else if (is_obj(value)) {
+        printf("<obj @%p>", as_obj(value));
+    } else {
+        printf("<value 0x%016llx>", (unsigned long long)value);
+    }
+}
+
+void print_class(const ObjClass* klass)
+{
+    if (klass == NULL) {
+        printf("<class (null)>\n");
+        return;
+    }
+
+    // 1. クラス宣言ヘッダ: <class Name TypeArgs...> [based Super] [from Del1, Del2...]
+    printf("<class %s", klass->name ? klass->name->chars : "Anonymous");
+    if (klass->type != NULL && klass->type->type_arg_count > 0) {
+        for (int i = 0; i < klass->type->type_arg_count; i++) {
+            printf(" ");
+            print_type_info(klass->type->type_args[i]);
+        }
+    }
+    printf(">");
+
+    // 継承元
+    if (klass->superclass != NULL || klass->superclass_type != NULL) {
+        printf(" [based ");
+        if (klass->superclass_type != NULL) {
+            print_type_info(klass->superclass_type);
+        } else if (klass->superclass != NULL && klass->superclass->name != NULL) {
+            printf("%s", klass->superclass->name->chars);
+        }
+        printf("]");
+    }
+
+    // 委譲元リスト
+    if (klass->delegate_count > 0) {
+        printf(" [from ");
+        for (int i = 0; i < klass->delegate_count; i++) {
+            if (i > 0) printf(", ");
+            if (klass->delegate_types != NULL && klass->delegate_types[i] != NULL) {
+                print_type_info(klass->delegate_types[i]);
+            } else if (klass->delegates != NULL && klass->delegates[i] != NULL && klass->delegates[i]->name != NULL) {
+                printf("%s", klass->delegates[i]->name->chars);
+            } else {
+                printf("Unknown");
+            }
+        }
+        printf("]");
+    }
+    printf("\n");
+
+    // 2. フィールド情報
+    printf("fields:\n");
+    if (klass->field_count == 0) {
+        printf("  (none)\n");
+    } else {
+        for (int i = 0; i < klass->field_count; i++) {
+            FieldInfo* f = &klass->field_infos[i];
+            printf("  - ");
+            if (f->is_static) printf("static ");
+            printf("%s: ", f->name ? f->name->chars : "(unnamed)");
+            print_type_info(f->type);
+
+            // デフォルト初期値
+            if (klass->default_values != NULL) {
+                printf(" = ");
+                print_value_repr(klass->default_values[i]);
+            }
+
+            // 委譲元の明示
+            if (f->from_class != NULL) {
+                printf(" (from %s)", f->from_class->name ? f->from_class->name->chars : "Unknown");
+            }
+            printf("\n");
+        }
+    }
+
+    // 3. メソッド一覧（Table 内の OCCUPIED スロットを走査）
+    printf("methods:\n");
+    bool has_methods = false;
+    if (klass->methods != NULL && klass->methods->entries != NULL) {
+        for (int i = 0; i < klass->methods->capacity; i++) {
+            HashEntry* entry = &klass->methods->entries[i];
+            if (entry->status == OCCUPIED && entry->key != NULL) {
+                printf("  - %s\n", entry->key->chars);
+                has_methods = true;
+            }
+        }
+    }
+    if (!has_methods) {
+        printf("  (none)\n");
+    }
+}
+
+void print_instance(const ObjInstance* inst)
+{
+    if (inst == NULL) {
+        printf("<instance (null)>\n");
+        return;
+    }
+
+    printf("<instance of %s @%p>\n", 
+           inst->klass && inst->klass->name ? inst->klass->name->chars : "Unknown", 
+           (void*)inst);
+    printf("instance fields:\n");
+
+    if (inst->klass == NULL || inst->klass->field_count == 0) {
+        printf("  (none)\n");
+    } else {
+        for (int i = 0; i < inst->klass->field_count; i++) {
+            FieldInfo* f = &inst->klass->field_infos[i];
+            printf("  - %s = ", f->name ? f->name->chars : "(unnamed)");
+            print_value_repr(inst->fields[i]);
+            printf("\n");
+        }
+    }
+}
+
+#endif
+TypeInfo* new_type_info(ObjString* name, int type_arg_count)
 {
     TypeInfo* t = (TypeInfo*)malloc(sizeof(TypeInfo));
     t->name = name;
@@ -19,7 +169,7 @@ TypeInfo* new_type_info(const char* name, int type_arg_count)
     return t;
 }
 
-FieldInfo new_field_info(const char* name, TypeInfo* type,
+FieldInfo new_field_info(ObjString* name, TypeInfo* type,
                           ObjClass* from_class, bool is_static)
 {
     FieldInfo f = {
@@ -31,7 +181,7 @@ FieldInfo new_field_info(const char* name, TypeInfo* type,
     return f;
 }
 
-ObjClass* new_class(const char* name, TypeInfo* type, 
+ObjClass* new_class(ObjString* name, TypeInfo* type, 
                     ObjClass* superclass, TypeInfo* superclass_type,
                     int delegate_count)
 {
@@ -55,7 +205,7 @@ ObjClass* new_class(const char* name, TypeInfo* type,
         klass->delegate_types = NULL;
     }
 
-    klass->methods = NULL;
+    klass->methods = new_table(8);
 
     klass->field_count = 0;
     klass->field_capacity = 0;
@@ -63,6 +213,25 @@ ObjClass* new_class(const char* name, TypeInfo* type,
     klass->default_values = NULL;
 
     return klass;
+}
+
+void free_class(ObjClass* klass)
+{
+    if (klass == NULL) return;
+
+    if (klass->delegates != NULL) {
+        free(klass->delegates);
+        free(klass->delegate_types);
+    }
+    if (klass->field_infos != NULL) {
+        free(klass->field_infos);
+        free(klass->default_values);
+    }
+    if (klass->methods != NULL) {
+        table_free(klass->methods);
+    }
+
+    free(klass);
 }
 
 void set_delegate(ObjClass* klass, int index,
@@ -89,6 +258,32 @@ void add_field(ObjClass* klass, FieldInfo field_info, Value default_value)
     int idx = klass->field_count++;
     klass->field_infos[idx] = field_info;
     klass->default_values[idx] = default_value;
+}
+
+void add_method(ObjClass* klass, ObjString* name, Value method)
+{
+    table_set(klass->methods, name, method);
+}
+
+bool find_method(ObjClass* klass, ObjString* name, Value* out_method)
+{
+    if (table_get(klass->methods, name, out_method)) {
+        return true;
+    }
+
+    for (int index = 0; index < klass->delegate_count; index++) {
+        if (klass->delegates[index] != NULL) {
+            if (find_method(klass->delegates[index], name, out_method)) {
+                return true;
+            }
+        }
+    }
+
+    if (klass->superclass != NULL) {
+        return find_method(klass->superclass, name, out_method);
+    }
+
+    return false;
 }
 
 ObjInstance* new_instance(ObjClass* klass)
