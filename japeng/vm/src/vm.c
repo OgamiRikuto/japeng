@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DEBUG_TRACE_EXECUTION 1
+#define DEBUG_TRACE_EXECUTION 0
 
 #if DEBUG_TRACE_EXECUTION 
 static void print_stack(VM* vm);
@@ -125,6 +125,7 @@ static InterpretResult run(VM* vm)
                 if (!dispatch_send(vm, arg_count, msg_index)) {
                     return INTERPRET_RUNTIME_ERROR;
                 }
+                frame = &vm->frames[vm->frame_count - 1];
                 break;
             }
             case OP_CALL: {
@@ -202,7 +203,35 @@ static void print_stack(VM* vm) {
         } else if (is_float(*slot)) {
             printf("%g", as_float(*slot));
         } else if (is_obj(*slot)) {
-            printf("<obj %p>", as_obj(*slot));
+            Obj* obj = (Obj*)as_obj(*slot);
+            if (obj == NULL) {
+                printf("XXX");
+            } else {
+                switch (obj->type) {
+                    case OBJ_CLASS: {
+                        ObjClass* klass = (ObjClass*)obj;
+                        printf("<class %s>", klass->name ? klass->name->chars : "Anon");
+                        break;
+                    }
+                    case OBJ_INSTANCE: {
+                        ObjInstance* inst = (ObjInstance*)obj;
+                        printf("<inst %s>", (inst->klass && inst->klass->name) 
+                                            ? inst->klass->name->chars : "Anon");
+                        break;
+                    }
+                    case OBJ_STRING: {
+                        ObjString* str = (ObjString*)obj;
+                        printf("\"%s\"", str->chars);
+                        break;
+                    }
+                    case OBJ_FUNCTION:
+                        printf("<fn>");
+                        break;
+                    default:
+                        printf("XXX");
+                        break;
+                }
+            }
         } else {
             printf("<unknown>");
         }

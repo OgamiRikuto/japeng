@@ -5,5 +5,8 @@
 #include "literal.h"
 #include "opcode.h"
 #include "object.h"
+#include "class.h"
+#include "symbol.h"
+#include "table.h"
 
 #endif

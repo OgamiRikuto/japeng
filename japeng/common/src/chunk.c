@@ -34,7 +34,7 @@ int add_constant(Chunk* chunk, Value value)
     if (chunk->constant_capacity < chunk->constant_count + 1) {
         int old_capacity = chunk->constant_capacity;
         chunk->constant_capacity = (old_capacity < 8)? 8 : old_capacity * 2;
-        chunk->constants = (Value*)realloc(chunk->constants, sizeof(Value) * chunk->capacity);
+        chunk->constants = (Value*)realloc(chunk->constants, sizeof(Value) * chunk->constant_capacity);
     }
     chunk->constants[chunk->constant_count] = value;
     return chunk->constant_count++;
