@@ -1,9 +1,9 @@
 #include "class.h"
 #include "table.h" 
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 
 #if DEBUG_MODE
 // 型メタデータ（ジェネリクス対応）の再帰表示
@@ -211,6 +211,17 @@ ObjClass* new_class(ObjString* name, TypeInfo* type,
     klass->field_capacity = 0;
     klass->field_infos = NULL;
     klass->default_values = NULL;
+
+    if (superclass != NULL && superclass->field_count > 0) {
+        for (int i = 0; i < superclass->field_count; i++) {
+            FieldInfo f = superclass->field_infos[i];
+            // 由来元が空の場合は、直接の親クラスを記録
+            if (f.from_class == NULL) {
+                f.from_class = superclass;
+            }
+            add_field(klass, f, superclass->default_values[i]);
+        }
+    }
 
     return klass;
 }

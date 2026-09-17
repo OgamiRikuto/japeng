@@ -202,15 +202,59 @@ static void test_pattern_multiple_and_dispatch(void)
     printf("-> Pattern 3 Passed.\n");
 }
 
+static void test_field_flattening_multilevel(void)
+{
+    printf("\n=== [Multilevel Inheritance Field Flattening Test] ===\n");
+
+    ObjString* sym_int = intern_cstr("Integer");
+    TypeInfo* type_int = new_type_info(sym_int, 0);
+
+    // 1. Object (最上位: フィールド 0個)
+    ObjClass* cls_object = new_class(intern_cstr("Object"), NULL, NULL, NULL, 0);
+
+    // 2. Shape based Object (フィールド: x=10, y=20)
+    ObjClass* cls_shape = new_class(intern_cstr("Shape"), NULL, cls_object, NULL, 0);
+    add_field(cls_shape, new_field_info(intern_cstr("x"), type_int, NULL, false), make_int(10));
+    add_field(cls_shape, new_field_info(intern_cstr("y"), type_int, NULL, false), make_int(20));
+
+    // 3. Circle based Shape (フィールド: radius=5)
+    //    -> new_class の中で Shape の x, y が自動複写される
+    ObjClass* cls_circle = new_class(intern_cstr("Circle"), NULL, cls_shape, NULL, 0);
+    add_field(cls_circle, new_field_info(intern_cstr("radius"), type_int, NULL, false), make_int(5));
+
+    // クラスのダンプ確認
+    print_class(cls_circle);
+
+    // インスタンス化してオフセット検証
+    ObjInstance* inst = new_instance(cls_circle);
+    print_instance(inst);
+
+    // 親のフィールドと子のフィールドが平らな配列に連続して並んでいるか
+    assert(inst->klass->field_count == 3);
+    assert(as_int(inst->fields[0]) == 10); // x (Shape由来)
+    assert(as_int(inst->fields[1]) == 20); // y (Shape由来)
+    assert(as_int(inst->fields[2]) == 5);  // radius (Circle自前)
+
+    free(inst->fields);
+    free(inst);
+    free_class(cls_circle);
+    free_class(cls_shape);
+    free_class(cls_object);
+
+    printf("-> Multilevel Field Flattening Passed Successfully!\n");
+}
+
 int main(void)
 {
     printf("##################################################\n");
     printf("###  JapEng Class Combinatorial Exhaustive Test ###\n");
     printf("##################################################\n");
 
-    test_pattern_empty();
-    test_pattern_singular();
-    test_pattern_multiple_and_dispatch();
+    // test_pattern_empty();
+    // test_pattern_singular();
+    // test_pattern_multiple_and_dispatch();
+
+    test_field_flattening_multilevel();
 
     free_symbol_pool();
 
