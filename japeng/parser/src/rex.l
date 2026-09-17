@@ -1,6 +1,8 @@
 %{
 #include <stdlib.h>
 #include <string.h>
+#include "literal.h"
+#include "symbol.h"
 int linecounter = 1;
 %}
 %option nounput
@@ -17,15 +19,15 @@ int linecounter = 1;
 "return"	{ return RETURN; }
 "break"	{ return BREAK; }
 "continue"	{ return CONTINUE; }
-[A-Z][a-zA-Z0-9_]*	{ yylval.string = strdup(yytext); return CLASS_NAME; }
-[a-z_][a-zA-Z0-9_]*	{ yylval.string = strdup(yytext); return IDENTIFIER; }
+[A-Z][a-zA-Z0-9_]*	{ yylval.symbol = intern_cstr(yytext); return CLASS_NAME; }
+[a-z_][a-zA-Z0-9_]*	{ yylval.symbol = intern_cstr(yytext); return IDENTIFIER; }
 [0-9]+				{ yylval.int_val = atoi(yytext); return INTEGER; }
 [0-9]*"."[0-9]+		{ yylval.float_val = atof(yytext); return FLOAT; }
-[0-9]*"/"[0-9]+		{ yylval.string = strdup(yytext); return FRACTION; }
+[0-9]*"/"[0-9]+		{ yylval.symbol = intern_cstr(yytext); return FRACTION; }
 0b[0|1]+			{ return BINARY; }
 0x[0-9a-fA-F]+ 		{ return HEX; }
-\"[^\"\n]*\" 		{ yylval.string = strndup(yytext + 1, strlen(yytext) - 2); return STRING; }
-"+"|"-"|"*"|"/"|"%"|"="|"!="|">"|"<"|">="|"<="|"<<"|">>"	{ yylval.string = strdup(yytext); return SP_IDENTIFIER; }
+\"[^\"\n]*\" 		{ yylval.symbol = unquote_and_intern(yytext, strlen(yytext)); return STRING; }
+"+"|"-"|"*"|"/"|"%"|"="|"!="|">"|"<"|">="|"<="|"<<"|">>"	{ yylval.symbol = intern_cstr(yytext); return SP_IDENTIFIER; }
 "//".*				{ }
 "/*"				{ comment(); }
 ","					{ return COMMA; }
@@ -63,4 +65,15 @@ void comment(void) {
 	if (first == EOF) {
 		fprintf(stderr, "eof in comment\n");
 	}
+}
+
+ObjString* unquote_and_intern(const char* text, int len) {
+    char buf[1024];
+    int content_len = len - 2;
+    if (content_len >= (int)sizeof(buf)) {
+        content_len = sizeof(buf) - 1;
+    }
+    memcpy(buf, text + 1, content_len);
+    buf[content_len] = '\0';
+    return intern_cstr(buf);
 }

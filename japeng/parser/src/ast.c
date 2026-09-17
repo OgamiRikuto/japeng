@@ -42,7 +42,7 @@ ASTNode* create_literal_node(Value val)
     return node;
 }
 
-ASTNode* create_identifier_node(const char* name)
+ASTNode* create_identifier_node(ObjString* name)
 {
     ASTNode* node = alloc_node(AST_IDENTIFIER);
     node->identifier.name = name;

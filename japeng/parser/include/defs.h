@@ -5,6 +5,8 @@
 #include <string.h>
 
 #include "ast.h"
+#include "literal.h"
+
 
 #define TRUE 1
 #define FALSE 0
@@ -17,6 +19,7 @@ extern int yylineno;
 int main(int, char**);
 int yylex(void);
 void comment(void);
+ObjString* unquote_and_intern(const char*, int);
 int yyparse(void);
 void yyerror(char*);
 

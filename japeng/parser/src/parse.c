@@ -6,6 +6,8 @@
 #include "ast.h"
 #include "defs.h"
 #include "parse.h"
+#include "symbol.h"
+#include "object.h"
 
 extern FILE* yyin;
 const char* current_filename = "";
@@ -129,7 +131,7 @@ void print_ast(ASTNode* node, int depth)
             break;
             
         case AST_IDENTIFIER:
-            printf("[ID: %s]\n", node->identifier.name);
+            printf("[ID: %s]\n", node->identifier.name->chars);
             break;
             
         case AST_LITERAL:
@@ -218,7 +220,7 @@ void dump_ast(ASTNode* node, int depth)
             break;
 
         case AST_IDENTIFIER:
-            printf("ID: %s\n", node->identifier.name);
+            printf("ID: %s\n", node->identifier.name->chars);
             break;
 
         case AST_LITERAL:

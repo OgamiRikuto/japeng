@@ -2,18 +2,19 @@
 #include "defs.h"
 #include "ast.h"
 #include "literal.h"
+#include "symbol.h"
 
 extern int yylex();
 %}
 %union {
     int int_val;
     float float_val;
-    char* string;
+    ObjString* symbol;
     ASTNode* node;
 }
 %token CLASS BASED FROM ARG RET RETURN BREAK CONTINUE STATIC SELF
 %token COMMA PERIOD COLON L_PAR R_PAR L_BLACKET R_BLACKET UNKNOWN
-%token <string> IDENTIFIER CLASS_NAME SP_IDENTIFIER STRING FRACTION
+%token <symbol> IDENTIFIER CLASS_NAME SP_IDENTIFIER STRING FRACTION
 %token <int_val> INTEGER BINARY HEX
 %token <float_val> FLOAT
 
@@ -215,10 +216,10 @@ primary :
     IDENTIFIER  { $$ = create_identifier_node($1); }
     | INTEGER   { $$ = create_literal_node(make_int($1)); }
     | FLOAT     { $$ = create_literal_node(make_float($1)); }
-    | FRACTION  { }
+    | FRACTION  { $$ = create_literal_node(make_obj($1)); }
     | BINARY    { }
     | HEX       { }
-    | STRING    { }
+    | STRING    { $$ = create_literal_node(make_obj($1)); }
     | block     { $$ = $1; }
     | L_PAR expression R_PAR { $$ = $2; }
     ;
@@ -259,7 +260,7 @@ receiver :
     | CLASS_NAME
     { $$ = create_identifier_node($1); }
     | SELF
-    { $$ = create_identifier_node("self"); }
+    { $$ = create_identifier_node(intern_cstr("self")); }
     ;
 
 expression_list :   

@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "literal.h"
+#include "symbol.h"
 
 typedef enum {
     AST_STMT,
@@ -43,7 +44,7 @@ struct ASTNode {
         } literal;
 
         struct {
-            const char* name;
+            ObjString* name;
         } identifier;
 
         struct {
@@ -89,7 +90,7 @@ struct ASTNode {
 ASTNode* create_stmt_node(ASTNode*, ASTNode*);
 ASTNode* create_class_node(ASTNode*, ASTNode*);
 ASTNode* create_literal_node(Value);
-ASTNode* create_identifier_node(const char*);
+ASTNode* create_identifier_node(ObjString*);
 ASTNode* create_send_node(ASTNode*, ASTNode*, ASTNode*);
 ASTNode* create_block_node(ASTNode*, ASTNode*, ASTNode*);
 ASTNode* create_vardecl_node(ASTNode*, ASTNode*);
