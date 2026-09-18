@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DEBUG_TRACE_EXECUTION 0
+#define DEBUG_TRACE_EXECUTION 1
 
 #if DEBUG_TRACE_EXECUTION 
 static void print_stack(VM* vm);
@@ -20,6 +20,13 @@ const char* op_kind[OP_MAX] = {
     [OP_JUMP]          = "OP_JUMP",
     [OP_JUMP_IF_FALSE] = "OP_JUMP_IF_FALSE",
     [OP_LOOP]          = "OP_LOOP",
+    [OP_ADD]          = "OP_ADD",
+    [OP_SUB]          = "OP_SUB",
+    [OP_MUL]          = "OP_MUL",
+    [OP_DIV]          = "OP_DIV",
+    [OP_LESS]         = "OP_LESS",
+    [OP_GREAT]        = "OP_GREAT",
+    [OP_EQUAL]        = "OP_EQUAL",
 };
 #endif
 
@@ -109,7 +116,7 @@ static InterpretResult run(VM* vm)
             }
             case OP_JUMP_IF_FALSE: {
                 uint32_t offset = get_operand(instruction);
-                Value condition = pop(vm);
+                Value condition = peek(vm, 0);
                 if (is_falsy(condition)) frame->ip += offset;
                 break;
             }
@@ -164,6 +171,99 @@ static InterpretResult run(VM* vm)
                 frame = &vm->frames[vm->frame_count - 1];
                 break;
             }
+            case OP_ADD: {
+                Value b = pop(vm);
+                Value a = pop(vm);
+                if (is_int(a) && is_int(b)) {
+                    push(vm, make_int(as_int(a) + as_int(b)));
+                } else if (is_float(a) && is_float(b)) {
+                    push(vm, make_float(as_float(a) + as_float(b)));
+                } else {
+                    fprintf(stderr, "Type error in OP_ADD.\n");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
+            case OP_SUB: {
+                Value b = pop(vm);
+                Value a = pop(vm);
+                if (is_int(a) && is_int(b)) {
+                    push(vm, make_int(as_int(a) - as_int(b)));
+                } else if (is_float(a) && is_float(b)) {
+                    push(vm, make_float(as_float(a) - as_float(b)));
+                } else {
+                    fprintf(stderr, "Type error in OP_SUB.\n");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
+            case OP_MUL: {
+                Value b = pop(vm);
+                Value a = pop(vm);
+                if (is_int(a) && is_int(b)) {
+                    push(vm, make_int(as_int(a) * as_int(b)));
+                } else if (is_float(a) && is_float(b)) {
+                    push(vm, make_float(as_float(a) * as_float(b)));
+                } else {
+                    fprintf(stderr, "Type error in OP_MUL.\n");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
+            case OP_DIV: {
+                Value b = pop(vm);
+                Value a = pop(vm);
+                if (is_int(a) && is_int(b)) {
+                    if (as_int(b) == 0) {
+                        fprintf(stderr, "Division by zero.\n");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    push(vm, make_int(as_int(a) / as_int(b)));
+                } else if (is_float(a) && is_float(b)) {
+                    push(vm, make_float(as_float(a) / as_float(b)));
+                } else {
+                    fprintf(stderr, "Type error in OP_DIV.\n");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
+
+            // ----------------------------------------------------
+            // 比較演算 (ループ判定で使用)
+            // ----------------------------------------------------
+            case OP_LESS: {
+                Value b = pop(vm);
+                Value a = pop(vm);
+                if (is_int(a) && is_int(b)) {
+                    push(vm, make_bool(as_int(a) < as_int(b)));
+                } else if (is_float(a) && is_float(b)) {
+                    push(vm, make_bool(as_float(a) < as_float(b)));
+                } else {
+                    fprintf(stderr, "Type error in OP_LESS.\n");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
+            case OP_GREAT: {
+                Value b = pop(vm);
+                Value a = pop(vm);
+                if (is_int(a) && is_int(b)) {
+                    push(vm, make_bool(as_int(a) > as_int(b)));
+                } else if (is_float(a) && is_float(b)) {
+                    push(vm, make_bool(as_float(a) > as_float(b)));
+                } else {
+                    fprintf(stderr, "Type error in OP_GREAT.\n");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
+            case OP_EQUAL: {
+                Value b = pop(vm);
+                Value a = pop(vm);
+                // 64bit 値としての直接比較（NaNタグ含めて一致するか）
+                push(vm, make_bool(a == b));
+                break;
+            }
             default: 
                 fprintf(stderr, "Unknown opcode: %d\n", op);
                 return INTERPRET_RUNTIME_ERROR;
@@ -173,6 +273,9 @@ static InterpretResult run(VM* vm)
 
 InterpretResult interpret(VM* vm, Chunk* chunk)
 {
+    reset_stack(vm);
+    push(vm, make_nil());
+    
     CallFrame* frame = &vm->frames[vm->frame_count++];
     frame->chunk = chunk;
     frame->ip = chunk->code;
