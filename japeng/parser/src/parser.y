@@ -22,7 +22,7 @@ extern int yylex();
 %type <node> member member_list receiver return_stmt
 %type <node> class_decl name_def class type_list class_list field_decl
 %type <node> identifier_decl identifier_decl_list statement_list_opt
-%type <node> expression primary block args rets expression_list
+%type <node> expression primary block args rets expression_list_opt expression_list
 %left IDENTIFIER SP_IDENTIFIER
 %left COMMA
 %%
@@ -63,6 +63,8 @@ statement_list_opt :
 statement : 
     message PERIOD
     { $$ = $1; }
+    | identifier_decl PERIOD
+    { $$ = $1; }
     | return_stmt PERIOD 
     { $$ = $1; }
     | BREAK PERIOD
@@ -95,6 +97,31 @@ message :
         ASTNode* msg = create_identifier_node($2);
         $$ = create_send_node($1, msg, $3);
     }
+    | IDENTIFIER L_PAR expression_list_opt R_PAR
+    {
+        ASTNode* self_node = create_identifier_node(intern_cstr("self"));
+        ASTNode* msg = create_identifier_node($1);
+        $$ = create_send_node(self_node, msg, $3);
+    }
+
+    /* 2. 制御構文スタイル: if (cond) [ body ] や repeat (cond) [ body ] */
+    | IDENTIFIER L_PAR expression_list_opt R_PAR block
+    {
+        ASTNode* self_node = create_identifier_node(intern_cstr("self"));
+        ASTNode* msg = create_identifier_node($1);
+        // 条件式 ($3) と ブロック ($5) を引数チェインとして結合
+        ASTNode* args = ($3 == NULL) ? $5 : create_stmt_node($3, $5);
+        $$ = create_send_node(self_node, msg, args);
+    }
+
+    /* 3. 引数なしブロックスタイル: repeat [ body ] (無限ループ) */
+    | IDENTIFIER block
+    {
+        ASTNode* self_node = create_identifier_node(intern_cstr("self"));
+        ASTNode* msg = create_identifier_node($1);
+        $$ = create_send_node(self_node, msg, $2);
+    }
+    ;
     ;
 
 
@@ -261,6 +288,13 @@ receiver :
     { $$ = create_identifier_node($1); }
     | SELF
     { $$ = create_identifier_node(intern_cstr("self")); }
+    ;
+
+expression_list_opt : 
+    /* empty */
+    { $$ = NULL; }
+    | expression_list
+    { $$ = $1; }
     ;
 
 expression_list :   

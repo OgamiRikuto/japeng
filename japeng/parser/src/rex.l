@@ -11,9 +11,9 @@ int linecounter = 1;
 "class"	{ return CLASS; }
 "based"	{ return BASED; }
 "from"	{ return FROM; }
-"is"	{ return SP_IDENTIFIER; }
-"are"	{ return SP_IDENTIFIER; }
-"self"	{ return SELF; }
+"is"	{ yylval.symbol = intern_cstr(yytext); return SP_IDENTIFIER; }
+"are"	{ yylval.symbol = intern_cstr(yytext); return SP_IDENTIFIER; }
+"self"	{ yylval.symbol = intern_cstr(yytext); return SELF; }
 "arg"	{ return ARG; }
 "ret"	{ return RET; }
 "return"	{ return RETURN; }
