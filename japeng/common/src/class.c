@@ -40,14 +40,14 @@ static void print_value_repr(Value value)
     }
 }
 
-void print_class(const ObjClass* klass)
+void print_class(ObjClass* klass)
 {
     if (klass == NULL) {
         printf("<class (null)>\n");
         return;
     }
 
-    // 1. クラス宣言ヘッダ: <class Name TypeArgs...> [based Super] [from Del1, Del2...]
+    // 1. クラス宣言ヘッダ
     printf("<class %s", klass->name ? klass->name->chars : "Anonymous");
     if (klass->type != NULL && klass->type->type_arg_count > 0) {
         for (int i = 0; i < klass->type->type_arg_count; i++) {
@@ -118,7 +118,14 @@ void print_class(const ObjClass* klass)
         for (int i = 0; i < klass->methods->capacity; i++) {
             HashEntry* entry = &klass->methods->entries[i];
             if (entry->status == OCCUPIED && entry->key != NULL) {
-                printf("  - %s\n", entry->key->chars);
+                printf("  - %s", entry->key->chars);
+
+                // ★ 委譲元の明示
+                ObjClass* from_cls = get_method_from(klass, entry->key);
+                if (from_cls != NULL && from_cls->name != NULL) {
+                    printf(" (from %s)", from_cls->name->chars);
+                }
+                printf("\n");
                 has_methods = true;
             }
         }
@@ -128,7 +135,7 @@ void print_class(const ObjClass* klass)
     }
 }
 
-void print_instance(const ObjInstance* inst)
+void print_instance(ObjInstance* inst)
 {
     if (inst == NULL) {
         printf("<instance (null)>\n");
@@ -206,6 +213,7 @@ ObjClass* new_class(ObjString* name, TypeInfo* type,
     }
 
     klass->methods = new_table(8);
+    klass->method_from = new_table(8);
 
     klass->field_count = 0;
     klass->field_capacity = 0;
@@ -222,6 +230,8 @@ ObjClass* new_class(ObjString* name, TypeInfo* type,
             add_field(klass, f, superclass->default_values[i]);
         }
     }
+
+    klass->state = CLASS_STATE_UNCOMPILED;
 
     return klass;
 }
@@ -276,6 +286,12 @@ void add_method(ObjClass* klass, ObjString* name, Value method)
     table_set(klass->methods, name, method);
 }
 
+void add_method_from(ObjClass* klass, ObjString* name, ObjClass* from_class)
+{
+    if (klass->method_from == NULL) klass->method_from = new_table(8);
+    table_set(klass->method_from, name, make_obj((Obj*)from_class));
+}
+
 bool find_method(ObjClass* klass, ObjString* name, Value* out_method)
 {
     if (table_get(klass->methods, name, out_method)) {
@@ -295,6 +311,16 @@ bool find_method(ObjClass* klass, ObjString* name, Value* out_method)
     }
 
     return false;
+}
+
+ObjClass* get_method_from(ObjClass* klass, ObjString* name)
+{
+    if (klass == NULL || klass->method_from == NULL) return NULL;
+    Value val;
+    if (table_get(klass->method_from, name, &val)) {
+        return (ObjClass*)as_obj(val);
+    }
+    return NULL;
 }
 
 ObjInstance* new_instance(ObjClass* klass)
@@ -318,4 +344,14 @@ ObjInstance* new_instance(ObjClass* klass)
     }
 
     return instance;
+}
+
+int find_field_index(ObjClass* klass, ObjString* name)
+{
+    for (int index = 0; index < klass->field_count; index++) {
+        if (klass->field_infos[index].name == name) {
+            return index;
+        }
+    }
+    return -1;
 }

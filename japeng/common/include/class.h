@@ -23,6 +23,13 @@ typedef struct fieldInfo {
     bool is_static;
 } FieldInfo;
 
+typedef enum {
+    CLASS_STATE_UNCOMPILED = 0,
+    CLASS_STATE_COMPILING,
+    CLASS_STATE_COMPILED,
+    CLASS_STATE_MAX
+} ClassState;
+
 // クラスデータ
 typedef struct objClass {
     Obj header;
@@ -42,12 +49,15 @@ typedef struct objClass {
 
     // メソッド
     Table* methods;
+    Table* method_from;
     
     // フィールド情報
     int field_count; 
     int field_capacity;
     FieldInfo* field_infos;
     Value* default_values;
+
+    ClassState state;
 } ObjClass;
 
 typedef struct objIns {
@@ -57,8 +67,8 @@ typedef struct objIns {
 } ObjInstance;
 
 #if DEBUG_MODE
-void print_class(const ObjClass* klass);
-void print_instance(const ObjInstance* inst);
+void print_class(ObjClass* klass);
+void print_instance(ObjInstance* inst);
 #endif
 
 TypeInfo* new_type_info(ObjString* name, int type_arg_count);
@@ -75,9 +85,13 @@ void set_delegate(ObjClass* klass, int index,
 void add_field(ObjClass* klass, FieldInfo field_info, Value default_value);
 
 void add_method(ObjClass* klass, ObjString* name, Value method);
+void add_method_from(ObjClass* klass, ObjString* name, ObjClass* from_class);
 bool find_method(ObjClass* klass, ObjString* name, Value* out_method);
+ObjClass* get_method_from(ObjClass* klass, ObjString* name);
 
 ObjInstance* new_instance(ObjClass* klass);
+
+int find_field_index(ObjClass* klass, ObjString* name);
 
 
 #endif
