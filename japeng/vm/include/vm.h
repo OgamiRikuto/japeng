@@ -5,6 +5,7 @@
 
 typedef struct chunk Chunk;
 typedef uint64_t Value;
+typedef struct table Table;
 
 #define FRAME_MAX 64
 #define STACK_MAX (FRAME_MAX * 256)
@@ -21,6 +22,7 @@ typedef struct vm{
 
     Value stack[STACK_MAX];
     Value* stack_top;
+    Table* globals;
 } VM;
 
 typedef enum {

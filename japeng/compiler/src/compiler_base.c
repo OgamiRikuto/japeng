@@ -2,32 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static ObjString* get_type_name(ASTNode* type_node) {
-    if (type_node == NULL) return NULL;
-    if (type_node->kind == AST_IDENTIFIER) {
-        return type_node->identifier.name;
-    }
-    if (type_node->kind == AST_CLASS && type_node->class.classname != NULL) {
-        return type_node->class.classname->identifier.name;
-    }
-    return NULL;
-}
-
-// パーサーでの数値処理を入れる前の応急処置----------------
-static bool is_integer_type(ObjString* name) {
-    if (name == NULL) return false;
-    return (strcmp(name->chars, "Integer") == 0 || 
-            strcmp(name->chars, "SmallInteger") == 0);
-}
-
-// 即値 Float かどうかの判定 (Float / SmallFloat 両対応)
-static bool is_float_type(ObjString* name) {
-    if (name == NULL) return false;
-    return (strcmp(name->chars, "Float") == 0 || 
-            strcmp(name->chars, "SmallFloat") == 0);
-}
-//-----------------------------------------------------
-
 static int compile_args(Compiler* c, ASTNode* arg_node)
 {
     if (arg_node == NULL) return 0;
@@ -45,9 +19,10 @@ void compile_var_decl(Compiler* c, ASTNode* node)
 {
     ObjString* var_name  = node->var_decl.identifier->identifier.name;
     ObjString* type_name = get_type_name(node->var_decl.type);
+    TypeInfo* t_info = new_type_info(type_name, 1);
 
     // 1. 変数スロットを確保
-    add_local(c, var_name);
+    add_local(c, var_name, t_info);
 
     // 2. デフォルトコンストラクタの実行（引数 0 個）
     // if (type_name == sym_SInteger) {
@@ -76,8 +51,9 @@ void compile_assignment(Compiler* c, ASTNode* node)
         ASTNode* decl = node->send.receiver;
         ObjString* var_name  = decl->var_decl.identifier->identifier.name;
         ObjString* type_name = get_type_name(decl->var_decl.type);
+        TypeInfo* t_info = new_type_info(type_name, 1);
 
-        int slot = add_local(c, var_name);
+        int slot = add_local(c, var_name, t_info);
 
         // 即値型（Integer, Float 等）の場合
         // if (type_name == sym_SInteger || type_name == sym_SFloat) {
@@ -109,13 +85,26 @@ void compile_assignment(Compiler* c, ASTNode* node)
     if (node->send.receiver->kind == AST_IDENTIFIER) {
         ObjString* target_name = node->send.receiver->identifier.name;
         int slot = resolve_local(c, target_name);
-        if (slot == -1) {
-            fprintf(stderr, "Error: Assignment to undefined variable '%s'.\n", target_name->chars);
-            exit(1);
+        if (slot != -1) {
+            compile(c, node->send.args);
+            emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
+            emit_inst(c, OP_POP, 0);
+            return;
         }
-        compile(c, node->send.args);
-        emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
-        emit_inst(c, OP_POP, 0);
+
+        if (c->current_class != NULL) {
+            int field_idx = find_field_index(c->current_class, target_name);
+            if (field_idx != -1) {
+                emit_inst(c, OP_GET_LOCAL, 0);
+                compile(c, node->send.args);
+                emit_inst(c, OP_SET_FIELD, (uint32_t)field_idx);
+                emit_inst(c, OP_POP, 0);
+                return;
+            }
+        }
+
+        fprintf(stderr, "Error: Assignment to undefined variable '%s'.\n", target_name->chars);
+        exit(1);
         return;
     }
 }

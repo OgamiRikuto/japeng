@@ -38,10 +38,12 @@ static void reset_stack(VM* vm)
 void init_vm(VM* vm)
 {
     reset_stack(vm);
+    vm->globals = new_table(8);
 }
 
 void free_vm(VM* vm)
 {
+    table_free(vm->globals);
     // 未定
     (void)vm;
 }
@@ -89,6 +91,10 @@ static InterpretResult run(VM* vm)
         printf("%04d  op: %s (operand: %u)\n", 
                current_ip, op_kind[op_preview], get_operand(instruction_preview));
 #endif
+       if (frame->ip >= frame->chunk->code + frame->chunk->count) {
+            fprintf(stderr, "Runtime Error: Execution fell off the end of chunk without OP_RETURN.\n");
+            return INTERPRET_RUNTIME_ERROR;
+        }
         uint32_t instruction = *frame->ip++;
         Opcode op = get_op(instruction);
 
@@ -107,6 +113,41 @@ static InterpretResult run(VM* vm)
             case OP_SET_LOCAL: {
                 uint32_t slot = get_operand(instruction);
                 frame->slots[slot] = peek(vm ,0);
+                break;
+            }
+            case OP_GET_GLOBAL: {
+                uint32_t name_idx = get_operand(instruction);
+                ObjString* name = (ObjString*)as_obj(frame->chunk->constants[name_idx]);
+                Value value;
+                if (!table_get(vm->globals, name, &value)) {
+                    fprintf(stderr, "Undefined global variable '%s'\n", name->chars);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                push(vm, value);
+                break;
+            }
+            case OP_SET_GLOBAL: {
+                uint32_t name_idx = get_operand(instruction);
+                ObjString* name = (ObjString*)as_obj(frame->chunk->constants[name_idx]);
+                table_set(vm->globals, name, peek(vm, 0));
+                break;
+            }
+            case OP_GET_FIELD: {
+                uint32_t field_idx = get_operand(instruction);
+                Value receiver = pop(vm);
+
+                ObjInstance* instance = (ObjInstance*)as_obj(receiver);
+                push(vm, instance->fields[field_idx]);
+                break;
+            }
+            case OP_SET_FIELD: {
+                uint32_t field_idx = get_operand(instruction);
+                Value value = pop(vm);
+                Value receiver = pop(vm);
+
+                ObjInstance* instance = (ObjInstance*)as_obj(receiver);
+                instance->fields[field_idx] = value;
+                push(vm, value);
                 break;
             }
             case OP_JUMP: {

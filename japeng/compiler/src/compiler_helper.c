@@ -3,22 +3,24 @@
 #include <stdlib.h>
 
 ObjString* sym_is       = NULL;
+ObjString* sym_are      = NULL;
 ObjString* sym_self     = NULL;
 ObjString* sym_if       = NULL;
 ObjString* sym_repeat   = NULL;
 ObjString* sym_SInteger = NULL;
 ObjString* sym_SFloat   = NULL;
-ObjString* sym_plus   = NULL;
-ObjString* sym_minus   = NULL;
-ObjString* sym_multi   = NULL;
-ObjString* sym_div   = NULL;
-ObjString* sym_equal   = NULL;
-ObjString* sym_less   = NULL;
-ObjString* sym_gt   = NULL;
+ObjString* sym_plus     = NULL;
+ObjString* sym_minus    = NULL;
+ObjString* sym_multi    = NULL;
+ObjString* sym_div      = NULL;
+ObjString* sym_equal    = NULL;
+ObjString* sym_less     = NULL;
+ObjString* sym_gt       = NULL;
 
 
 void init_compiler_symbols(void) {
     if (!sym_is)        sym_is       = intern_cstr("is");
+    if (!sym_are)       sym_are      = intern_cstr("are");
     if (!sym_self)      sym_self     = intern_cstr("self");
     if (!sym_if)        sym_if       = intern_cstr("if");
     if (!sym_repeat)    sym_repeat   = intern_cstr("repeat"); 
@@ -44,6 +46,8 @@ void init_compiler(Compiler* compiler, Chunk* chunk)
     compiler->locals[0].depth = 1;
     compiler->local_count = 1;
     compiler->current_loop = NULL;
+    compiler->current_class = NULL;
+    compiler->defined_class = new_table(16);
 }
 
 void emit_inst(Compiler* c, Opcode op, uint32_t operand)
@@ -85,7 +89,7 @@ int resolve_local(Compiler* c, ObjString* name)
     return -1;
 }
 
-int add_local(Compiler* c, ObjString* name)
+int add_local(Compiler* c, ObjString* name, TypeInfo* type)
 {
     if (c->local_count >= MAX_LOCALS) {
         fprintf(stderr, "Error: Too many local variables.\n");
@@ -94,6 +98,7 @@ int add_local(Compiler* c, ObjString* name)
 
     int slot = c->local_count++;
     c->locals[slot].name = name;
+    c->locals[slot].type = type;
     c->locals[slot].depth = c->scope_depth;
     return slot; 
 }
@@ -109,4 +114,27 @@ int add_anonymous_local(Compiler* c)
     c->locals[slot].name = NULL;
     c->locals[slot].depth = c->scope_depth;
     return slot;
+}
+
+ObjString* get_type_name(ASTNode* type_node) {
+    if (type_node == NULL) return NULL;
+    if (type_node->kind == AST_IDENTIFIER) {
+        return type_node->identifier.name;
+    }
+    if (type_node->kind == AST_CLASS && type_node->class.classname != NULL) {
+        return type_node->class.classname->identifier.name;
+    }
+    return NULL;
+}
+
+bool is_integer_type(ObjString* name) {
+    if (name == NULL) return false;
+    return (strcmp(name->chars, "Integer") == 0 || 
+            strcmp(name->chars, "SmallInteger") == 0);
+}
+
+bool is_float_type(ObjString* name) {
+    if (name == NULL) return false;
+    return (strcmp(name->chars, "Float") == 0 || 
+            strcmp(name->chars, "SmallFloat") == 0);
 }

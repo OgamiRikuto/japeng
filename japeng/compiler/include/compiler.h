@@ -6,6 +6,7 @@
 #include "ast.h"
 #include "chunk.h"
 #include "opcode.h"
+#include "class.h"
 
 #define MAX_LOCALS 256
 
@@ -17,6 +18,7 @@ typedef struct loop {
 
 typedef struct local {
     ObjString* name;
+    TypeInfo* type;
     int depth;
 } Local;
 
@@ -28,14 +30,18 @@ typedef struct compiler {
     int local_count;
     int scope_depth;
     Loop* current_loop;
+    ObjClass* current_class;
+    Table* defined_class;
 } Compiler;
 
 void init_compiler_symbols(void);
 void init_compiler(Compiler* compiler, Chunk* chunk);
 void compile(Compiler* compiler, ASTNode* node);
+void emit_inst(Compiler* c, Opcode op, uint32_t operand);
+void emit_constant(Compiler* c, Value val);
 
-int emit_jump(Compiler* c, Opcode op);
-void patch_jump(Compiler* c, int jump_inst_index);
-void emit_loop(Compiler* c, int loop_start_index);
+void declare_class_skeleton(Compiler* c, ASTNode* node);
+void compile_class_body(Compiler* c, ASTNode* node);
+
 
 #endif

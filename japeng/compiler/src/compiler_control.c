@@ -103,7 +103,8 @@ void compile_repeat(Compiler* c, ASTNode* node)
         int counter_slot;
         if (block_node->block.args != NULL) {
             ASTNode* id_node = block_node->block.args->var_decl.identifier;
-            counter_slot = add_local(c, id_node->identifier.name);
+            ObjString* type_name = block_node->block.args->var_decl.identifier->identifier.name;
+            counter_slot = add_local(c, id_node->identifier.name, new_type_info(type_name, 1));
         } else {
             counter_slot = add_anonymous_local(c);
         }
@@ -168,6 +169,22 @@ void compile_continue(Compiler* c)
     emit_loop(c, c->current_loop->start_pos);
 }
 
+static void compile_block_args(Compiler* c, ASTNode* args_node, int* arity)
+{
+    if (args_node == NULL) return;
+    if (args_node->kind == AST_STMT) {
+        compile_block_args(c, args_node->stmt.left, arity);
+        compile_block_args(c, args_node->stmt.right, arity);
+        return;
+    }
+    if (args_node->kind == AST_VAR_DECL) {
+        ObjString* arg_name = args_node->var_decl.identifier->identifier.name;
+        TypeInfo* t_info = build_type_info(args_node->var_decl.type);
+        add_local(c, arg_name, t_info);
+        (*arity)++;
+    }
+}
+
 ObjFunction* compile_block(Compiler* parent, ASTNode* block_node)
 {
     Chunk* fn_chunk = (Chunk*)malloc(sizeof(Chunk));
@@ -176,8 +193,21 @@ ObjFunction* compile_block(Compiler* parent, ASTNode* block_node)
     Compiler block_compiler;
     init_compiler(&block_compiler, fn_chunk);
     block_compiler.enclosing = parent;
+    block_compiler.current_class = parent->current_class;
+
+    // if (block_compiler.current_class != NULL) {
+    //     block_compiler.locals[0].type = block_compiler.current_class->type;
+    // }
 
     int arity = 0;
+    if (block_node->block.args != NULL) {
+        compile_block_args(&block_compiler, block_node->block.args, &arity);
+    }
+
+    // TypeInfo* ret_type = NULL;
+    // if (block_node->block.has_ret) {
+    //     ret_type = build_type_info(block_node->block.rets);
+    // }
 
     compile(&block_compiler, block_node->block.body);
 

@@ -19,10 +19,18 @@ void compile(Compiler* c, ASTNode* node)
             int slot = resolve_local(c, node->identifier.name);
             if (slot != -1) {
                 emit_inst(c, OP_GET_LOCAL, (uint32_t)slot);
-            } else {
-                fprintf(stderr, "Error: Undefined variable '%s'.\n", node->identifier.name->chars);
-                exit(EXIT_FAILURE);
-            }
+                break;
+            } 
+            if (c->current_class != NULL) {
+                int field_idx = find_field_index(c->current_class, node->identifier.name);
+                if (field_idx != -1) {
+                    emit_inst(c, OP_GET_LOCAL, 0);
+                    emit_inst(c, OP_GET_FIELD, (uint32_t)field_idx);
+                    break;
+                }
+            } 
+            fprintf(stderr, "Error: Undefined variable '%s'.\n", node->identifier.name->chars);
+            exit(EXIT_FAILURE);
             break;
         }
         
@@ -35,8 +43,6 @@ void compile(Compiler* c, ASTNode* node)
             ObjString* msg_sym = node->send.message->identifier.name;
             bool is_self = (node->send.receiver->kind == AST_IDENTIFIER &&
                             node->send.receiver->identifier.name == sym_self);
-
-            // 特殊ケース: 代入
             // AST_SEND 内の代入処理
             if (msg_sym == sym_is) {
                 compile_assignment(c, node);
@@ -47,13 +53,11 @@ void compile(Compiler* c, ASTNode* node)
                 compile_if(c, node);
                 break;
             }
-
             /* repeat */
             if (msg_sym == sym_repeat) {
                 compile_repeat(c, node);
                 break;
             }
-            
             compile_mesage_send(c, node, msg_sym);
             break;
         }
@@ -77,7 +81,10 @@ void compile(Compiler* c, ASTNode* node)
             emit_inst(c, OP_RETURN, 0);
             break;
         }
-
+        case AST_CLASS_DEF: {
+            compile_class_def(c, node);
+            break;
+        }
         case AST_STMT: {
             if (node->stmt.left)  compile(c, node->stmt.left);
             if (node->stmt.right) compile(c, node->stmt.right);
