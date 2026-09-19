@@ -26,8 +26,9 @@ void yyerror(char*);
 
 #define MAX_FILES 100
 
-extern ASTNode* parsed_files[MAX_FILES];
-extern int parsed_file_count;
-
+extern ASTNode* current_parsed_ast;
+extern ASTNode* parsed_cd[MAX_FILES];
+extern int      parsed_cd_count;
+extern ASTNode* parsed_je;
 
 #endif

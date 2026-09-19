@@ -29,19 +29,11 @@ extern int yylex();
 program : 
     statement_list
     { $$ = $1; 
-      if(parsed_file_count < MAX_FILES) {
-        parsed_files[parsed_file_count++] = $$;
-      } else {
-        fprintf(stderr, "Error: too many files parsed.\n");
-      }
+      current_parsed_ast = $$;
     }
     | class_def
     { $$ = $1; 
-      if(parsed_file_count < MAX_FILES) {
-        parsed_files[parsed_file_count++] = $$;
-      } else {
-        fprintf(stderr, "Error: too many files parsed.\n");
-      }
+      current_parsed_ast = $$;
     }
     ;
 

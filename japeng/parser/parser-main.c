@@ -22,10 +22,11 @@ int main(int argc, char** argv) {
     free(path_copy);
 
     printf("\n=== AST PRINT (%d files) ===\n", parsed_file_count);
-    for (int i = 0; i < parsed_file_count; i++) {
-        printf("\n--- %s ---\n", parsed_files[i]->filename);
-        print_ast(parsed_files[i], 0);
+    for (int i = 0; i < parsed_cd_count; i++) {
+        printf("\n--- %s ---\n", parsed_cd[i]->filename);
+        print_ast(parsed_cd[i], 0);
     }
+    print_ast(parsed_je, 0);
     
     return EXIT_SUCCESS;
 }

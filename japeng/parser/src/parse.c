@@ -12,12 +12,30 @@
 extern FILE* yyin;
 const char* current_filename = "";
 
-ASTNode* parsed_files[MAX_FILES];
+ASTNode* current_parsed_ast = NULL;
 
-static int is_target_file(const char* filename) {
+ASTNode* parsed_cd[MAX_FILES];
+int      parsed_cd_count = 0;
+
+ASTNode* parsed_je = NULL;
+
+static int is_cd_file(const char* filename) 
+{
     const char* dot = strrchr(filename, '.');
     if(dot == NULL) return 0;
-    return (strcmp(dot, ".je") == 0 || strcmp(dot, ".cd") == 0);
+    return (strcmp(dot, ".cd") == 0);
+}
+
+static int is_je_file(const char* filename)
+{
+    const char* dot = strrchr(filename, '.');
+    if(dot == NULL) return 0;
+    return (strcmp(dot, ".je") == 0);
+}
+
+static int is_target_file(const char* filename)
+{
+    return is_cd_file(filename) || is_je_file(filename);
 }
 
 void parse(const char* dir_path)
@@ -57,9 +75,24 @@ void parse(const char* dir_path)
                     // 行番号を1にリセットする
                     linecounter = 1;
                     yylineno = 1;
-
-                    yyparse();
-
+                    current_parsed_ast = NULL;
+                    
+                    if (yyparse() == 0 && current_parsed_ast != NULL) {
+                        if (is_cd_file(entry->d_name)) {
+                            if (parsed_cd_count < MAX_FILES) {
+                                parsed_cd[parsed_cd_count++] = current_parsed_ast;
+                            } else {
+                                fprintf(stderr, "Error: Too many .cd files.\n");
+                            }
+                        }
+                        else if (is_je_file(entry->d_name)) {
+                            if (parsed_je == NULL) {
+                                parsed_je = current_parsed_ast;
+                            } else {
+                                fprintf(stderr, "Warning: Multiple .je files found.\n");
+                            }
+                        }
+                    }
                     fclose(file);
                 } 
             }
