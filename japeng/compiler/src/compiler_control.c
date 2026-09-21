@@ -15,20 +15,90 @@ static void start_loop(Compiler* c, Loop* loop, int start_pos)
 static void end_loop(Compiler* c, Loop* loop)
 {
     int jump = loop->break_jump;
+#if DEBUG_LOOP_WRITE
     printf("[END_LOOP] start patching, break_jump=%d\n", jump);
+#endif
     while (jump != -1) {
         // オペランドに退避していた「前の break 位置」を取り出す (上位ビット)
         uint32_t raw_inst = c->chunk->code[jump];
         uint32_t next = get_operand(raw_inst);
         int next_jump = (next == SENTINEL_JUMP) ? -1 : (int)next;
+#if DEBUG_LOOP_WRITE
         printf("  patching jump=%d, raw=0x%08X, next=%d\n", jump, raw_inst, next_jump);
+#endif
 
         // 現在のアドレスへ脱出ジャンプをパッチ
         patch_jump(c, jump);
         jump = next_jump;
     }
     c->current_loop = loop->enclosing;
+#if DEBUG_LOOP_WRITE
     printf("[END_LOOP] finished\n");
+#endif
+}
+
+static void collect_clauses(ASTNode* node, ASTNode** list, int* count, int max)
+{
+    if (node == NULL || *count >= max) return;
+    if (node->kind == AST_STMT) {
+        collect_clauses(node->stmt.left, list, count, max);
+        collect_clauses(node->stmt.right, list, count, max);
+    } else {
+        list[(*count)++] = node;
+    }
+}
+
+void compile_if_chain(Compiler* c, ASTNode* node)
+{
+    ASTNode* clauses[32];
+    int clause_count = 0;
+    collect_clauses(node, clauses, &clause_count, 32);
+
+    int exit_jumps[32];
+    int exit_count = 0;
+
+    for (int i = 0; i < clause_count; i++) {
+        ASTNode* clause = clauses[i];
+        if (clause == NULL || clause->kind != AST_SEND || clause->send.message == NULL) {
+            continue;
+        }
+
+        ObjString* msg = clause->send.message->identifier.name;
+
+        if (msg == sym_if || msg == sym_elif) {
+            ASTNode* cond_node  = clause->send.args->stmt.left;
+            ASTNode* block_node = clause->send.args->stmt.right;
+
+            // 1. 条件式の評価
+            compile(c, cond_node);
+
+            // 2. 偽なら次の節へジャンプ
+            int false_jump = emit_jump(c, OP_JUMP_IF_FALSE);
+
+            // 3. 真のパス: 条件値を POP してブロック実行
+            emit_inst(c, OP_POP, 0);
+            compile(c, block_node->block.body);
+
+            // 4. ブロック終了後は if 全体の末尾へ脱出
+            exit_jumps[exit_count++] = emit_jump(c, OP_JUMP);
+
+            // 5. 偽だったときの着地点をここ（次の節の直前）にパッチ
+            patch_jump(c, false_jump);
+
+            // 6. 偽のパス: 条件値を POP (次の elif の評価や else の実行に備える)
+            emit_inst(c, OP_POP, 0);
+
+        } else if (msg == sym_else) {
+            // else の引数は直接 BLOCK ノード
+            ASTNode* block_node = clause->send.args;
+            compile(c, block_node->block.body);
+        }
+    }
+
+    // 7. 各節の末尾から飛んできたすべての OP_JUMP を現在の末尾アドレスにパッチ
+    for (int i = 0; i < exit_count; i++) {
+        patch_jump(c, exit_jumps[i]);
+    }
 }
 
 void compile_if(Compiler* c, ASTNode* node)

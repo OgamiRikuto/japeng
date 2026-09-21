@@ -13,9 +13,14 @@ const char* op_kind[OP_MAX] = {
     [OP_CONSTANT]      = "OP_CONSTANT",
     [OP_GET_LOCAL]     = "OP_GET_LOCAL",
     [OP_SET_LOCAL]     = "OP_SET_LOCAL",
+    [OP_GET_GLOBAL]    = "OP_GET_GLOBAL",
+    [OP_SET_GLOBAL]    = "OP_SET_GLOBAL",
+    [OP_GET_FIELD]     = "OP_GET_FIELD",
+    [OP_SET_FIELD]    = "OP_SET_FIELD",
     [OP_SEND]          = "OP_SEND",
     [OP_CALL]          = "OP_CALL",
     [OP_POP]           = "OP_POP",
+    [OP_DUP]           = "OP_DUP",
     [OP_RETURN]        = "OP_RETURN",
     [OP_JUMP]          = "OP_JUMP",
     [OP_JUMP_IF_FALSE] = "OP_JUMP_IF_FALSE",
@@ -150,6 +155,19 @@ static InterpretResult run(VM* vm)
                 push(vm, value);
                 break;
             }
+            case OP_NEW_INSTANCE: {
+                Value class_val = pop(vm);
+                if (!is_obj(class_val) || ((Obj*)as_obj(class_val))->type != OBJ_CLASS) {
+                    fprintf(stderr, "Cannot instantiate non-class value.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                ObjClass* klass = (ObjClass*)as_obj(class_val);
+                ObjInstance* instance = new_instance(klass);
+
+                push(vm, make_obj((Obj*)instance));
+                break;
+            }
             case OP_JUMP: {
                 uint32_t offset = get_operand(instruction);
                 frame->ip += offset;
@@ -191,6 +209,9 @@ static InterpretResult run(VM* vm)
             case OP_POP:
                 pop(vm);
                 break;
+            case OP_DUP: 
+                push(vm, peek(vm, 0));
+                break; 
             case OP_RETURN: {
                 Value result = pop(vm);
 

@@ -6,6 +6,8 @@ ObjString* sym_is       = NULL;
 ObjString* sym_are      = NULL;
 ObjString* sym_self     = NULL;
 ObjString* sym_if       = NULL;
+ObjString* sym_elif     = NULL;
+ObjString* sym_else     = NULL;
 ObjString* sym_repeat   = NULL;
 ObjString* sym_SInteger = NULL;
 ObjString* sym_SFloat   = NULL;
@@ -23,6 +25,8 @@ void init_compiler_symbols(void) {
     if (!sym_are)       sym_are      = intern_cstr("are");
     if (!sym_self)      sym_self     = intern_cstr("self");
     if (!sym_if)        sym_if       = intern_cstr("if");
+    if (!sym_elif)      sym_elif     = intern_cstr("elif");
+    if (!sym_else)      sym_else     = intern_cstr("else");
     if (!sym_repeat)    sym_repeat   = intern_cstr("repeat"); 
     if (!sym_SInteger)  sym_SInteger = intern_cstr("SmallInteger"); 
     if (!sym_SFloat)    sym_SFloat   = intern_cstr("SmallFloat");
@@ -53,7 +57,9 @@ void init_compiler(Compiler* compiler, Chunk* chunk)
 void emit_inst(Compiler* c, Opcode op, uint32_t operand)
 {
     write_chunk(c->chunk, make_inst(op, operand));
+#if DEBUG_CHUNK_WRITE
     printf("[EMIT] count=%d, op=%d, operand=%u\n", c->chunk->count, op, operand);
+#endif
 }
 
 void emit_constant(Compiler* c, Value val)

@@ -22,7 +22,7 @@ void compile_var_decl(Compiler* c, ASTNode* node)
     TypeInfo* t_info = new_type_info(type_name, 1);
 
     // 1. 変数スロットを確保
-    add_local(c, var_name, t_info);
+    int slot = add_local(c, var_name, t_info);
 
     // 2. デフォルトコンストラクタの実行（引数 0 個）
     // if (type_name == sym_SInteger) {
@@ -42,6 +42,7 @@ void compile_var_decl(Compiler* c, ASTNode* node)
         // 2-2. 引数 0 個でインスタンス生成 (引数なしコンストラクタを自動呼出)
         emit_inst(c, OP_NEW_INSTANCE, 0);
     }
+    emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
 }
 
 void compile_assignment(Compiler* c, ASTNode* node)
@@ -69,14 +70,16 @@ void compile_assignment(Compiler* c, ASTNode* node)
         // 一般クラス (Point 等) の場合はインスタンス生成命令へ分岐...
         uint32_t class_sym_idx = add_constant(c->chunk, make_obj((Obj*)type_name));
         emit_inst(c, OP_GET_GLOBAL, class_sym_idx);
+        emit_inst(c, OP_NEW_INSTANCE, 0);
 
-        // 2. 引数を評価してスタックに積む (例: 10, 2)
-        int argc = compile_args(c, node->send.args);
-
-        // 3. インスタンス生成 & コンストラクタ呼び出し
-        emit_inst(c, OP_NEW_INSTANCE, (uint32_t)argc);
-
-        // 4. 生成されたインスタンスを変数スロットに格納
+        int argc = 0;
+        if (node->send.args != NULL) {
+            emit_inst(c, OP_DUP, 0);
+            argc = compile_args(c, node->send.args);
+            uint32_t init_sym = add_constant(c->chunk, make_obj((Obj*)intern_cstr("init")));
+            write_chunk(c->chunk, make_send_inst((uint16_t)argc, (uint16_t)init_sym));
+            emit_inst(c, OP_POP, 0);
+;       }
         emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
         return;
     }

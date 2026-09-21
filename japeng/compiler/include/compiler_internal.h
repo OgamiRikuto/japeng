@@ -11,6 +11,8 @@ extern ObjString* sym_is;
 extern ObjString* sym_are;
 extern ObjString* sym_self;
 extern ObjString* sym_if;
+extern ObjString* sym_elif;
+extern ObjString* sym_else;
 extern ObjString* sym_repeat;
 extern ObjString* sym_SInteger;
 extern ObjString* sym_SFloat;
@@ -21,6 +23,11 @@ extern ObjString* sym_div;
 extern ObjString* sym_equal;
 extern ObjString* sym_less;
 extern ObjString* sym_gt;
+
+#define DEBUG_CHUNK_WRITE 0
+#define DEBUG_CLASS_WRITE 1
+#define DEBUG_COMPILE_KIND 0
+#define DEBUG_LOOP_WRITE 0
 
 // コード生成ヘルパー
 int  emit_jump(Compiler* c, Opcode op);
@@ -42,6 +49,7 @@ void compile_mesage_send(Compiler* c, ASTNode* node, ObjString* msg);
 
 // 制御構文コンパイル関数
 void compile_if(Compiler* c, ASTNode* node);
+void compile_if_chain(Compiler* c, ASTNode* node);
 void compile_repeat(Compiler* c, ASTNode* node);
 void compile_break(Compiler* c);
 void compile_continue(Compiler* c);

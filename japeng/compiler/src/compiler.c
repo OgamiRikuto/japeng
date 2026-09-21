@@ -4,10 +4,33 @@
 #include "compiler_internal.h"
 #include "object.h"
 
+static bool is_clause_msg(ASTNode* node, ObjString* sym)
+{
+    return (node != NULL && node->kind == AST_SEND &&
+            node->send.message != NULL &&
+            node->send.message->identifier.name != NULL &&
+            node->send.message->identifier.name == sym);
+}
+
+static bool is_if_chain(ASTNode* node)
+{
+    if (node == NULL) return false;
+    // 単体の if
+    if (is_clause_msg(node, sym_if)) return true;
+
+    // if から始まるチェイン (AST_STMT の左が if)
+    if (node->kind == AST_STMT && is_clause_msg(node->stmt.left, sym_if)) {
+        return true;
+    }
+    return false;
+}
+
 void compile(Compiler* c, ASTNode* node)
 {
     if (node == NULL) return;
+#if DEBUG_COMPILE_KIND
     printf("[COMPILE] kind=%d\n", node->kind);
+#endif
 
     switch(node->kind) {
         case AST_LITERAL: {
@@ -40,6 +63,10 @@ void compile(Compiler* c, ASTNode* node)
         }
         
         case AST_SEND: {
+            if (is_if_chain(node)) {
+                compile_if_chain(c, node);
+                return;
+            }
             ObjString* msg_sym = node->send.message->identifier.name;
             bool is_self = (node->send.receiver->kind == AST_IDENTIFIER &&
                             node->send.receiver->identifier.name == sym_self);
@@ -86,6 +113,10 @@ void compile(Compiler* c, ASTNode* node)
             break;
         }
         case AST_STMT: {
+            if (is_if_chain(node)) {
+                compile_if_chain(c, node);
+                return;
+            }
             if (node->stmt.left)  compile(c, node->stmt.left);
             if (node->stmt.right) compile(c, node->stmt.right);
             break;
