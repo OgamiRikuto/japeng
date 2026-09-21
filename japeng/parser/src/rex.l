@@ -3,7 +3,17 @@
 #include <string.h>
 #include "literal.h"
 #include "symbol.h"
+
 int linecounter = 1;
+extern const char* current_filename;
+int yycolumn = 1;
+
+#define YY_USER_ACTION \
+    yylloc.first_line   = yylineno; \
+    yylloc.first_column = yycolumn; \
+    yylloc.last_line    = yylineno; \
+    yylloc.last_column  = yycolumn + yyleng - 1; \
+    yycolumn += yyleng;
 %}
 %option nounput
 %option yylineno
@@ -37,7 +47,7 @@ int linecounter = 1;
 ")"					{ return R_PAR; }
 "["					{ return L_BLACKET; }
 "]"					{ return R_BLACKET; }
-"\n"				{ linecounter++; }
+"\n"				{ yycolumn = 1; linecounter++; }
 [ \t\r]+			{ }
 .					{ return UNKNOWN; }
 %%

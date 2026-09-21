@@ -10,7 +10,7 @@
 #include "object.h"
 
 extern FILE* yyin;
-const char* current_filename = "";
+extern const char* current_filename;
 
 ASTNode* current_parsed_ast = NULL;
 

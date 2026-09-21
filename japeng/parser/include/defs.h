@@ -15,13 +15,14 @@
 extern char *yytext;
 extern int linecounter;
 extern int yylineno;
+extern int syntax_error_count;
 
 int main(int, char**);
 int yylex(void);
 void comment(void);
 ObjString* unquote_and_intern(const char*, int);
 int yyparse(void);
-void yyerror(char*);
+void yyerror(const char*);
 
 
 #define MAX_FILES 100
