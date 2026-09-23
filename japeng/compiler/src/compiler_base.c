@@ -56,13 +56,12 @@ void compile_assignment(Compiler* c, ASTNode* node)
 
         int slot = add_local(c, var_name, t_info);
 
-        // 即値型（Integer, Float 等）の場合
-        // if (type_name == sym_SInteger || type_name == sym_SFloat) {
-        if (is_float_type(type_name) || is_integer_type(type_name)) {
-            compile(c, node->send.args); // 右辺の式を評価 (スタックに乗る)
-            // スタックトップにある値がそのまま slot の領域になるため、
-            // その場で作るなら OP_SET_LOCAL すら不要（既にスタックトップにある）
-            // 明示的に書き込むなら:
+
+        if ((node->send.args != NULL && node->send.args->kind == AST_BLOCK) ||
+            (type_name != NULL && strcmp(type_name->chars, "Function") == 0) ||
+            is_float_type(type_name) || is_integer_type(type_name)) {
+            compile(c, node->send.args);
+
             emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
             return;
         }
@@ -114,6 +113,32 @@ void compile_assignment(Compiler* c, ASTNode* node)
 
 void compile_mesage_send(Compiler* c, ASTNode* node, ObjString* msg)
 {
+    bool is_self = (node->send.receiver->kind == AST_IDENTIFIER &&
+                    node->send.receiver->identifier.name == sym_self);
+
+    // ★ レシーバーが self で、かつ同名のローカル変数（または外側の変数）が存在する場合
+    // 例: self add 10 -> 変数 add に入っている関数を呼び出す
+    if (is_self) {
+        int var_slot = resolve_local(c, msg);
+        int upval_slot = (var_slot == -1) ? resolve_upvalue(c, msg) : -1;
+
+        if (var_slot != -1 || upval_slot != -1) {
+            // 1. self ではなく、関数が入っている変数をスタックにロード
+            if (var_slot != -1) {
+                emit_inst(c, OP_GET_LOCAL, (uint32_t)var_slot);
+            } else {
+                emit_inst(c, OP_GET_UPVALUE, (uint32_t)upval_slot);
+            }
+
+            // 2. 引数を評価してスタックに積む
+            int argc = compile_args(c, node->send.args);
+
+            // 3. 内部的に "call" メッセージを送って関数を実行
+            uint32_t call_sym = add_constant(c->chunk, make_obj((Obj*)intern_cstr("call")));
+            write_chunk(c->chunk, make_send_inst((uint16_t)argc, (uint16_t)call_sym));
+            return;
+        }
+    }
     // 通常のメッセージ送信
     compile(c, node->send.receiver);
     int argc = compile_args(c, node->send.args);

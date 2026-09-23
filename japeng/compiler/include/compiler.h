@@ -22,6 +22,11 @@ typedef struct local {
     int depth;
 } Local;
 
+typedef struct upvalue {
+    uint8_t index;
+    bool is_local;
+} CompilerUpvalue;
+
 typedef struct compiler {
     struct compiler* enclosing;
     Chunk* chunk;
@@ -29,6 +34,10 @@ typedef struct compiler {
     Local locals[MAX_LOCALS];
     int local_count;
     int scope_depth;
+    
+    CompilerUpvalue upvalues[MAX_LOCALS];
+    int upvalue_count;
+
     Loop* current_loop;
     ObjClass* current_class;
     Table* defined_class;

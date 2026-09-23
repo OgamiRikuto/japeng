@@ -44,6 +44,11 @@ void compile(Compiler* c, ASTNode* node)
                 emit_inst(c, OP_GET_LOCAL, (uint32_t)slot);
                 break;
             } 
+            int upval = resolve_upvalue(c, node->identifier.name);
+            if (upval != -1) {
+                emit_inst(c, OP_GET_UPVALUE, (uint32_t)upval);
+                break;
+            }
             if (c->current_class != NULL) {
                 int field_idx = find_field_index(c->current_class, node->identifier.name);
                 if (field_idx != -1) {
@@ -124,7 +129,12 @@ void compile(Compiler* c, ASTNode* node)
 
         case AST_BLOCK: {
             ObjFunction* fn = compile_block(c, node);
-            emit_constant(c, make_obj((Obj*)fn));
+            uint32_t fn_idx = add_constant(c->chunk, make_obj((Obj*)fn));
+            if (fn->upvalue_count > 0) {
+                emit_inst(c, OP_CLOSURE, fn_idx);
+            } else {
+                emit_constant(c, make_obj((Obj*)fn));
+            }
             break;
         }
 

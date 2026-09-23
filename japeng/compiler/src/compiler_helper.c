@@ -11,6 +11,7 @@ ObjString* sym_else     = NULL;
 ObjString* sym_repeat   = NULL;
 ObjString* sym_SInteger = NULL;
 ObjString* sym_SFloat   = NULL;
+ObjString* sym_function = NULL;
 ObjString* sym_plus     = NULL;
 ObjString* sym_minus    = NULL;
 ObjString* sym_multi    = NULL;
@@ -30,6 +31,7 @@ void init_compiler_symbols(void) {
     if (!sym_repeat)    sym_repeat   = intern_cstr("repeat"); 
     if (!sym_SInteger)  sym_SInteger = intern_cstr("SmallInteger"); 
     if (!sym_SFloat)    sym_SFloat   = intern_cstr("SmallFloat");
+    if (!sym_function)  sym_function = intern_cstr("Function");
     if (!sym_plus)      sym_plus     = intern_cstr("+");
     if (!sym_minus)     sym_minus    = intern_cstr("-");
     if (!sym_multi)     sym_multi    = intern_cstr("*");
@@ -49,6 +51,7 @@ void init_compiler(Compiler* compiler, Chunk* chunk)
     compiler->locals[0].name = intern_cstr("self");
     compiler->locals[0].depth = 1;
     compiler->local_count = 1;
+    compiler->upvalue_count = 0;
     compiler->current_loop = NULL;
     compiler->current_class = NULL;
     compiler->defined_class = new_table(16);
@@ -122,6 +125,42 @@ int add_anonymous_local(Compiler* c)
     return slot;
 }
 
+int add_upvalue(Compiler* compiler, uint8_t index, bool is_local) 
+{
+    int count = compiler->upvalue_count;
+
+    // 既にキャプチャ済みかチェック
+    for (int i = 0; i < count; i++) {
+        CompilerUpvalue* upvalue = &compiler->upvalues[i];
+        if (upvalue->index == index && upvalue->is_local == is_local) {
+            return i;
+        }
+    }
+
+    // 新規登録
+    compiler->upvalues[count].is_local = is_local;
+    compiler->upvalues[count].index = index;
+    return compiler->upvalue_count++;
+}
+
+int resolve_upvalue(Compiler* compiler, ObjString* name) 
+{
+    if (compiler->enclosing == NULL) return -1; // 最上位なら存在しない
+
+    // 1. 親スコープのローカル変数にあるか？
+    int local = resolve_local(compiler->enclosing, name);
+    if (local != -1) {
+        return add_upvalue(compiler, (uint8_t)local, true);
+    }
+
+    // 2. 親スコープも外側からキャプチャしているか？（再帰探索）
+    int upvalue = resolve_upvalue(compiler->enclosing, name);
+    if (upvalue != -1) {
+        return add_upvalue(compiler, (uint8_t)upvalue, false);
+    }
+
+    return -1; // 外側のローカル変数としては見つからなかった
+}
 ObjString* get_type_name(ASTNode* type_node) {
     if (type_node == NULL) return NULL;
     if (type_node->kind == AST_IDENTIFIER) {

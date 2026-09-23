@@ -16,6 +16,7 @@ extern ObjString* sym_else;
 extern ObjString* sym_repeat;
 extern ObjString* sym_SInteger;
 extern ObjString* sym_SFloat;
+extern ObjString* sym_function;
 extern ObjString* sym_plus;
 extern ObjString* sym_minus;
 extern ObjString* sym_multi;
@@ -24,7 +25,7 @@ extern ObjString* sym_equal;
 extern ObjString* sym_less;
 extern ObjString* sym_gt;
 
-#define DEBUG_CHUNK_WRITE 0
+#define DEBUG_CHUNK_WRITE 1
 #define DEBUG_CLASS_WRITE 1
 #define DEBUG_COMPILE_KIND 0
 #define DEBUG_LOOP_WRITE 0
@@ -38,11 +39,14 @@ void emit_loop(Compiler* c, int loop_start_index);
 int resolve_local(Compiler* c, ObjString* name);
 int add_local(Compiler* c, ObjString* name, TypeInfo* type);
 int add_anonymous_local(Compiler* c);
+int add_upvalue(Compiler* compiler, uint8_t index, bool is_local);
+int resolve_upvalue(Compiler* compiler, ObjString* name);
 ObjString* get_type_name(ASTNode* type_node);
 bool is_integer_type(ObjString* name);
 bool is_float_type(ObjString* name);
 
 // 基本構文コンパイル関数
+void compile_identifier_load(Compiler* compiler, ObjString* name);
 void compile_var_decl(Compiler* c, ASTNode* node);
 void compile_assignment(Compiler* c, ASTNode* node);
 void compile_mesage_send(Compiler* c, ASTNode* node, ObjString* msg);

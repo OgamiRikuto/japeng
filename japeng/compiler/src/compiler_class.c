@@ -45,6 +45,17 @@ static void collect_delegate_classes(Compiler* c, ASTNode* node, ObjClass** list
     }
 }
 
+static void collect_delegate_types(ASTNode* node, TypeInfo** list, int* idx)
+{
+    if (node == NULL) return;
+    if (node->kind == AST_STMT) {
+        collect_delegate_types(node->stmt.left, list, idx);
+        collect_delegate_types(node->stmt.right, list, idx);
+        return;
+    }
+    list[(*idx)++] = build_type_info(node);
+}
+
 static int count_type_args(ASTNode* node)
 {
     if (node == NULL) return 0;
@@ -314,15 +325,11 @@ void compile_class_body(Compiler* c, ASTNode* node)
     ObjString* super_name = NULL;
     if (node->class_def.super_class != NULL) {
         super_name = get_class_name_from_node(node->class_def.super_class);
-    } else {
-        ObjString* obj_str = intern_cstr("Object");
-        if (class_name != obj_str) {
-            super_name = obj_str;
-        } 
     }
 
     if (super_name != NULL) {
         klass->superclass = resolve_class(c, super_name);
+        klass->superclass_type = build_type_info(node->class_def.super_class);
 
         if (klass->superclass != NULL && klass->superclass->state != CLASS_STATE_COMPILED) {
             ASTNode* super_ast = find_class_ast(super_name);
@@ -335,9 +342,14 @@ void compile_class_body(Compiler* c, ASTNode* node)
     int delegate_count = count_classes(node->class_def.from_classes);
     if (delegate_count > 0) {
         klass->delegates = (ObjClass**)malloc(sizeof(ObjClass*) * delegate_count);
+        klass->delegate_types = (TypeInfo**)malloc(sizeof(TypeInfo*) * delegate_count);
+
         int idx = 0;
         collect_delegate_classes(c, node->class_def.from_classes, klass->delegates, &idx);
         klass->delegate_count = idx;
+
+        int type_idx = 0;
+        collect_delegate_types(node->class_def.from_classes, klass->delegate_types, &type_idx);
     }
 
     if (klass->superclass != NULL) {

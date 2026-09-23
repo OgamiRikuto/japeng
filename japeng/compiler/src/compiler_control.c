@@ -265,24 +265,29 @@ ObjFunction* compile_block(Compiler* parent, ASTNode* block_node)
     block_compiler.enclosing = parent;
     block_compiler.current_class = parent->current_class;
 
-    // if (block_compiler.current_class != NULL) {
-    //     block_compiler.locals[0].type = block_compiler.current_class->type;
-    // }
-
     int arity = 0;
     if (block_node->block.args != NULL) {
         compile_block_args(&block_compiler, block_node->block.args, &arity);
     }
 
-    // TypeInfo* ret_type = NULL;
-    // if (block_node->block.has_ret) {
-    //     ret_type = build_type_info(block_node->block.rets);
-    // }
 
     compile(&block_compiler, block_node->block.body);
 
     if (!block_node->block.has_ret)
         emit_inst(&block_compiler, OP_RETURN, 0);
 
-    return new_function(fn_chunk, arity);
+    ObjFunction* fn =  new_function(fn_chunk, arity);
+
+    fn->upvalue_count = block_compiler.upvalue_count;
+    if (fn->upvalue_count > 0) {
+        fn->upvalues = (UpvalueInfo*)malloc(sizeof(UpvalueInfo) * fn->upvalue_count);
+        for (int i = 0; i < fn->upvalue_count; i++) {
+            fn->upvalues[i].index    = block_compiler.upvalues[i].index;
+            fn->upvalues[i].is_local = block_compiler.upvalues[i].is_local;
+        }
+    } else {
+        fn->upvalues = NULL;
+    }
+
+    return fn;
 }
