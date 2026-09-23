@@ -308,18 +308,15 @@ void compile_class_body(Compiler* c, ASTNode* node)
         exit(EXIT_FAILURE);
     }
 
-    // ★ 対策 1: すでにコンパイル完了していればスキップ (二重コンパイル防止)
     if (klass->state == CLASS_STATE_COMPILED) {
         return;
     }
 
-    // ★ 対策 2: コンパイル中に再度自分に到達したら循環継承エラー
     if (klass->state == CLASS_STATE_COMPILING) {
         fprintf(stderr, "Error: Cyclic inheritance detected involving class '%s'.\n", class_name->chars);
         exit(EXIT_FAILURE);
     }
 
-    // コンパイル中マークをセット
     klass->state = CLASS_STATE_COMPILING;
 
     ObjString* super_name = NULL;

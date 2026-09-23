@@ -25,8 +25,8 @@ extern ObjString* sym_equal;
 extern ObjString* sym_less;
 extern ObjString* sym_gt;
 
-#define DEBUG_CHUNK_WRITE 1
-#define DEBUG_CLASS_WRITE 1
+#define DEBUG_CHUNK_WRITE 0
+#define DEBUG_CLASS_WRITE 0
 #define DEBUG_COMPILE_KIND 0
 #define DEBUG_LOOP_WRITE 0
 

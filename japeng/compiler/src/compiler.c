@@ -25,6 +25,26 @@ static bool is_if_chain(ASTNode* node)
     return false;
 }
 
+static void compile_statement_node(Compiler* c, ASTNode* node) 
+{
+    if (node == NULL) return;
+
+    if (node->kind == AST_STMT) {
+        compile(c, node);
+        return;
+    }
+
+    compile(c, node);
+
+    if (node->kind == AST_SEND && node->send.message != NULL) {
+        ObjString* msg = node->send.message->identifier.name;
+        if (msg != sym_is && msg != sym_are && msg != sym_if && msg != sym_repeat) {
+            emit_inst(c, OP_POP, 0);
+        }
+    }
+}
+
+
 void compile(Compiler* c, ASTNode* node)
 {
     if (node == NULL) return;
@@ -76,7 +96,7 @@ void compile(Compiler* c, ASTNode* node)
             bool is_self = (node->send.receiver->kind == AST_IDENTIFIER &&
                             node->send.receiver->identifier.name == sym_self);
             // AST_SEND 内の代入処理
-            if (msg_sym == sym_is) {
+            if (msg_sym == sym_is || msg_sym == sym_are) {
                 compile_assignment(c, node);
                 break;
             }
@@ -122,8 +142,8 @@ void compile(Compiler* c, ASTNode* node)
                 compile_if_chain(c, node);
                 return;
             }
-            if (node->stmt.left)  compile(c, node->stmt.left);
-            if (node->stmt.right) compile(c, node->stmt.right);
+            if (node->stmt.left)  compile_statement_node(c, node->stmt.left);
+            if (node->stmt.right) compile_statement_node(c, node->stmt.right);
             break;
         }
 

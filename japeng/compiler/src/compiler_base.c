@@ -21,25 +21,15 @@ void compile_var_decl(Compiler* c, ASTNode* node)
     ObjString* type_name = get_type_name(node->var_decl.type);
     TypeInfo* t_info = new_type_info(type_name, 1);
 
-    // 1. 変数スロットを確保
     int slot = add_local(c, var_name, t_info);
 
-    // 2. デフォルトコンストラクタの実行（引数 0 個）
-    // if (type_name == sym_SInteger) {
     if (is_integer_type(type_name)) {
-        // Integer のデフォルト: 0 (ヒープ確保なし)
         emit_constant(c, make_int(0));
-    // } else if (type_name == sym_SFloat) {
     } else if (is_float_type(type_name)) {
-        // Float のデフォルト: 0.0
         emit_constant(c, make_float(0.0));
     } else {
-        // 一般クラス (Point など)
-        // 2-1. クラスオブジェクトをスタックにロード
         uint32_t class_sym_idx = add_constant(c->chunk, make_obj((Obj*)type_name));
         emit_inst(c, OP_GET_GLOBAL, class_sym_idx);
-
-        // 2-2. 引数 0 個でインスタンス生成 (引数なしコンストラクタを自動呼出)
         emit_inst(c, OP_NEW_INSTANCE, 0);
     }
     emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
@@ -47,7 +37,7 @@ void compile_var_decl(Compiler* c, ASTNode* node)
 
 void compile_assignment(Compiler* c, ASTNode* node)
 {
-    // パターン 1: 初期化付き宣言
+
     if (node->send.receiver->kind == AST_VAR_DECL) {
         ASTNode* decl = node->send.receiver;
         ObjString* var_name  = decl->var_decl.identifier->identifier.name;
@@ -66,7 +56,7 @@ void compile_assignment(Compiler* c, ASTNode* node)
             return;
         }
 
-        // 一般クラス (Point 等) の場合はインスタンス生成命令へ分岐...
+
         uint32_t class_sym_idx = add_constant(c->chunk, make_obj((Obj*)type_name));
         emit_inst(c, OP_GET_GLOBAL, class_sym_idx);
         emit_inst(c, OP_NEW_INSTANCE, 0);
@@ -83,7 +73,6 @@ void compile_assignment(Compiler* c, ASTNode* node)
         return;
     }
 
-    // パターン 2: 既存変数への再代入
     if (node->send.receiver->kind == AST_IDENTIFIER) {
         ObjString* target_name = node->send.receiver->identifier.name;
         int slot = resolve_local(c, target_name);
@@ -116,30 +105,27 @@ void compile_mesage_send(Compiler* c, ASTNode* node, ObjString* msg)
     bool is_self = (node->send.receiver->kind == AST_IDENTIFIER &&
                     node->send.receiver->identifier.name == sym_self);
 
-    // ★ レシーバーが self で、かつ同名のローカル変数（または外側の変数）が存在する場合
-    // 例: self add 10 -> 変数 add に入っている関数を呼び出す
+
     if (is_self) {
         int var_slot = resolve_local(c, msg);
         int upval_slot = (var_slot == -1) ? resolve_upvalue(c, msg) : -1;
 
         if (var_slot != -1 || upval_slot != -1) {
-            // 1. self ではなく、関数が入っている変数をスタックにロード
+
             if (var_slot != -1) {
                 emit_inst(c, OP_GET_LOCAL, (uint32_t)var_slot);
             } else {
                 emit_inst(c, OP_GET_UPVALUE, (uint32_t)upval_slot);
             }
 
-            // 2. 引数を評価してスタックに積む
             int argc = compile_args(c, node->send.args);
 
-            // 3. 内部的に "call" メッセージを送って関数を実行
             uint32_t call_sym = add_constant(c->chunk, make_obj((Obj*)intern_cstr("call")));
             write_chunk(c->chunk, make_send_inst((uint16_t)argc, (uint16_t)call_sym));
             return;
         }
     }
-    // 通常のメッセージ送信
+
     compile(c, node->send.receiver);
     int argc = compile_args(c, node->send.args);
 

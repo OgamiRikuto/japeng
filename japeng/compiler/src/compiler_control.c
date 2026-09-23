@@ -19,15 +19,12 @@ static void end_loop(Compiler* c, Loop* loop)
     printf("[END_LOOP] start patching, break_jump=%d\n", jump);
 #endif
     while (jump != -1) {
-        // オペランドに退避していた「前の break 位置」を取り出す (上位ビット)
         uint32_t raw_inst = c->chunk->code[jump];
         uint32_t next = get_operand(raw_inst);
         int next_jump = (next == SENTINEL_JUMP) ? -1 : (int)next;
 #if DEBUG_LOOP_WRITE
         printf("  patching jump=%d, raw=0x%08X, next=%d\n", jump, raw_inst, next_jump);
 #endif
-
-        // 現在のアドレスへ脱出ジャンプをパッチ
         patch_jump(c, jump);
         jump = next_jump;
     }
@@ -89,7 +86,6 @@ void compile_if_chain(Compiler* c, ASTNode* node)
             emit_inst(c, OP_POP, 0);
 
         } else if (msg == sym_else) {
-            // else の引数は直接 BLOCK ノード
             ASTNode* block_node = clause->send.args;
             compile(c, block_node->block.body);
         }
@@ -121,7 +117,7 @@ void compile_repeat(Compiler* c, ASTNode* node)
 {
     bool is_self = (node->send.receiver->kind == AST_IDENTIFIER &&
                     node->send.receiver->identifier.name == sym_self);
-    // パターン 2-A: repeat (cond) [ body ] (条件ループ)
+    // パターン 1: repeat (cond) [ body ] (条件ループ)
     if (is_self && node->send.args->kind == AST_STMT) {
         ASTNode* cond_node  = node->send.args->stmt.left;
         ASTNode* block_node = node->send.args->stmt.right;
@@ -145,7 +141,7 @@ void compile_repeat(Compiler* c, ASTNode* node)
         return;
     }
     
-    // パターン 2-B: repeat [ body ] (無限ループ)
+    // パターン 2: repeat [ body ] (無限ループ)
     if (is_self && node->send.args->kind == AST_BLOCK) {
         int loop_start = c->chunk->count;
     
@@ -160,7 +156,7 @@ void compile_repeat(Compiler* c, ASTNode* node)
         return;
     }
     
-    // パターン 2-C: limit repeat [ arg i: Integer. body ] (回数指定ループ)
+    // パターン 3: limit repeat [ arg i: Integer. body ] (回数指定ループ)
     if (!is_self && node->send.args->kind == AST_BLOCK) {
         ASTNode* block_node = node->send.args;
     
@@ -225,7 +221,6 @@ void compile_break(Compiler* c)
     uint32_t prev = (c->current_loop->break_jump == -1) 
                     ? SENTINEL_JUMP
                     : (uint32_t)c->current_loop->break_jump;
-    // オペランド部分に前の break 位置を一時保存してリスト化
     c->chunk->code[jump] = make_inst(OP_JUMP, prev);
     c->current_loop->break_jump = jump;
 }

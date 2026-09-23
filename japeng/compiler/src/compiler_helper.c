@@ -129,7 +129,6 @@ int add_upvalue(Compiler* compiler, uint8_t index, bool is_local)
 {
     int count = compiler->upvalue_count;
 
-    // 既にキャプチャ済みかチェック
     for (int i = 0; i < count; i++) {
         CompilerUpvalue* upvalue = &compiler->upvalues[i];
         if (upvalue->index == index && upvalue->is_local == is_local) {
@@ -145,21 +144,19 @@ int add_upvalue(Compiler* compiler, uint8_t index, bool is_local)
 
 int resolve_upvalue(Compiler* compiler, ObjString* name) 
 {
-    if (compiler->enclosing == NULL) return -1; // 最上位なら存在しない
+    if (compiler->enclosing == NULL) return -1; 
 
-    // 1. 親スコープのローカル変数にあるか？
     int local = resolve_local(compiler->enclosing, name);
     if (local != -1) {
         return add_upvalue(compiler, (uint8_t)local, true);
     }
 
-    // 2. 親スコープも外側からキャプチャしているか？（再帰探索）
     int upvalue = resolve_upvalue(compiler->enclosing, name);
     if (upvalue != -1) {
         return add_upvalue(compiler, (uint8_t)upvalue, false);
     }
 
-    return -1; // 外側のローカル変数としては見つからなかった
+    return -1;
 }
 ObjString* get_type_name(ASTNode* type_node) {
     if (type_node == NULL) return NULL;
