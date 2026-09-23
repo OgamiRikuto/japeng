@@ -1,6 +1,7 @@
 #include "vm.h"
 #include "common.h"
-#include "dispatch/dispatches.h"
+#include "builtins.h"
+#include "dispatch.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -32,6 +33,9 @@ const char* op_kind[OP_MAX] = {
     [OP_LESS]         = "OP_LESS",
     [OP_GREAT]        = "OP_GREAT",
     [OP_EQUAL]        = "OP_EQUAL",
+    [OP_CLOSURE]      = "OP_CLOSURE",
+    [OP_GET_UPVALUE]  = "OP_GET_UPVALUE",
+    [OP_NEW_INSTANCE] = "OP_NEW_INSTANCE"
 };
 #endif
 
@@ -44,6 +48,7 @@ void init_vm(VM* vm)
 {
     reset_stack(vm);
     vm->globals = new_table(8);
+    init_builtin_classes(vm);
 }
 
 void free_vm(VM* vm)
@@ -65,19 +70,24 @@ Value pop(VM* vm)
     return *vm->stack_top;
 }
 
-static bool push_frame(VM* vm, Chunk* chunk, uint8_t arg_count)
+ObjClass* get_class_for_value(VM* vm, Value val) 
 {
-    if (vm->frame_count >= FRAME_MAX) {
-        fprintf(stderr, "Stack overflow: frame limit exceeded.\n");
-        return false;
+    if (is_int(val)) {
+        return vm->class_integer;
     }
 
-    CallFrame* frame = &vm->frames[vm->frame_count++];
-    frame->chunk = chunk;
-    frame->ip = chunk->code;
-    frame->slots = vm->stack_top - arg_count;
+    if (is_obj(val)) {
+        Obj* obj = as_obj(val);
+        switch (obj->type) {
+            case OBJ_INSTANCE:
+                return ((ObjInstance*)obj)->klass;
+            default:
+                break;
+        }
+    }
 
-    return true;
+    // 該当がなければ基底 Object クラスを返す
+    return vm->class_object;
 }
 
 static inline bool is_falsy(Value value) {
@@ -163,9 +173,34 @@ static InterpretResult run(VM* vm)
                 }
 
                 ObjClass* klass = (ObjClass*)as_obj(class_val);
+                if (klass != NULL && klass != vm->class_object && klass->superclass == NULL) {
+                    klass->superclass = vm->class_object;
+                    klass->superclass_type = new_type_info(intern_cstr("Object"), 0);
+                }
                 ObjInstance* instance = new_instance(klass);
 
                 push(vm, make_obj((Obj*)instance));
+                break;
+            }
+            case OP_CLOSURE: {
+                uint32_t fn_idx = get_operand(instruction);
+                ObjFunction* fn = (ObjFunction*)as_obj(frame->chunk->constants[fn_idx]);
+                ObjClosure* closure = new_closure(fn);
+
+                for (int i = 0; i < fn->upvalue_count; i++) {
+                    uint8_t index = fn->upvalues[i].index;
+                    if (fn->upvalues[i].is_local) {
+                        closure->captures[i] = frame->slots[index];
+                    } else {
+                        closure->captures[i] = frame->closure->captures[index];
+                    }
+                }
+                push(vm, make_obj((Obj*)closure));
+                break;
+            }
+            case OP_GET_UPVALUE: {
+                uint32_t slot = get_operand(instruction);
+                push(vm, frame->closure->captures[slot]);
                 break;
             }
             case OP_JUMP: {
@@ -191,18 +226,6 @@ static InterpretResult run(VM* vm)
                 if (!dispatch_send(vm, arg_count, msg_index)) {
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                frame = &vm->frames[vm->frame_count - 1];
-                break;
-            }
-            case OP_CALL: {
-                uint8_t arg_count = get_operand(instruction);
-
-                Chunk* callee_chunk = (Chunk*)as_obj(pop(vm));
-
-                if (!push_frame(vm, callee_chunk, arg_count)) {
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-
                 frame = &vm->frames[vm->frame_count - 1];
                 break;
             }
@@ -339,6 +362,7 @@ InterpretResult interpret(VM* vm, Chunk* chunk)
     push(vm, make_nil());
     
     CallFrame* frame = &vm->frames[vm->frame_count++];
+    frame->closure = NULL;
     frame->chunk = chunk;
     frame->ip = chunk->code;
     frame->slots = vm->stack;
@@ -391,6 +415,9 @@ static void print_stack(VM* vm) {
                     }
                     case OBJ_FUNCTION:
                         printf("<fn>");
+                        break;
+                    case OBJ_CLOSURE:
+                        printf("<closure>");
                         break;
                     default:
                         printf("XXX");
