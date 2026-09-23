@@ -60,20 +60,16 @@ bool dispatch_send(VM* vm, uint8_t arg_count, uint16_t msg_index)
         }
     }
 
-    // ====================================================
-    // 3. ★ 統一メソッド探索（Integer, Instance, 将来のListなど）
-    // ====================================================
+    // 3. クラスオブジェクトへのメッセージ
     ObjClass* klass = get_class_for_value(vm, receiver);
     Value method_val;
 
     if (klass != NULL && find_method(klass, msg_sym, &method_val)) {
-        // (A) ネイティブ関数 (print, println など)
         if (is_obj(method_val) && ((Obj*)as_obj(method_val))->type == OBJ_NATIVE) {
             ObjNative* native = (ObjNative*)as_obj(method_val);
             return native->function(vm, arg_count);
         }
 
-        // (B) ユーザー定義バイトコードメソッド
         if (is_obj(method_val) && ((Obj*)as_obj(method_val))->type == OBJ_FUNCTION) {
             ObjFunction* func = (ObjFunction*)as_obj(method_val);
 

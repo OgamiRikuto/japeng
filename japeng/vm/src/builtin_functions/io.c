@@ -26,6 +26,16 @@ static void print_value(Value value)
             case OBJ_STRING:
                 printf("%s", ((ObjString*)obj)->chars);
                 break;
+            case OBJ_LIST: {
+                ObjList* list = (ObjList*)obj;
+                printf("list: [ ");
+                for (int index = 0; index < list->size; index++) {
+                    print_value(list->elements[index]);
+                    printf(", ");
+                }
+                printf("]");
+                break;
+            }
             case OBJ_CLASS:
                 printf("<class %s>", ((ObjClass*)obj)->name ? ((ObjClass*)obj)->name->chars : "Anon");
                 break;
@@ -51,10 +61,8 @@ bool native_println(VM* vm, uint8_t arg_count)
 {
     Value target;
     if (arg_count == 0) {
-        // 10 println. -> レシーバ自身を出力
         target = peek(vm, 0);
-    } else if (arg_count == 1) {
-        // println 10. (self println 10) -> 引数を出力
+    } else if (arg_count == 1) {\
         target = peek(vm, 0);
     } else {
         fprintf(stderr, "Runtime Error: 'println' expects 0 or 1 argument.\n");
@@ -64,17 +72,14 @@ bool native_println(VM* vm, uint8_t arg_count)
     print_value(target);
     printf("\n");
 
-    // スタックからレシーバと引数をすべて除去
     for (int i = 0; i <= arg_count; i++) {
         pop(vm);
     }
 
-    // 評価結果として出力した値をスタックに残す
     push(vm, target);
     return true;
 }
 
-// --- ネイティブ関数: print (改行なし) ---
 bool native_print(VM* vm, uint8_t arg_count) 
 {
     Value target = peek(vm, 0);

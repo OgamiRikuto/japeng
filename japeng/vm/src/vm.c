@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DEBUG_TRACE_EXECUTION 1
+#define DEBUG_TRACE_EXECUTION 0
 
 #if DEBUG_TRACE_EXECUTION 
 static void print_stack(VM* vm);
@@ -81,12 +81,12 @@ ObjClass* get_class_for_value(VM* vm, Value val)
         switch (obj->type) {
             case OBJ_INSTANCE:
                 return ((ObjInstance*)obj)->klass;
+            case OBJ_LIST:
+                return vm->class_list;
             default:
                 break;
         }
     }
-
-    // 該当がなければ基底 Object クラスを返す
     return vm->class_object;
 }
 
@@ -177,9 +177,11 @@ static InterpretResult run(VM* vm)
                     klass->superclass = vm->class_object;
                     klass->superclass_type = new_type_info(intern_cstr("Object"), 0);
                 }
-                ObjInstance* instance = new_instance(klass);
-
-                push(vm, make_obj((Obj*)instance));
+                if (klass == vm->class_list) {
+                    push(vm, make_obj((Obj*)new_list()));
+                } else {
+                    push(vm, make_obj((Obj*)new_instance(klass)));
+                }
                 break;
             }
             case OP_CLOSURE: {
@@ -312,10 +314,6 @@ static InterpretResult run(VM* vm)
                 }
                 break;
             }
-
-            // ----------------------------------------------------
-            // 比較演算 (ループ判定で使用)
-            // ----------------------------------------------------
             case OP_LESS: {
                 Value b = pop(vm);
                 Value a = pop(vm);
@@ -411,6 +409,11 @@ static void print_stack(VM* vm) {
                     case OBJ_STRING: {
                         ObjString* str = (ObjString*)obj;
                         printf("\"%s\"", str->chars);
+                        break;
+                    }
+                    case OBJ_LIST: {
+                        ObjList* list = (ObjList*)obj;
+                        printf("<list len:%d>", list->size);
                         break;
                     }
                     case OBJ_FUNCTION:
