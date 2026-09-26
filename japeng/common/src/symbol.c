@@ -12,6 +12,17 @@ typedef struct {
     int capacity;
 } SymbolPool;
 
+#define DEFINE_SYM(name, str) ObjString* sym_##name = NULL;
+CORE_SYMBOLS(DEFINE_SYM)
+#undef DEFINE_SYM
+
+void init_symbols(void)
+{
+    #define INIT_SYM(name, str) sym_##name = intern_cstr(str);
+        CORE_SYMBOLS(INIT_SYM)
+    #undef INIT_SYM
+}
+
 static SymbolPool global_pool = {NULL, 0, 0};
 
 // FNV-1a ハッシュアルゴリズム
