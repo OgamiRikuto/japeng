@@ -6,7 +6,6 @@
 
 #include <stdio.h>
 #include <string.h>
-ObjString* sym_new = NULL;
 
 bool dispatch_send(VM* vm, uint8_t arg_count, uint16_t msg_index)
 {
@@ -31,7 +30,7 @@ bool dispatch_send(VM* vm, uint8_t arg_count, uint16_t msg_index)
 
     // 2. クロージャ / 関数の 'call' メッセージ
     if (is_obj(receiver) && (((Obj*)as_obj(receiver))->type == OBJ_CLOSURE || ((Obj*)as_obj(receiver))->type == OBJ_FUNCTION)) {
-        if (strcmp(msg_sym->chars, "call") == 0) {
+        if (msg_sym == sym_call) {
             ObjFunction* func = (((Obj*)as_obj(receiver))->type == OBJ_CLOSURE)
                                 ? ((ObjClosure*)as_obj(receiver))->function
                                 : (ObjFunction*)as_obj(receiver);

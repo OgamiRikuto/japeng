@@ -54,7 +54,6 @@ void init_vm(VM* vm)
 void free_vm(VM* vm)
 {
     table_free(vm->globals);
-    // 未定
     (void)vm;
 }
 
@@ -243,13 +242,13 @@ static InterpretResult run(VM* vm)
                 vm->frame_count--;
 
                 if (vm->frame_count == 0) {
-                    if (is_int(result)) {
-                        printf("Result: %d\n", as_int(result));
-                    } else if (is_float(result)) {
-                        printf("Result: %g\n", as_float(result));
-                    } else if (is_bool(result)) {
-                        printf("Result: %s\n", as_bool(result) ? "true" : "false");
-                    }
+                    // if (is_int(result)) {
+                    //     printf("Result: %d\n", as_int(result));
+                    // } else if (is_float(result)) {
+                    //     printf("Result: %g\n", as_float(result));
+                    // } else if (is_bool(result)) {
+                    //     printf("Result: %s\n", as_bool(result) ? "true" : "false");
+                    // }
                     return INTERPRET_OK;
                 }
                 vm->stack_top = frame->slots;
@@ -343,7 +342,6 @@ static InterpretResult run(VM* vm)
             case OP_EQUAL: {
                 Value b = pop(vm);
                 Value a = pop(vm);
-                // 64bit 値としての直接比較（NaNタグ含めて一致するか）
                 push(vm, make_bool(a == b));
                 break;
             }
