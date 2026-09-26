@@ -36,7 +36,7 @@ VM_OBJS = $(VM_SRCS:.c=.o)
 
 # 1. 既存パーサーテスト (parser/parser-main.c + symbol.c のみ)
 PARSER_MAIN      = parser/parser-main.o
-PARSER_ONLY_OBJS = $(PARSER_MAIN) $(PARSER_OBJS) common/src/symbol.o
+PARSER_ONLY_OBJS = $(PARSER_MAIN) $(PARSER_OBJS) common/src/symbol.o common/src/object.o
 
 # 2. 統合テスト (test_cat.c + 全モジュール)
 RUN_MAIN = test_cat.o
@@ -50,39 +50,39 @@ all: $(TARGET_PARSE) $(TARGET_RUN)
 
 # 既存のパーサー単体バイナリ
 $(TARGET_PARSE): $(PARSER_ONLY_OBJS)
-	$(LD) $(LDFLAGS) -o $@ $^
+	@$(LD) $(LDFLAGS) -o $@ $^
 
 # 今回の AST -> Compiler -> VM 統合バイナリ
 $(TARGET_RUN): $(RUN_OBJS)
-	$(LD) $(LDFLAGS) -o $@ $^
+	@$(LD) $(LDFLAGS) -o $@ $^
 
 # 1. Bison: parser.y -> y.tab.c, y.tab.h
 parser/src/y.tab.c parser/src/y.tab.h: parser/src/parser.y
-	$(YAC) -o parser/src/y.tab.c $<
+	@$(YAC) -o parser/src/y.tab.c $<
 
 # 2. Flex: rex.l -> lex.yy.c (y.tab.h の生成後に実行)
 parser/src/lex.yy.c: parser/src/rex.l parser/src/y.tab.h
-	$(LEX) -o $@ $<
+	@$(LEX) -o $@ $<
 
 # 3. parser.y が "lex.yy.c" を include しているため、コンパイル前に生成を保証
 parser/src/y.tab.o: parser/src/y.tab.c parser/src/lex.yy.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 # 汎用コンパイルルール
 %.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 # 統合テストのワンアクション実行
 run: $(TARGET_RUN)
-	./$(TARGET_RUN) test_code/test.je
+	@./$(TARGET_RUN) test_code/test.je
 
 clean:
-	rm -f $(TARGET_PARSE) $(TARGET_RUN)
-	rm -f parser/src/y.tab.c parser/src/y.tab.h parser/src/y.output
-	rm -f parser/src/lex.yy.c
-	rm -f test_cat.o parser/*.o parser/src/*.o
-	rm -f common/src/*.o
-	rm -f compiler/src/*.o
-	rm -f vm/src/*.o vm/src/builtin_functions/*.o
+	@rm -f $(TARGET_PARSE) $(TARGET_RUN)
+	@rm -f parser/src/y.tab.c parser/src/y.tab.h parser/src/y.output
+	@rm -f parser/src/lex.yy.c
+	@rm -f test_cat.o parser/*.o parser/src/*.o
+	@rm -f common/src/*.o
+	@rm -f compiler/src/*.o
+	@rm -f vm/src/*.o vm/src/builtin_functions/*.o
 
 .PHONY: all clean run
