@@ -12,6 +12,18 @@ static bool is_clause_msg(ASTNode* node, ObjString* sym)
             node->send.message->identifier.name == sym);
 }
 
+static bool is_chain_clause(ASTNode* node)
+{
+    if (node == NULL) return false;
+    if (node->kind == AST_SEND) {
+        return is_clause_msg(node, sym_elif) || is_clause_msg(node, sym_else);
+    }
+    if (node->kind == AST_STMT) {
+        return is_chain_clause(node->stmt.left);
+    }
+    return false;
+}
+
 static bool is_if_chain(ASTNode* node)
 {
     if (node == NULL) return false;
@@ -20,10 +32,16 @@ static bool is_if_chain(ASTNode* node)
 
     // if から始まるチェイン (AST_STMT の左が if)
     if (node->kind == AST_STMT && is_clause_msg(node->stmt.left, sym_if)) {
-        return true;
+        return is_chain_clause(node->stmt.left);
     }
     return false;
 }
+
+// static bool is_compound_assign(ObjString* msg) 
+// {
+//     return msg == sym_plus_eq  || msg == sym_minus_eq ||
+//            msg == sym_multi_eq || msg == sym_div_eq;
+// }
 
 static void compile_statement_node(Compiler* c, ASTNode* node) 
 {
@@ -38,7 +56,8 @@ static void compile_statement_node(Compiler* c, ASTNode* node)
 
     if (node->kind == AST_SEND && node->send.message != NULL) {
         ObjString* msg = node->send.message->identifier.name;
-        if (msg != sym_is && msg != sym_are && msg != sym_if && msg != sym_repeat) {
+        if (msg != sym_is && msg != sym_are && 
+            msg != sym_if && msg != sym_repeat) {
             emit_inst(c, OP_POP, 0);
         }
     }
@@ -95,6 +114,7 @@ void compile(Compiler* c, ASTNode* node)
             ObjString* msg_sym = node->send.message->identifier.name;
             bool is_self = (node->send.receiver->kind == AST_IDENTIFIER &&
                             node->send.receiver->identifier.name == sym_self);
+            if (compile_compound_assignment(c, node)) break;
             // AST_SEND 内の代入処理
             if (msg_sym == sym_is || msg_sym == sym_are) {
                 compile_assignment(c, node);

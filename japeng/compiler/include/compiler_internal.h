@@ -46,6 +46,7 @@ bool is_integer_type(ObjString* name);
 bool is_float_type(ObjString* name);
 
 // 基本構文コンパイル関数
+bool compile_compound_assignment(Compiler* c, ASTNode* node);
 void compile_identifier_load(Compiler* compiler, ObjString* name);
 void compile_var_decl(Compiler* c, ASTNode* node);
 void compile_assignment(Compiler* c, ASTNode* node);

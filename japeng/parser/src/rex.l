@@ -3,6 +3,7 @@
 #include <string.h>
 #include "literal.h"
 #include "symbol.h"
+#include "object.h"
 
 int linecounter = 1;
 extern const char* current_filename;
@@ -21,9 +22,9 @@ int yycolumn = 1;
 "class"	{ return CLASS; }
 "based"	{ return BASED; }
 "from"	{ return FROM; }
-"is"	{ yylval.symbol = intern_cstr(yytext); return SP_IDENTIFIER; }
-"are"	{ yylval.symbol = intern_cstr(yytext); return SP_IDENTIFIER; }
-"self"	{ yylval.symbol = intern_cstr(yytext); return SELF; }
+"is"	{ yylval.symbol = sym_is; return SP_IDENTIFIER; }
+"are"	{ yylval.symbol = sym_are; return SP_IDENTIFIER; }
+"self"	{ yylval.symbol = sym_self; return SELF; }
 "arg"	{ return ARG; }
 "ret"	{ return RET; }
 "return"	{ return RETURN; }
@@ -37,12 +38,29 @@ int yycolumn = 1;
 0b[0|1]+			{ return BINARY; }
 0x[0-9a-fA-F]+ 		{ return HEX; }
 \"[^\"\n]*\" 		{ yylval.symbol = unquote_and_intern(yytext, strlen(yytext)); return STRING; }
-"+"|"-"|"*"|"/"|"%"|"="|"!="|">"|"<"|">="|"<="|"<<"|">>"	{ yylval.symbol = intern_cstr(yytext); return SP_IDENTIFIER; }
+"+"					{ yylval.symbol = sym_plus; return SP_IDENTIFIER; }
+"-"					{ yylval.symbol = sym_minus; return SP_IDENTIFIER; }
+"*"					{ yylval.symbol = sym_multi; return SP_IDENTIFIER; }
+"/"					{ yylval.symbol = sym_div; return SP_IDENTIFIER; }
+"%"					{ yylval.symbol = sym_rem; return SP_IDENTIFIER; }
+"="					{ yylval.symbol = sym_equal; return SP_IDENTIFIER; }
+"!="				{ yylval.symbol = sym_nequal; return SP_IDENTIFIER; }
+">"					{ yylval.symbol = sym_gt; return SP_IDENTIFIER; }
+"<"					{ yylval.symbol = sym_less; return SP_IDENTIFIER; }
+">="				{ yylval.symbol = sym_nless; return SP_IDENTIFIER; }
+"<="				{ yylval.symbol = sym_ngt; return SP_IDENTIFIER; }
+"<<"				{ yylval.symbol = sym_lshif; return SP_IDENTIFIER; }
+">>"				{ yylval.symbol = sym_rshif; return SP_IDENTIFIER; }
+"+="				{ yylval.symbol = sym_plus_eq; return SP_IDENTIFIER; }
+"-="				{ yylval.symbol = sym_minus_eq; return SP_IDENTIFIER; }
+"*="				{ yylval.symbol = sym_multi_eq; return SP_IDENTIFIER; }
+"/="				{ yylval.symbol = sym_div_eq; return SP_IDENTIFIER; }
 "//".*				{ }
 "/*"				{ comment(); }
 ","					{ return COMMA; }
-"."					{ return PERIOD; }
+"."					{ return DOT; }
 ":"					{ return COLON; }
+";"					{ return SEMICOLON; }
 "("					{ return L_PAR; }
 ")"					{ return R_PAR; }
 "["					{ return L_BLACKET; }
@@ -85,5 +103,5 @@ ObjString* unquote_and_intern(const char* text, int len) {
     }
     memcpy(buf, text + 1, content_len);
     buf[content_len] = '\0';
-    return intern_cstr(buf);
+    return new_string(buf, content_len);
 }

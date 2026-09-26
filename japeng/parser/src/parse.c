@@ -10,6 +10,9 @@
 #include "object.h"
 
 extern FILE* yyin;
+extern int linecounter;
+extern int yylineno;
+void yyrestart(FILE* input_file);
 extern const char* current_filename;
 
 ASTNode* current_parsed_ast = NULL;
@@ -38,6 +41,52 @@ static int is_target_file(const char* filename)
     return is_cd_file(filename) || is_je_file(filename);
 }
 
+bool parse_file(const char* full_path) 
+{
+    if (!is_target_file(full_path)) {
+        fprintf(stderr, "Warning: '%s' is not a .cd or .je file. Skipped.\n", full_path);
+        return false;
+    }
+
+    FILE* file = fopen(full_path, "r");
+    if (!file) {
+        fprintf(stderr, "Error: Cannot open file '%s'\n", full_path);
+        return false;
+    }
+
+    yyin = file;
+    current_filename = strdup(full_path);
+    yyrestart(file);
+    
+    linecounter = 1;
+    yylineno = 1;
+    current_parsed_ast = NULL;
+
+    bool success = false;
+    if (yyparse() == 0 && current_parsed_ast != NULL) {
+        if (is_cd_file(full_path)) {
+            if (parsed_cd_count < MAX_FILES) {
+                parsed_cd[parsed_cd_count++] = current_parsed_ast;
+                success = true;
+            } else {
+                fprintf(stderr, "Error: Too many .cd files.\n");
+            }
+        } else if (is_je_file(full_path)) {
+            if (parsed_je == NULL) {
+                parsed_je = current_parsed_ast;
+                success = true;
+            } else {
+                fprintf(stderr, "Warning: Multiple .je files found. Overwriting.\n");
+                parsed_je = current_parsed_ast;
+                success = true;
+            }
+        }
+    }
+
+    fclose(file);
+    return success;
+}
+
 void parse(const char* dir_path)
 {
     DIR* dir = opendir(dir_path);
@@ -53,48 +102,11 @@ void parse(const char* dir_path)
         struct stat path_stat;
         if(stat(full_path, &path_stat) != 0) continue;
 
-        if(S_ISDIR(path_stat.st_mode)) parse(full_path);
-        else if(S_ISREG(path_stat.st_mode)) {
+        if(S_ISDIR(path_stat.st_mode)) {
+            parse(full_path);
+        } else if(S_ISREG(path_stat.st_mode)) {
             if(is_target_file(entry->d_name)) {
-                printf("Processing: %s\n", full_path);
-
-                FILE* file = fopen(full_path, "r");
-                if(file) {
-                    yyin = file;
-                    current_filename = strdup(full_path);
-
-                    extern int linecounter;
-                    extern int yylineno;
-                    void yyrestart(FILE *input_file); // Flexの内部バッファリセット関数
-                    
-                    current_filename = strdup(full_path); 
-                    
-                    // Lexerに新しいファイルを渡し、内部状態を完全に初期化する
-                    yyrestart(file);
-                    
-                    // 行番号を1にリセットする
-                    linecounter = 1;
-                    yylineno = 1;
-                    current_parsed_ast = NULL;
-                    
-                    if (yyparse() == 0 && current_parsed_ast != NULL) {
-                        if (is_cd_file(entry->d_name)) {
-                            if (parsed_cd_count < MAX_FILES) {
-                                parsed_cd[parsed_cd_count++] = current_parsed_ast;
-                            } else {
-                                fprintf(stderr, "Error: Too many .cd files.\n");
-                            }
-                        }
-                        else if (is_je_file(entry->d_name)) {
-                            if (parsed_je == NULL) {
-                                parsed_je = current_parsed_ast;
-                            } else {
-                                fprintf(stderr, "Warning: Multiple .je files found.\n");
-                            }
-                        }
-                    }
-                    fclose(file);
-                } 
+                parse_file(full_path);
             }
         }
     }

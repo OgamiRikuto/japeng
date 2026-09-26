@@ -2,45 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-ObjString* sym_is       = NULL;
-ObjString* sym_are      = NULL;
-ObjString* sym_self     = NULL;
-ObjString* sym_if       = NULL;
-ObjString* sym_elif     = NULL;
-ObjString* sym_else     = NULL;
-ObjString* sym_repeat   = NULL;
-ObjString* sym_SInteger = NULL;
-ObjString* sym_SFloat   = NULL;
-ObjString* sym_function = NULL;
-ObjString* sym_plus     = NULL;
-ObjString* sym_minus    = NULL;
-ObjString* sym_multi    = NULL;
-ObjString* sym_div      = NULL;
-ObjString* sym_equal    = NULL;
-ObjString* sym_less     = NULL;
-ObjString* sym_gt       = NULL;
-
-
-void init_compiler_symbols(void) {
-    if (!sym_is)        sym_is       = intern_cstr("is");
-    if (!sym_are)       sym_are      = intern_cstr("are");
-    if (!sym_self)      sym_self     = intern_cstr("self");
-    if (!sym_if)        sym_if       = intern_cstr("if");
-    if (!sym_elif)      sym_elif     = intern_cstr("elif");
-    if (!sym_else)      sym_else     = intern_cstr("else");
-    if (!sym_repeat)    sym_repeat   = intern_cstr("repeat"); 
-    if (!sym_SInteger)  sym_SInteger = intern_cstr("SmallInteger"); 
-    if (!sym_SFloat)    sym_SFloat   = intern_cstr("SmallFloat");
-    if (!sym_function)  sym_function = intern_cstr("Function");
-    if (!sym_plus)      sym_plus     = intern_cstr("+");
-    if (!sym_minus)     sym_minus    = intern_cstr("-");
-    if (!sym_multi)     sym_multi    = intern_cstr("*");
-    if (!sym_div)       sym_div      = intern_cstr("/");
-    if (!sym_equal)     sym_equal    = intern_cstr("=");
-    if (!sym_less)      sym_less     = intern_cstr("<");
-    if (!sym_gt)        sym_gt       = intern_cstr(">");
-}
-
 void init_compiler(Compiler* compiler, Chunk* chunk)
 {
     compiler->enclosing = NULL;
@@ -172,11 +133,11 @@ ObjString* get_type_name(ASTNode* type_node) {
 bool is_integer_type(ObjString* name) {
     if (name == NULL) return false;
     return (strcmp(name->chars, "Integer") == 0 || 
-            strcmp(name->chars, "SmallInteger") == 0);
+            name == sym_SmallInteger);
 }
 
 bool is_float_type(ObjString* name) {
     if (name == NULL) return false;
     return (strcmp(name->chars, "Float") == 0 || 
-            strcmp(name->chars, "SmallFloat") == 0);
+            name == sym_SmallFloat);
 }

@@ -29,8 +29,9 @@ int syntax_error_count = 0;
 %token SELF         "self"
 
 %token COMMA        ","
-%token PERIOD       "."
+%token DOT          "."
 %token COLON        ":"
+%token SEMICOLON    ";"
 %token L_PAR        "("
 %token R_PAR        ")"
 %token L_BLACKET    "["
@@ -54,8 +55,10 @@ int syntax_error_count = 0;
 %type <node> expression primary block args rets expression_list_opt expression_list
 %type <node> control_chain control_clause_list control_clause
 
+%nonassoc PREC_EXPR
 %left IDENTIFIER SP_IDENTIFIER
 %left COMMA
+%left DOT
 %%
 program : 
     statement_list
@@ -88,17 +91,17 @@ statement_list_opt :
 
 
 statement : 
-    message PERIOD
+    message SEMICOLON
     { $$ = $1; }
-    | identifier_decl PERIOD
+    | identifier_decl SEMICOLON
     { $$ = $1; }
-    | return_stmt PERIOD 
+    | return_stmt SEMICOLON
     { $$ = $1; }
-    | BREAK PERIOD
+    | BREAK SEMICOLON
     { $$ = create_break_node(); }
-    | CONTINUE PERIOD
+    | CONTINUE SEMICOLON
     { $$ = create_continue_node(); }
-    | error PERIOD
+    | error SEMICOLON
     { $$ = NULL; }
     ;
 
@@ -134,6 +137,21 @@ message :
     }
     | control_chain
     { $$ = $1; }
+    | message DOT IDENTIFIER
+    {
+        ASTNode* msg = create_identifier_node($3);
+        $$ = create_send_node($1, msg, NULL);
+    }
+    | message DOT IDENTIFIER expression_list
+    {
+        ASTNode* msg = create_identifier_node($3);
+        $$ = create_send_node($1, msg, $4);
+    }
+    | message DOT SP_IDENTIFIER expression_list
+    {
+        ASTNode* msg = create_identifier_node($3);
+        $$ = create_send_node($1, msg, $4);
+    }
     ;
 
 control_chain :
@@ -238,16 +256,16 @@ member_list :
     ;
 
 member : 
-    field_decl PERIOD
+    field_decl SEMICOLON
     { $$ = $1; }
-    | STATIC field_decl PERIOD
+    | STATIC field_decl SEMICOLON
     { 
         $2->field_decl.is_static = true; 
         $$ = $2;
     }
-    | message PERIOD
+    | message SEMICOLON
     { $$ = $1; }
-    | STATIC message PERIOD
+    | STATIC message SEMICOLON
     {
         if($2->kind == AST_FIELD_DECL) {
             $2->field_decl.is_static = true;
@@ -256,7 +274,7 @@ member :
         }
         $$ = $2;
     }
-    | message FROM CLASS_NAME PERIOD
+    | message FROM CLASS_NAME SEMICOLON
     {
         if ($1->kind == AST_SEND && $1->send.receiver && $1->send.receiver->kind == AST_VAR_DECL) {
             ASTNode* from_node = create_identifier_node($3);
@@ -265,7 +283,7 @@ member :
             $$ = $1;
         }
     }
-    | STATIC message FROM CLASS_NAME PERIOD
+    | STATIC message FROM CLASS_NAME SEMICOLON
     {
         
         if ($2->kind == AST_SEND && $2->send.receiver && $2->send.receiver->kind == AST_VAR_DECL) {
@@ -296,7 +314,7 @@ identifier_decl :
 
 expression : 
     primary     { $$ = $1; }
-    | message   { $$ = $1; }
+    | message %prec PREC_EXPR  { $$ = $1; }
     ;
 
 primary : 
@@ -311,7 +329,7 @@ primary :
     | L_PAR expression R_PAR { $$ = $2; }
     | SP_IDENTIFIER primary
     {
-        if (strcmp($1->chars, "-") == 0) {
+        if ($1 == sym_minus) {
             ASTNode* zero = create_literal_node(make_int(0));
             ASTNode* op   = create_identifier_node($1);
             $$ = create_send_node(zero, op, $2);
@@ -327,11 +345,11 @@ primary :
 block : 
     L_BLACKET statement_list_opt R_BLACKET 
     { $$ = create_block_node(NULL, NULL, $2); }
-    | L_BLACKET args PERIOD statement_list_opt R_BLACKET 
+    | L_BLACKET args SEMICOLON statement_list_opt R_BLACKET 
     { $$ = create_block_node($2, NULL, $4); }
-    | L_BLACKET rets PERIOD statement_list_opt R_BLACKET 
+    | L_BLACKET rets SEMICOLON statement_list_opt R_BLACKET 
     { $$ = create_block_node(NULL, $2, $4); }
-    | L_BLACKET args PERIOD rets PERIOD statement_list_opt R_BLACKET
+    | L_BLACKET args SEMICOLON rets SEMICOLON statement_list_opt R_BLACKET
     { $$ = create_block_node($2, $4, $6); }
     ;
 
@@ -410,7 +428,7 @@ static int print_previous_valid_line(const char* filename, int current_err_line)
             char* buf = lines[l - 1];
             buf[strcspn(buf, "\r\n")] = '\0';
 
-            // 行末の非空白文字の位置（ピリオドを打つべき場所）を特定
+            // 行末の非空白文字の位置（セミコロン打つべき場所）を特定
             int end_col = strlen(buf);
             while (end_col > 0 && (buf[end_col - 1] == ' ' || buf[end_col - 1] == '\t')) {
                 end_col--;
@@ -418,7 +436,7 @@ static int print_previous_valid_line(const char* filename, int current_err_line)
             int caret_col = end_col + 1;
 
             // エラーヘッダーの出力
-            fprintf(stderr, "\033[1m%s:%d:%d: \033[1;31merror:\033[0m\033[1m syntax error, expected '.' at end of statement\033[0m\n",
+            fprintf(stderr, "\033[1m%s:%d:%d: \033[1;31merror:\033[0m\033[1m syntax error, expected ';' at end of statement\033[0m\n",
                     filename, l, caret_col);
 
             // ソースコード行の出力
@@ -472,9 +490,9 @@ void yyerror(const char *s) {
 
     const char* fn = (current_filename && current_filename[0] != '\0') ? current_filename : "input";
 
-    // ピリオド欠落（expecting .）によるエラーで、行頭付近で破綻した場合
+    // セミコロン欠落（expecting ;）によるエラーで、行頭付近で破綻した場合
     // 上に向かって直前の有効なコード行を探して表示
-    if (strstr(s, "expecting .") && print_previous_valid_line(fn, yylloc.first_line)) {
+    if (strstr(s, "expecting ;") && print_previous_valid_line(fn, yylloc.first_line)) {
         // 直前行のピリオド抜けとして補正表示できた場合はカスケードを防ぐためここで終了
         exit(EXIT_FAILURE);
     }

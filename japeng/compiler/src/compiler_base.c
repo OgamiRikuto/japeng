@@ -1,4 +1,5 @@
 #include "compiler_internal.h"
+#include "opcode.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -13,6 +14,67 @@ static int compile_args(Compiler* c, ASTNode* arg_node)
     }
     compile(c, arg_node);
     return 1;
+}
+
+// compiler/src/compiler_base.c
+
+// 複合代入シンボルに対応する演算オペコードを解決
+static Opcode resolve_compound_op(ObjString* msg) 
+{
+    if (msg == sym_plus_eq)  return OP_ADD;
+    if (msg == sym_minus_eq) return OP_SUB;
+    if (msg == sym_multi_eq) return OP_MUL;
+    if (msg == sym_div_eq)   return OP_DIV;
+    // 必要に応じて剰余 (sym_rem 等) も追加可能
+    return (Opcode)-1;
+}
+
+// 複合代入のコード生成 (ローカル変数 or selfのフィールド)
+bool compile_compound_assignment(Compiler* c, ASTNode* node) 
+{
+    ObjString* msg = node->send.message->identifier.name;
+    Opcode op = resolve_compound_op(msg);
+    if ((int)op == -1) {
+        return false; // 複合代入ではない
+    }
+
+    ASTNode* target = node->send.receiver;
+    if (!target || target->kind != AST_IDENTIFIER) {
+        fprintf(stderr, "Error: Left side of compound assignment must be an identifier.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    ObjString* name = target->identifier.name;
+
+    // パターン 1: ローカル変数の更新
+    int slot = resolve_local(c, name);
+    if (slot != -1) {
+        emit_inst(c, OP_GET_LOCAL, (uint32_t)slot); // 1. 現在の値をロード
+        compile(c, node->send.args);                 // 2. 右辺の加算値をロード
+        emit_inst(c, op, 0);                         // 3. 演算実行 (OP_ADD 等)
+        emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);  // 4. ローカル変数に書き戻し
+        
+        return true;
+    }
+
+    // パターン 2: フィールド変数 (self) の更新
+    if (c->current_class != NULL) {
+        int field_idx = find_field_index(c->current_class, name);
+        if (field_idx != -1) {
+            // SET_FIELD 直前のスタックを [self, 新しい値] にするための積み順
+            emit_inst(c, OP_GET_LOCAL, 0);                   // 1. SET_FIELD 用レシーバ (self)
+            emit_inst(c, OP_GET_LOCAL, 0);                   // 2. GET_FIELD 用レシーバ (self)
+            emit_inst(c, OP_GET_FIELD, (uint32_t)field_idx); // 3. 現在のフィールド値を取得
+            compile(c, node->send.args);                      // 4. 右辺の加算値をロード
+            emit_inst(c, op, 0);                              // 5. 演算実行
+            emit_inst(c, OP_SET_FIELD, (uint32_t)field_idx);  // 6. self に書き戻し
+            
+            return true;
+        }
+    }
+
+    fprintf(stderr, "Error: Undefined variable or field '%s' for compound assignment.\n", name->chars);
+    exit(EXIT_FAILURE);
 }
 
 void compile_var_decl(Compiler* c, ASTNode* node)
