@@ -1,14 +1,14 @@
 CC      = clang
-CFLAGS  = -Wall -g -Icommon/include -Iparser/include -Iparser/src -Icompiler/include -Ivm/include
+CFLAGS  = -Wall -O3 -flto -g -Icommon/include -Iparser/include -Iparser/src -Icompiler/include -Ivm/include
 LD      = clang
-LDFLAGS = -Wall
+LDFLAGS = -Wall -O3 -flto
 
 LEX     = flex
 YAC     = bison -d -v
 
 # 生成するバイナリ
-TARGET_PARSE = jpen       # 既存: パーサー単体用
-TARGET_RUN   = jpen-run   # 新規: AST -> Compiler -> VM 統合実行用
+TARGET_PARSE = jpen-parse       # 既存: パーサー単体用
+TARGET_RUN   = jpen   # 新規: AST -> Compiler -> VM 統合実行用
 
 # ----------------------------------------------------
 # 各ディレクトリのソースとオブジェクト
@@ -36,10 +36,10 @@ VM_OBJS = $(VM_SRCS:.c=.o)
 
 # 1. 既存パーサーテスト (parser/parser-main.c + symbol.c のみ)
 PARSER_MAIN      = parser/parser-main.o
-PARSER_ONLY_OBJS = $(PARSER_MAIN) $(PARSER_OBJS) common/src/symbol.o common/src/object.o
+PARSER_ONLY_OBJS = $(PARSER_MAIN) $(PARSER_OBJS) common/src/symbol.o common/src/object.o common/src/error.o
 
 # 2. 統合テスト (test_cat.c + 全モジュール)
-RUN_MAIN = test_cat.o
+RUN_MAIN = main.o
 RUN_OBJS = $(RUN_MAIN) $(PARSER_OBJS) $(COMPILER_OBJS) $(VM_OBJS) $(COMMON_OBJS)
 
 # ----------------------------------------------------
@@ -80,7 +80,7 @@ clean:
 	@rm -f $(TARGET_PARSE) $(TARGET_RUN)
 	@rm -f parser/src/y.tab.c parser/src/y.tab.h parser/src/y.output
 	@rm -f parser/src/lex.yy.c
-	@rm -f test_cat.o parser/*.o parser/src/*.o
+	@rm -f main.o parser/*.o parser/src/*.o
 	@rm -f common/src/*.o
 	@rm -f compiler/src/*.o
 	@rm -f vm/src/*.o vm/src/builtin_functions/*.o
