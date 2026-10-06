@@ -26,7 +26,6 @@ int syntax_error_count = 0;
 %token BREAK        "break"
 %token CONTINUE     "continue"
 %token STATIC       "static"
-%token SELF         "self"
 
 %token COMMA        ","
 %token DOT          "."
@@ -38,6 +37,7 @@ int syntax_error_count = 0;
 %token R_BLACKET    "]"
 %token UNKNOWN
 
+%token <symbol> SELF            "self"
 %token <symbol> IDENTIFIER      "identifier"
 %token <symbol> CLASS_NAME      "class name"
 %token <symbol> SP_IDENTIFIER   "operator"
@@ -319,6 +319,7 @@ expression :
 
 primary : 
     IDENTIFIER  { $$ = create_identifier_node($1); }
+    | SELF      { $$ = create_identifier_node($1); }
     | INTEGER   { $$ = create_literal_node(make_int($1)); }
     | FLOAT     { $$ = create_literal_node(make_float($1)); }
     | FRACTION  { $$ = create_literal_node(make_obj($1)); }
@@ -377,8 +378,6 @@ receiver :
     { $$ = $1; }
     | CLASS_NAME
     { $$ = create_identifier_node($1); }
-    | SELF
-    { $$ = create_identifier_node(intern_cstr("self")); }
     ;
 
 expression_list_opt : 
