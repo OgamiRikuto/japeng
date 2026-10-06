@@ -4,6 +4,7 @@
 #include "literal.h"
 #include "symbol.h"
 #include "object.h"
+#include "error.h"
 
 int linecounter = 1;
 extern const char* current_filename;

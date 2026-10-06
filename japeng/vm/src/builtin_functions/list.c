@@ -66,7 +66,7 @@ static bool native_list_get(VM* vm, uint8_t arg_count)
     int index = (int)as_int(idx_val);
 
     if (index < 0 || index >= list->size) {
-        fprintf(stderr, "Runtime Error: List index out of bounds (index: %d, size: %d).\n", index, list->size);
+        error_runtime(ERR_INDEX_OUT_OF_BOUNDS, index, list->size);
         return false;
     }
 
@@ -86,7 +86,7 @@ static bool native_list_set(VM* vm, uint8_t arg_count)
     int index = (int)as_int(idx_val);
 
     if (index < 0 || index >= list->size) {
-        fprintf(stderr, "Runtime Error: List index out of bounds.\n");
+        error_runtime(ERR_INDEX_OUT_OF_BOUNDS, index, list->size);
         return false;
     }
 

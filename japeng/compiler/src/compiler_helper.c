@@ -62,7 +62,8 @@ int resolve_local(Compiler* c, ObjString* name)
 int add_local(Compiler* c, ObjString* name, TypeInfo* type)
 {
     if (c->local_count >= MAX_LOCALS) {
-        fprintf(stderr, "Error: Too many local variables.\n");
+        Location no_loc = {0};
+        error_at(no_loc, ERR_TOO_MANY_LOCALS);
         exit(EXIT_FAILURE);
     }
 
@@ -76,7 +77,8 @@ int add_local(Compiler* c, ObjString* name, TypeInfo* type)
 int add_anonymous_local(Compiler* c)
 {
     if (c->local_count >= MAX_LOCALS) {
-        fprintf(stderr, "Error: Too many local variables.\n");
+        Location no_loc = {0};
+        error_at(no_loc, ERR_TOO_MANY_LOCALS);
         exit(EXIT_FAILURE);
     }
 

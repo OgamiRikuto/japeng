@@ -1,6 +1,14 @@
 #include "ast.h"
 #include <stdio.h>
 
+typedef struct YYLTYPE {
+    int first_line;
+    int first_column;
+    int last_line;
+    int last_column;
+} YYLTYPE;
+
+extern YYLTYPE yylloc;
 extern int yylineno;
 extern const char* current_filename;
 
@@ -13,8 +21,10 @@ static ASTNode* alloc_node(ASTNodeType kind)
     }
 
     node->kind = kind;
-    node->line = yylineno;
-    node->filename = current_filename ? current_filename : "unknown.je";
+    node->loc.line = yylineno;
+    node->loc.column = yylloc.first_column;
+    node->loc.col_end = yylloc.last_column;
+    node->loc.filename = current_filename ? current_filename : "unknown.je";
 
     return node;
 }

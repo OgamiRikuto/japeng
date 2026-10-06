@@ -8,6 +8,7 @@
 #include "parse.h"
 #include "symbol.h"
 #include "object.h"
+#include "error.h"
 
 extern FILE* yyin;
 extern int linecounter;
@@ -246,7 +247,7 @@ void dump_ast(ASTNode* node, int depth)
     for (int i = 0; i < depth; i++) printf("  ");
 
     // ノードの共通属性表示
-    printf("|- [Kind:%d] (line:%d) ", node->kind, node->line);
+    printf("|- [Kind:%d] (line:%d) ", node->kind, node->loc.line);
 
     switch (node->kind) {
         case AST_CLASS_DEF:

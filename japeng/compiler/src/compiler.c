@@ -96,7 +96,7 @@ void compile(Compiler* c, ASTNode* node)
                     break;
                 }
             } 
-            fprintf(stderr, "Error: Undefined variable '%s'.\n", node->identifier.name->chars);
+            error_compile(node, ERR_UNDEFINED_VAR, node->identifier.name->chars);
             exit(EXIT_FAILURE);
             break;
         }
@@ -135,12 +135,12 @@ void compile(Compiler* c, ASTNode* node)
         }
 
         case AST_BREAK: {
-            compile_break(c);
+            compile_break(c, node);
             break;
         }
 
         case AST_CONTINUE: {
-            compile_continue(c);
+            compile_continue(c, node);
             break;
         }
 
@@ -179,7 +179,7 @@ void compile(Compiler* c, ASTNode* node)
         }
 
         default: 
-            fprintf(stderr, "Unhandled ASTNode kind: %d\n", node->kind);
+            error_compile(node, ERR_UNHANDLED_AST_KIND, node->kind);
             break;
     }
 }

@@ -4,6 +4,7 @@
 #include "object.h"
 #include "literal.h"
 #include "symbol.h"
+#include "error.h"
 
 extern int yylex();
 const char* current_filename = "";
@@ -318,7 +319,11 @@ expression :
     ;
 
 primary : 
-    IDENTIFIER  { $$ = create_identifier_node($1); }
+    IDENTIFIER  
+    { 
+        $$ = create_identifier_node($1); 
+        $$->loc.column = @1.first_column;
+    }
     | SELF      { $$ = create_identifier_node($1); }
     | INTEGER   { $$ = create_literal_node(make_int($1)); }
     | FLOAT     { $$ = create_literal_node(make_float($1)); }
@@ -400,108 +405,11 @@ return_stmt :
 
 %%
 #include "lex.yy.c"
-// 行が空行（空白・改行のみ）または単一行コメントかどうかを判定
-static int is_ignorable_line(const char* s) {
-    while (*s == ' ' || *s == '\t' || *s == '\r' || *s == '\n') s++;
-    if (*s == '\0') return 1; // 空行
-    if (s[0] == '/' && s[1] == '/') return 1; // コメント行
-    return 0;
-}
-
-// ファイルから直前の有効なコード行（空行・コメント以外）を探し出して表示する
-static int print_previous_valid_line(const char* filename, int current_err_line) {
-    FILE* fp = fopen(filename, "r");
-    if (!fp) return 0;
-
-    char lines[256][1024];
-    int line_count = 0;
-
-    while (line_count < 256 && fgets(lines[line_count], sizeof(lines[line_count]), fp)) {
-        line_count++;
-    }
-    fclose(fp);
-
-    // エラー発生行（例: 18行目）の手前から上に向かってスキャン
-    for (int l = current_err_line - 1; l >= 1; l--) {
-        if (l <= line_count && !is_ignorable_line(lines[l - 1])) {
-            char* buf = lines[l - 1];
-            buf[strcspn(buf, "\r\n")] = '\0';
-
-            // 行末の非空白文字の位置（セミコロン打つべき場所）を特定
-            int end_col = strlen(buf);
-            while (end_col > 0 && (buf[end_col - 1] == ' ' || buf[end_col - 1] == '\t')) {
-                end_col--;
-            }
-            int caret_col = end_col + 1;
-
-            // エラーヘッダーの出力
-            fprintf(stderr, "\033[1m%s:%d:%d: \033[1;31merror:\033[0m\033[1m syntax error, expected ';' at end of statement\033[0m\n",
-                    filename, l, caret_col);
-
-            // ソースコード行の出力
-            fprintf(stderr, "%6d | %s\n", l, buf);
-            fprintf(stderr, "       | ");
-            for (int i = 1; i < caret_col; i++) {
-                fputc((buf[i - 1] == '\t') ? '\t' : ' ', stderr);
-            }
-            fprintf(stderr, "\033[1;32m^\033[0m\n\n");
-            return 1; // 補正成功
-        }
-    }
-    return 0;
-}
-
-static void print_error_snippet(const char* filename, int line, int col_start, int col_end) {
-    if (!filename || filename[0] == '\0') return;
-    FILE* fp = fopen(filename, "r");
-    if (!fp) return;
-
-    char buf[1024];
-    int cur_line = 1;
-
-    while (fgets(buf, sizeof(buf), fp)) {
-        if (cur_line == line) {
-            buf[strcspn(buf, "\r\n")] = '\0';
-            fprintf(stderr, "%6d | %s\n", line, buf);
-            fprintf(stderr, "       | ");
-
-            int len = strlen(buf);
-            for (int i = 1; i < col_start; i++) {
-                char ch = (i - 1 < len) ? buf[i - 1] : ' ';
-                fputc((ch == '\t') ? '\t' : ' ', stderr);
-            }
-
-            int width = (col_end >= col_start) ? (col_end - col_start + 1) : 1;
-            fprintf(stderr, "\033[1;32m^");
-            for (int i = 1; i < width; i++) {
-                fputc('~', stderr);
-            }
-            fprintf(stderr, "\033[0m\n");
-            break;
-        }
-        cur_line++;
-    }
-    fclose(fp);
-}
 
 void yyerror(const char *s) {
     syntax_error_count++;
-
     const char* fn = (current_filename && current_filename[0] != '\0') ? current_filename : "input";
-
-    // セミコロン欠落（expecting ;）によるエラーで、行頭付近で破綻した場合
-    // 上に向かって直前の有効なコード行を探して表示
-    if (strstr(s, "expecting ;") && print_previous_valid_line(fn, yylloc.first_line)) {
-        // 直前行のピリオド抜けとして補正表示できた場合はカスケードを防ぐためここで終了
-        exit(EXIT_FAILURE);
-    }
-
-    // 通常の構文エラー表示
-    fprintf(stderr, "\033[1m%s:%d:%d: \033[1;31merror:\033[0m\033[1m %s\033[0m\n",
-            fn, yylloc.first_line, yylloc.first_column, s);
-
-    print_error_snippet(fn, yylloc.first_line, yylloc.first_column, yylloc.last_column);
-    fprintf(stderr, "\n");
+    error_syntax(fn, yylloc.first_line, yylloc.first_column, yylloc.last_column, s);
 
     if (syntax_error_count >= 100) {
         fprintf(stderr, "fatal: too many errors emitted, stopping now.\n");

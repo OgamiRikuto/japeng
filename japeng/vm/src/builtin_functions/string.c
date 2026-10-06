@@ -24,7 +24,7 @@ static bool native_string_get(VM* vm, uint8_t arg_count)
     int index = (int)as_int(idx_val);
 
     if (index < 0 || index >= string->length) {
-        fprintf(stderr, "Runtime Error: List index out of bounds (index: %d, size: %d).\n", index, string->length);
+        error_runtime(ERR_INDEX_OUT_OF_BOUNDS, index, string->length);
         return false;
     }
 
@@ -44,6 +44,12 @@ static bool native_string_length(VM* vm, uint8_t arg_count)
     push(vm, make_int(string->length));
     return true;
 }
+
+// static bool native_string_toInt(VM* vm, uint8_t arg_count)
+// {
+//     Value receiver = pop(vm);
+//     ObjString* string = (ObjString*)as_obj(receiver);
+// }
 
 void setup_string(VM* vm, ObjClass* super_class, TypeInfo* t_info)
 {

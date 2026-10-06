@@ -8,5 +8,6 @@
 #include "class.h"
 #include "symbol.h"
 #include "table.h"
+#include "error.h"
 
 #endif

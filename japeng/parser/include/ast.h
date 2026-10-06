@@ -5,6 +5,7 @@
 #include <string.h>
 #include "literal.h"
 #include "symbol.h"
+#include "error.h"
 
 typedef enum {
     AST_STMT,
@@ -25,8 +26,7 @@ typedef struct ASTNode ASTNode;
 
 struct ASTNode {
     ASTNodeType kind;
-    int line;
-    const char* filename;
+    Location loc;
 
     union {
         struct {

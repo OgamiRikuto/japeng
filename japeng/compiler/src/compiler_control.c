@@ -211,10 +211,10 @@ void compile_repeat(Compiler* c, ASTNode* node)
     }
 }
 
-void compile_break(Compiler* c)
+void compile_break(Compiler* c, ASTNode* node)
 {
     if (c->current_loop == NULL) {
-        fprintf(stderr, "Error: 'break' outside of loop.\n");
+        error_compile(node, ERR_BREAK_OUTSIDE_LOOP);
         exit(EXIT_FAILURE);
     }
     int jump = emit_jump(c, OP_JUMP);
@@ -225,10 +225,10 @@ void compile_break(Compiler* c)
     c->current_loop->break_jump = jump;
 }
 
-void compile_continue(Compiler* c)
+void compile_continue(Compiler* c, ASTNode* node)
 {
     if (c->current_loop == NULL) {
-        fprintf(stderr, "Error: 'continue' outside of loop.\n");
+        error_compile(node, ERR_CONTINUE_OUTSIDE_LOOP);
         exit(EXIT_FAILURE);
     }
     emit_loop(c, c->current_loop->start_pos);

@@ -145,7 +145,7 @@ static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
             ObjString* from_name = get_class_name_from_node(from_node);
             from_class  = resolve_class(c, from_name);
             if (from_class == NULL) {
-                fprintf(stderr, "Error: Delegate class '%s' node found for field '%s'.\n",
+                error_compile(node, ERR_DELEGATE_CLASS_NOT_FOUND,
                         from_name ? from_name->chars : "null", member_name->chars );
                 exit(EXIT_FAILURE);
             }
@@ -185,11 +185,11 @@ static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
                     add_method_from(klass, member_name, from_class);
                     return;
                 } else {
-                    fprintf(stderr, "Error: Method '%s' not found in delegate class '%s'.\n", 
+                    error_compile(node, ERR_DELEGATE_METHOD_NOT_FOUND, 
                             member_name->chars, from_class->name->chars);
                 }
             } else {
-                fprintf(stderr, "Error: Method '%s' must have an implementation or a delegate source.\n",
+                error_compile(node, ERR_METHOD_NO_IMPL,
                         member_name->chars);
             }
         }
@@ -240,7 +240,7 @@ static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
             ObjString* from_name = get_class_name_from_node(from_node);
             from_class  = resolve_class(c, from_name);
             if (from_class == NULL) {
-                fprintf(stderr, "Error: Delegate class '%s' node found for field '%s'.\n",
+                error_compile(node, ERR_DELEGATE_CLASS_NOT_FOUND,
                         from_name ? from_name->chars : "null", target_name->chars );
                 exit(EXIT_FAILURE);
             }
@@ -304,7 +304,7 @@ void compile_class_body(Compiler* c, ASTNode* node)
     ObjClass* klass = resolve_class(c, class_name);
 
     if (klass == NULL) {
-        fprintf(stderr, "Fatal Error: Class '%s' not registered in skeleton pass.\n", class_name->chars);
+        error_compile(node, ERR_CLASS_NOT_REGISTERED, class_name->chars);
         exit(EXIT_FAILURE);
     }
 
@@ -313,7 +313,7 @@ void compile_class_body(Compiler* c, ASTNode* node)
     }
 
     if (klass->state == CLASS_STATE_COMPILING) {
-        fprintf(stderr, "Error: Cyclic inheritance detected involving class '%s'.\n", class_name->chars);
+        error_compile(node, ERR_CYCLIC_INHERITANCE, class_name->chars);
         exit(EXIT_FAILURE);
     }
 

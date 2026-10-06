@@ -23,7 +23,7 @@ bool dispatch_send(VM* vm, uint8_t arg_count, uint16_t msg_index)
             *(vm->stack_top - 1 - arg_count) = make_obj((Obj*)inst);
             return true;
         }
-        fprintf(stderr, "Runtime Error: Undefined class method '%s' for '%s'\n",
+        error_runtime(ERR_UNDEFINED_CLASS_METHOD,
                 msg_sym->chars, klass->name ? klass->name->chars : "Anonymous");
         return false;
     }
@@ -39,13 +39,13 @@ bool dispatch_send(VM* vm, uint8_t arg_count, uint16_t msg_index)
                                   : NULL;
 
             if (func->arity != arg_count) {
-                fprintf(stderr, "Runtime Error: Expected %d arguments but got %d.\n",
+                error_runtime(ERR_WRONG_ARG_COUNT,
                         func->arity, arg_count);
                 return false;
             }
 
             if (vm->frame_count >= FRAME_MAX) {
-                fprintf(stderr, "Stack overflow: frame limit exceeded.\n");
+                error_runtime(ERR_STACK_OVERFLOW);
                 return false;
             }
 
@@ -73,7 +73,7 @@ bool dispatch_send(VM* vm, uint8_t arg_count, uint16_t msg_index)
             ObjFunction* func = (ObjFunction*)as_obj(method_val);
 
             if (vm->frame_count >= FRAME_MAX) {
-                fprintf(stderr, "Stack overflow: frame limit exceeded.\n");
+                error_runtime(ERR_STACK_OVERFLOW);
                 return false;
             }
 
@@ -97,6 +97,6 @@ bool dispatch_send(VM* vm, uint8_t arg_count, uint16_t msg_index)
         }
     }
 
-    fprintf(stderr, "Runtime Error: Undefined message '%s'\n", msg_sym->chars);
+    error_runtime(ERR_UNDEFINED_MESSAGE, msg_sym->chars);
     return false;
 }

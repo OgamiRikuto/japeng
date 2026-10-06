@@ -3,6 +3,7 @@
 #include "common.h"
 
 #include <stdio.h>
+#include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -65,7 +66,7 @@ static bool native_println(VM* vm, uint8_t arg_count)
     } else if (arg_count == 1) {\
         target = peek(vm, 0);
     } else {
-        fprintf(stderr, "Runtime Error: 'println' expects 0 or 1 argument.\n");
+        error_runtime(ERR_PRINTLN_ARG_COUNT);
         return false;
     }
 
@@ -92,8 +93,37 @@ static bool native_print(VM* vm, uint8_t arg_count)
     return true;
 }
 
+static bool native_input(VM* vm, uint8_t arg_count)
+{
+    // 引数が1つ渡されていたら、それをプロンプトとして画面表示
+    if (arg_count == 1) {
+        Value prompt_val = pop(vm);
+        if (is_obj(prompt_val) && ((Obj*)as_obj(prompt_val))->type == OBJ_STRING) {
+            ObjString* prompt = (ObjString*)as_obj(prompt_val);
+            printf("%s", prompt->chars);
+            fflush(stdout); // 即座に出力フラッシュ
+        }
+    }
+
+    char input[1024];
+    if (fgets(input, sizeof(input), stdin) == NULL) {
+        push(vm, make_obj((Obj*)new_string("", 0)));
+        return true;
+    }
+
+    size_t len = strlen(input);
+    while (len > 0 && (input[len - 1] == '\n' || input[len - 1] == '\r')) {
+        input[--len] = '\0';
+    }
+
+    ObjString* string = new_string(input, (int)len);
+    push(vm, make_obj((Obj*)string));
+    return true;
+}
+
 void setup_print(VM* vm, ObjClass* klass)
 {
     define_native(klass, "print", native_print);
     define_native(klass, "println", native_println);
+    define_native(klass, "input", native_input);
 }

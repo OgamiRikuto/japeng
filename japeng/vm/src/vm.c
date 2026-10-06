@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DEBUG_TRACE_EXECUTION 1
+#define DEBUG_TRACE_EXECUTION 0
 
 #if DEBUG_TRACE_EXECUTION 
 static void print_stack(VM* vm);
@@ -112,7 +112,7 @@ static InterpretResult run(VM* vm)
                current_ip, op_kind[op_preview], get_operand(instruction_preview));
 #endif
        if (frame->ip >= frame->chunk->code + frame->chunk->count) {
-            fprintf(stderr, "Runtime Error: Execution fell off the end of chunk without OP_RETURN.\n");
+            error_runtime(ERR_FELL_OFF_END);
             return INTERPRET_RUNTIME_ERROR;
         }
         uint32_t instruction = *frame->ip++;
@@ -140,7 +140,7 @@ static InterpretResult run(VM* vm)
                 ObjString* name = (ObjString*)as_obj(frame->chunk->constants[name_idx]);
                 Value value;
                 if (!table_get(vm->globals, name, &value)) {
-                    fprintf(stderr, "Undefined global variable '%s'\n", name->chars);
+                    error_runtime(ERR_UNDEFINED_GLOBAL, name->chars);
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 push(vm, value);
@@ -173,7 +173,7 @@ static InterpretResult run(VM* vm)
             case OP_NEW_INSTANCE: {
                 Value class_val = pop(vm);
                 if (!is_obj(class_val) || ((Obj*)as_obj(class_val))->type != OBJ_CLASS) {
-                    fprintf(stderr, "Cannot instantiate non-class value.");
+                    error_runtime(ERR_CANNOT_INSTANTIATE);
                     return INTERPRET_RUNTIME_ERROR;
                 }
 
@@ -271,7 +271,7 @@ static InterpretResult run(VM* vm)
                 } else if (is_float(a) && is_float(b)) {
                     push(vm, make_float(as_float(a) + as_float(b)));
                 } else {
-                    fprintf(stderr, "Type error in OP_ADD.\n");
+                    error_runtime(ERR_TYPE_OP_ADD);
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 break;
@@ -284,7 +284,7 @@ static InterpretResult run(VM* vm)
                 } else if (is_float(a) && is_float(b)) {
                     push(vm, make_float(as_float(a) - as_float(b)));
                 } else {
-                    fprintf(stderr, "Type error in OP_SUB.\n");
+                    error_runtime(ERR_TYPE_OP_SUB);
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 break;
@@ -297,7 +297,7 @@ static InterpretResult run(VM* vm)
                 } else if (is_float(a) && is_float(b)) {
                     push(vm, make_float(as_float(a) * as_float(b)));
                 } else {
-                    fprintf(stderr, "Type error in OP_MUL.\n");
+                    error_runtime(ERR_TYPE_OP_MUL);
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 break;
@@ -307,14 +307,14 @@ static InterpretResult run(VM* vm)
                 Value a = pop(vm);
                 if (is_int(a) && is_int(b)) {
                     if (as_int(b) == 0) {
-                        fprintf(stderr, "Division by zero.\n");
+                        error_runtime(ERR_DIVISION_BY_ZERO);
                         return INTERPRET_RUNTIME_ERROR;
                     }
                     push(vm, make_int(as_int(a) / as_int(b)));
                 } else if (is_float(a) && is_float(b)) {
                     push(vm, make_float(as_float(a) / as_float(b)));
                 } else {
-                    fprintf(stderr, "Type error in OP_DIV.\n");
+                    error_runtime(ERR_TYPE_OP_DIV);
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 break;
@@ -327,7 +327,7 @@ static InterpretResult run(VM* vm)
                 } else if (is_float(a) && is_float(b)) {
                     push(vm, make_bool(as_float(a) < as_float(b)));
                 } else {
-                    fprintf(stderr, "Type error in OP_LESS.\n");
+                    error_runtime(ERR_TYPE_OP_LESS);
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 break;
@@ -340,7 +340,7 @@ static InterpretResult run(VM* vm)
                 } else if (is_float(a) && is_float(b)) {
                     push(vm, make_bool(as_float(a) > as_float(b)));
                 } else {
-                    fprintf(stderr, "Type error in OP_GREAT.\n");
+                    error_runtime(ERR_TYPE_OP_GREAT);
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 break;
@@ -394,7 +394,7 @@ static InterpretResult run(VM* vm)
                 break;
             }
             default: 
-                fprintf(stderr, "Unknown opcode: %d\n", op);
+                error_runtime(ERR_UNKNOWN_OPCODE, op);
                 return INTERPRET_RUNTIME_ERROR;
         }
     }

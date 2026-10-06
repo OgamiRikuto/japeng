@@ -5,30 +5,15 @@
 #include "class.h"
 #include "table.h"
 #include "object.h"
-
-// 共有シンボル
-extern ObjString* sym_is;
-extern ObjString* sym_are;
-extern ObjString* sym_self;
-extern ObjString* sym_if;
-extern ObjString* sym_elif;
-extern ObjString* sym_else;
-extern ObjString* sym_repeat;
-extern ObjString* sym_SInteger;
-extern ObjString* sym_SFloat;
-extern ObjString* sym_function;
-extern ObjString* sym_plus;
-extern ObjString* sym_minus;
-extern ObjString* sym_multi;
-extern ObjString* sym_div;
-extern ObjString* sym_equal;
-extern ObjString* sym_less;
-extern ObjString* sym_gt;
+#include "error.h"
 
 #define DEBUG_CHUNK_WRITE 0
 #define DEBUG_CLASS_WRITE 0
 #define DEBUG_COMPILE_KIND 0
 #define DEBUG_LOOP_WRITE 0
+
+#define error_compile(node, code, ...) \
+    error_at((node)->loc, (code), ##__VA_ARGS__)
 
 // コード生成ヘルパー
 int  emit_jump(Compiler* c, Opcode op);
@@ -57,8 +42,8 @@ void compile_mesage_send(Compiler* c, ASTNode* node, ObjString* msg);
 void compile_if(Compiler* c, ASTNode* node);
 void compile_if_chain(Compiler* c, ASTNode* node);
 void compile_repeat(Compiler* c, ASTNode* node);
-void compile_break(Compiler* c);
-void compile_continue(Compiler* c);
+void compile_break(Compiler* c, ASTNode* node);
+void compile_continue(Compiler* c, ASTNode* node);
 ObjFunction* compile_block(Compiler* parent, ASTNode* block_node);
 
 // クラスコンパイル関数

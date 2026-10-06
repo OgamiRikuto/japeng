@@ -38,7 +38,7 @@ bool compile_compound_assignment(Compiler* c, ASTNode* node)
 
     ASTNode* target = node->send.receiver;
     if (!target || target->kind != AST_IDENTIFIER) {
-        fprintf(stderr, "Error: Left side of compound assignment must be an identifier.\n");
+        error_compile(node, ERR_COMPOUND_ASSIGN_TARGET);
         exit(EXIT_FAILURE);
     }
 
@@ -71,7 +71,7 @@ bool compile_compound_assignment(Compiler* c, ASTNode* node)
         }
     }
 
-    fprintf(stderr, "Error: Undefined variable or field '%s' for compound assignment.\n", name->chars);
+    error_compile(node, ERR_UNDEFINED_VAR_OR_FIELD, name->chars);
     exit(EXIT_FAILURE);
 }
 
@@ -157,8 +157,8 @@ void compile_assignment(Compiler* c, ASTNode* node)
             }
         }
 
-        fprintf(stderr, "Error: Assignment to undefined variable '%s'.\n", target_name->chars);
-        exit(1);
+        error_compile(node, ERR_ASSIGN_UNDEFINED_VAR, target_name->chars);
+        exit(EXIT_FAILURE);
         return;
     }
 }
