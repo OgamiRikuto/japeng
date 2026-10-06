@@ -130,14 +130,22 @@ ObjString* get_type_name(ASTNode* type_node) {
     return NULL;
 }
 
-bool is_integer_type(ObjString* name) {
+bool is_integer_type(ObjString* name) 
+{
     if (name == NULL) return false;
-    return (strcmp(name->chars, "Integer") == 0 || 
+    return (name == sym_Integer|| 
             name == sym_SmallInteger);
 }
 
-bool is_float_type(ObjString* name) {
+bool is_float_type(ObjString* name) 
+{
     if (name == NULL) return false;
-    return (strcmp(name->chars, "Float") == 0 || 
+    return (name == sym_Float || 
             name == sym_SmallFloat);
+}
+
+bool is_string_type(ObjString* name) 
+{
+    if (name == NULL) return false;
+    return (name == sym_String);
 }

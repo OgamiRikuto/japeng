@@ -32,6 +32,14 @@ typedef struct objString {
     char chars[];
 } ObjString;
 
+// リストオブジェクト
+typedef struct objList {
+    Obj header;
+    Value* elements;
+    int size;
+    int capacity;
+} ObjList;
+
 typedef struct upvalueInfo {
     uint8_t index;
     bool is_local;
@@ -72,5 +80,6 @@ static inline bool is_closure(Value value) {
 ObjFunction* new_function(Chunk* chunk, uint8_t arity);
 ObjClosure* new_closure(ObjFunction* function);
 ObjString* new_string(const char* chars, int length);
+ObjList* new_list();
 
 #endif

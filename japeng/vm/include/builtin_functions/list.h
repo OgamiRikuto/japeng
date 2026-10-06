@@ -1,8 +1,7 @@
 #ifndef LIST_H
 #define LIST_H
 
-#include "literal.h"
-#include "object.h"
+#include "common.h"
 
 typedef struct vm VM;
 
@@ -14,12 +13,8 @@ typedef struct objList {
 } ObjList;
 
 ObjList* new_list();
-bool native_list_new(VM* vm, uint8_t arg_count);
-bool native_list_init(VM* vm, uint8_t arg_count);
-bool native_list_push(VM* vm, uint8_t arg_count);
-bool native_list_get(VM* vm, uint8_t arg_count);
-bool native_list_set(VM* vm, uint8_t arg_count);
-bool native_list_length(VM* vm, uint8_t arg_count);
+
+
 
 
 #endif

@@ -57,7 +57,7 @@ static void print_value(Value value)
     }
 }
 
-bool native_println(VM* vm, uint8_t arg_count) 
+static bool native_println(VM* vm, uint8_t arg_count) 
 {
     Value target;
     if (arg_count == 0) {
@@ -80,7 +80,7 @@ bool native_println(VM* vm, uint8_t arg_count)
     return true;
 }
 
-bool native_print(VM* vm, uint8_t arg_count) 
+static bool native_print(VM* vm, uint8_t arg_count) 
 {
     Value target = peek(vm, 0);
     print_value(target);
@@ -90,4 +90,10 @@ bool native_print(VM* vm, uint8_t arg_count)
     }
     push(vm, target);
     return true;
+}
+
+void setup_print(VM* vm, ObjClass* klass)
+{
+    define_native(klass, "print", native_print);
+    define_native(klass, "println", native_println);
 }

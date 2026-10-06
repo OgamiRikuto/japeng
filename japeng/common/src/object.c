@@ -31,3 +31,12 @@ ObjString* new_string(const char* chars, int length)
     return string;
 }
 
+ObjList* new_list()
+{
+    ObjList* list = (ObjList*)malloc(sizeof(ObjList));
+    list->header.type = OBJ_LIST;
+    list->size = 0;
+    list->capacity = 8;
+    list->elements = (Value*)malloc(sizeof(Value) * list->capacity);
+    return list;
+}

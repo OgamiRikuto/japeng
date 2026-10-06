@@ -29,6 +29,7 @@ typedef enum {
     OP_LESS,
     OP_GREAT,
     OP_EQUAL,
+    OP_NEQUAL,
     OP_MAX
 } Opcode;
 

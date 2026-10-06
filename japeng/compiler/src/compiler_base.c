@@ -16,8 +16,6 @@ static int compile_args(Compiler* c, ASTNode* arg_node)
     return 1;
 }
 
-// compiler/src/compiler_base.c
-
 // 複合代入シンボルに対応する演算オペコードを解決
 static Opcode resolve_compound_op(ObjString* msg) 
 {
@@ -89,6 +87,8 @@ void compile_var_decl(Compiler* c, ASTNode* node)
         emit_constant(c, make_int(0));
     } else if (is_float_type(type_name)) {
         emit_constant(c, make_float(0.0));
+    } else if (is_string_type(type_name)) {
+        emit_constant(c, make_obj((Obj*)new_string("", 0)));
     } else {
         uint32_t class_sym_idx = add_constant(c->chunk, make_obj((Obj*)type_name));
         emit_inst(c, OP_GET_GLOBAL, class_sym_idx);
@@ -110,8 +110,9 @@ void compile_assignment(Compiler* c, ASTNode* node)
 
 
         if ((node->send.args != NULL && node->send.args->kind == AST_BLOCK) ||
-            (type_name != NULL && strcmp(type_name->chars, "Function") == 0) ||
-            is_float_type(type_name) || is_integer_type(type_name)) {
+            (type_name != NULL && type_name == sym_Function) ||
+            is_float_type(type_name) || is_integer_type(type_name) ||
+            is_string_type(type_name)) {
             compile(c, node->send.args);
 
             emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
@@ -197,6 +198,7 @@ void compile_mesage_send(Compiler* c, ASTNode* node, ObjString* msg)
         if (msg == sym_multi) {emit_inst(c, OP_MUL, 0); return;}
         if (msg == sym_div) {emit_inst(c, OP_DIV, 0); return;}
         if (msg == sym_equal) {emit_inst(c, OP_EQUAL, 0); return;}
+        if (msg == sym_nequal) {emit_inst(c, OP_NEQUAL, 0); return;}
         if (msg == sym_less) {emit_inst(c, OP_LESS, 0); return;}
         if (msg == sym_gt) {emit_inst(c, OP_GREAT, 0); return;}
     }

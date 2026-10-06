@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DEBUG_TRACE_EXECUTION 0
+#define DEBUG_TRACE_EXECUTION 1
 
 #if DEBUG_TRACE_EXECUTION 
 static void print_stack(VM* vm);
@@ -33,6 +33,7 @@ const char* op_kind[OP_MAX] = {
     [OP_LESS]         = "OP_LESS",
     [OP_GREAT]        = "OP_GREAT",
     [OP_EQUAL]        = "OP_EQUAL",
+    [OP_NEQUAL]       = "OP_NEQUAL",
     [OP_CLOSURE]      = "OP_CLOSURE",
     [OP_GET_UPVALUE]  = "OP_GET_UPVALUE",
     [OP_NEW_INSTANCE] = "OP_NEW_INSTANCE"
@@ -82,6 +83,8 @@ ObjClass* get_class_for_value(VM* vm, Value val)
                 return ((ObjInstance*)obj)->klass;
             case OBJ_LIST:
                 return vm->class_list;
+            case OBJ_STRING:
+                return vm->class_string;
             default:
                 break;
         }
@@ -90,7 +93,10 @@ ObjClass* get_class_for_value(VM* vm, Value val)
 }
 
 static inline bool is_falsy(Value value) {
-    return is_nil(value) || (is_bool(value) && !as_bool(value));
+    if (is_nil(value)) return true;
+    if ((is_bool(value) && !as_bool(value))) return true;
+    if (is_int(value) && as_int(value) == 0) return true;
+    return false;
 }
 
 static InterpretResult run(VM* vm)
@@ -342,7 +348,49 @@ static InterpretResult run(VM* vm)
             case OP_EQUAL: {
                 Value b = pop(vm);
                 Value a = pop(vm);
-                push(vm, make_bool(a == b));
+
+                if (a == b) {
+                    push(vm, make_bool(true));
+                    break;
+                }
+
+                if (is_obj(a) && is_obj(b)) {
+                    Obj* obj_a = as_obj(a);
+                    Obj* obj_b = as_obj(b);
+                    if (obj_a->type == OBJ_STRING && obj_b->type == OBJ_STRING) {
+                        ObjString* sa = (ObjString*)obj_a;
+                        ObjString* sb = (ObjString*)obj_b;
+                        bool eq = (sa->length == sb->length) && 
+                                  (memcmp(sa->chars, sb->chars, sa->length) == 0);
+                        push(vm, make_bool(eq));
+                        break;
+                    }
+                }
+                push(vm, make_bool(false));
+                break;
+            }
+            case OP_NEQUAL: {
+                Value b = pop(vm);
+                Value a = pop(vm);
+
+                if (a == b) {
+                    push(vm, make_bool(false));
+                    break;
+                }
+
+                if (is_obj(a) && is_obj(b)) {
+                    Obj* obj_a = as_obj(a);
+                    Obj* obj_b = as_obj(b);
+                    if (obj_a->type == OBJ_STRING && obj_b->type == OBJ_STRING) {
+                        ObjString* sa = (ObjString*)obj_a;
+                        ObjString* sb = (ObjString*)obj_b;
+                        bool eq = (sa->length == sb->length) && 
+                                  (memcmp(sa->chars, sb->chars, sa->length) == 0);
+                        push(vm, make_bool(!eq));
+                        break;
+                    }
+                }
+                push(vm, make_bool(true));
                 break;
             }
             default: 
