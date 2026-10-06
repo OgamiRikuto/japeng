@@ -15,15 +15,6 @@ static int grow(ObjList* list)
     return list->capacity;
 }
 
-static bool native_list_new(VM* vm, uint8_t arg_count)
-{
-    pop(vm); 
-
-    ObjList* list = new_list();
-    push(vm, make_obj((Obj*)list));
-    return true;
-}
-
 static bool native_list_init(VM* vm, uint8_t arg_count)
 {
     Value* args_start = vm->stack_top - arg_count;

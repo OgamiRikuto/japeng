@@ -6,7 +6,6 @@
 static bool native_string_init(VM* vm, uint8_t arg_count)
 {
     Value* args_start = vm->stack_top - arg_count;
-    ObjString* string = (ObjString*)as_obj(*(args_start - 1));
 
     vm->stack_top = args_start;
 
