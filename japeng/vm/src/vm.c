@@ -99,7 +99,7 @@ static inline bool is_falsy(Value value) {
     return false;
 }
 
-static InterpretResult run(VM* vm)
+static InterpretResult run(VM* vm, int stop_frame_count)
 {
     CallFrame* frame = &vm->frames[vm->frame_count - 1]; 
     for(;;) {
@@ -245,21 +245,16 @@ static InterpretResult run(VM* vm)
             case OP_RETURN: {
                 Value result = pop(vm);
 
+                CallFrame* ending_frame = frame;
                 vm->frame_count--;
 
-                if (vm->frame_count == 0) {
-                    // if (is_int(result)) {
-                    //     printf("Result: %d\n", as_int(result));
-                    // } else if (is_float(result)) {
-                    //     printf("Result: %g\n", as_float(result));
-                    // } else if (is_bool(result)) {
-                    //     printf("Result: %s\n", as_bool(result) ? "true" : "false");
-                    // }
+                vm->stack_top = ending_frame->slots;
+                push(vm, result);
+
+                if (vm->frame_count == stop_frame_count) {
                     return INTERPRET_OK;
                 }
-                vm->stack_top = frame->slots;
 
-                push(vm ,result);
                 frame = &vm->frames[vm->frame_count - 1];
                 break;
             }
@@ -410,7 +405,70 @@ InterpretResult interpret(VM* vm, Chunk* chunk)
     frame->chunk = chunk;
     frame->ip = chunk->code;
     frame->slots = vm->stack;
-    return run(vm);
+    return run(vm, 0);
+}
+
+// C言語から JapEng のクロージャ/関数を引数1個で実行し、戻り値を受け取る
+bool vm_call_function(VM* vm, Value func_val, uint8_t arg_count, Value* args, Value* out_result)
+{
+    if (!is_obj(func_val)) {
+        error_runtime(ERR_TYPE_OP_ADD);
+        return false;
+    }
+
+    Obj* obj = as_obj(func_val);
+    ObjFunction* func = NULL;
+    ObjClosure* closure = NULL;
+
+    if (obj->type == OBJ_CLOSURE) {
+        closure = (ObjClosure*)obj;
+        func = closure->function;
+    } else if (obj->type == OBJ_FUNCTION) {
+        func = (ObjFunction*)obj;
+    } else {
+        error_runtime(ERR_TYPE_OP_ADD);
+        return false;
+    }
+
+    // ★ 引数の個数を柔軟にチェック
+    if (func->arity != arg_count) {
+        error_runtime(ERR_WRONG_ARG_COUNT, func->arity, arg_count);
+        return false;
+    }
+
+    if (vm->frame_count >= FRAME_MAX) {
+        error_runtime(ERR_STACK_OVERFLOW);
+        return false;
+    }
+
+    // 1. レシーバ (クロージャ/関数) を push
+    push(vm, func_val);
+
+    // 2. 引数を順番にすべて push
+    for (int i = 0; i < arg_count; i++) {
+        push(vm, args[i]);
+    }
+
+    int stop_frame_count = vm->frame_count;
+
+    CallFrame* next_frame = &vm->frames[vm->frame_count++];
+    next_frame->closure = closure;
+    next_frame->chunk = func->chunk;
+    next_frame->ip = func->chunk->code;
+    // slots[0] がレシーバ、その後ろに引数が並ぶ
+    next_frame->slots = vm->stack_top - (arg_count + 1);
+
+    InterpretResult res = run(vm, stop_frame_count);
+    if (res != INTERPRET_OK) {
+        return false;
+    }
+
+    if (out_result != NULL) {
+        *out_result = pop(vm);
+    } else {
+        pop(vm); // 戻り値が不要な場合 (forEach など) は破棄
+    }
+    return true;
 }
 
 #if DEBUG_TRACE_EXECUTION

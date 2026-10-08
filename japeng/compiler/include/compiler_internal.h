@@ -29,7 +29,9 @@ int resolve_upvalue(Compiler* compiler, ObjString* name);
 ObjString* get_type_name(ASTNode* type_node);
 bool is_integer_type(ObjString* name);
 bool is_float_type(ObjString* name);
+bool is_list_type(ObjString* name);
 bool is_string_type(ObjString* name);
+bool is_builtin(ObjString* name);
 
 // 基本構文コンパイル関数
 bool compile_compound_assignment(Compiler* c, ASTNode* node);

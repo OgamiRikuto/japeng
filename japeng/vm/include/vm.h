@@ -1,6 +1,7 @@
 #ifndef VM_H
 #define VM_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 typedef struct chunk Chunk;
@@ -45,6 +46,7 @@ typedef enum {
 void init_vm(VM* vm);
 void free_vm(VM* vm);
 InterpretResult interpret(VM* vm, Chunk* chunk);
+bool vm_call_function(VM* vm, Value func_val, uint8_t arg_count, Value* args, Value* out_result);
 
 void push(VM* vm, Value value);
 Value pop(VM* vm);

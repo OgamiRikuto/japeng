@@ -87,6 +87,8 @@ void compile_var_decl(Compiler* c, ASTNode* node)
         emit_constant(c, make_int(0));
     } else if (is_float_type(type_name)) {
         emit_constant(c, make_float(0.0));
+    } else if (is_list_type(type_name)) {
+        emit_constant(c, make_obj((Obj*)new_list()));
     } else if (is_string_type(type_name)) {
         emit_constant(c, make_obj((Obj*)new_string("", 0)));
     } else {
@@ -111,8 +113,7 @@ void compile_assignment(Compiler* c, ASTNode* node)
 
         if ((node->send.args != NULL && node->send.args->kind == AST_BLOCK) ||
             (type_name != NULL && type_name == sym_Function) ||
-            is_float_type(type_name) || is_integer_type(type_name) ||
-            is_string_type(type_name)) {
+            is_builtin(type_name)) {
             compile(c, node->send.args);
 
             emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);

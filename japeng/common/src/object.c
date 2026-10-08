@@ -27,6 +27,7 @@ ObjString* new_string(const char* chars, int length)
     string->header.type = OBJ_STRING;
     string->length = length;
     memcpy(string->chars, chars, length);
+    string->chars[length] = '\0';
     string->hash = 0;
     return string;
 }

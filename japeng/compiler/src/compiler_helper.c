@@ -146,8 +146,27 @@ bool is_float_type(ObjString* name)
             name == sym_SmallFloat);
 }
 
+bool is_list_type(ObjString* name)
+{
+    if (name == NULL) return false;
+    return (name == sym_List);
+}
+
 bool is_string_type(ObjString* name) 
 {
     if (name == NULL) return false;
     return (name == sym_String);
+}
+
+bool is_builtin(ObjString* name)
+{
+    if (name == NULL) return false;
+    return  name == sym_Object ||
+            name == sym_Integer ||
+            name == sym_SmallInteger ||
+            name == sym_Float ||
+            name == sym_SmallFloat || 
+            name == sym_List ||
+            name == sym_String
+            ;
 }
