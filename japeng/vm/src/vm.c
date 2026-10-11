@@ -1,14 +1,16 @@
 #include "vm.h"
 #include "common.h"
+#include "native.h"
 #include "builtins.h"
 #include "dispatch.h"
 #include <stdio.h>
 #include <string.h>
 
-#define DEBUG_TRACE_EXECUTION 0
+#define DEBUG_TRACE_EXECUTION 1
 
 #if DEBUG_TRACE_EXECUTION 
 static void print_stack(VM* vm);
+static void print_instruction(CallFrame* frame, uint32_t instruction, uint32_t current_ip);
 
 const char* op_kind[OP_MAX] = {
     [OP_CONSTANT]      = "OP_CONSTANT",
@@ -19,6 +21,7 @@ const char* op_kind[OP_MAX] = {
     [OP_GET_FIELD]     = "OP_GET_FIELD",
     [OP_SET_FIELD]    = "OP_SET_FIELD",
     [OP_SEND]          = "OP_SEND",
+    [OP_SUPER_CALL]    = "OP_SUPER_CALL",
     [OP_CALL]          = "OP_CALL",
     [OP_POP]           = "OP_POP",
     [OP_DUP]           = "OP_DUP",
@@ -107,9 +110,7 @@ static InterpretResult run(VM* vm, int stop_frame_count)
         print_stack(vm);
         uint32_t current_ip = (uint32_t)(frame->ip - frame->chunk->code);
         uint32_t instruction_preview = *frame->ip;
-        Opcode op_preview = get_op(instruction_preview);
-        printf("%04d  op: %s (operand: %u)\n", 
-               current_ip, op_kind[op_preview], get_operand(instruction_preview));
+        print_instruction(frame, instruction_preview, current_ip);
 #endif
        if (frame->ip >= frame->chunk->code + frame->chunk->count) {
             error_runtime(ERR_FELL_OFF_END);
@@ -149,6 +150,15 @@ static InterpretResult run(VM* vm, int stop_frame_count)
             case OP_SET_GLOBAL: {
                 uint32_t name_idx = get_operand(instruction);
                 ObjString* name = (ObjString*)as_obj(frame->chunk->constants[name_idx]);
+                Value val = peek(vm, 0);
+
+                if (is_obj(val) && ((Obj*)as_obj(val))->type == OBJ_CLASS) {
+                    ObjClass* klass = (ObjClass*)as_obj(val);
+                    if (klass != vm->class_object && klass->superclass == NULL) {
+                        klass->superclass = vm->class_object;
+                        klass->superclass_type = new_type_info(sym_Object, 0);
+                    }
+                }
                 table_set(vm->globals, name, peek(vm, 0));
                 break;
             }
@@ -180,7 +190,7 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 ObjClass* klass = (ObjClass*)as_obj(class_val);
                 if (klass != NULL && klass != vm->class_object && klass->superclass == NULL) {
                     klass->superclass = vm->class_object;
-                    klass->superclass_type = new_type_info(intern_cstr("Object"), 0);
+                    klass->superclass_type = new_type_info(sym_Object, 0);
                 }
                 if (klass == vm->class_list) {
                     push(vm, make_obj((Obj*)new_list()));
@@ -210,6 +220,13 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 push(vm, frame->closure->captures[slot]);
                 break;
             }
+            case OP_SET_UPVALUE: {
+                uint32_t slot = get_operand(instruction);
+                Value value = peek(vm, 0); // または pop(vm)
+                // クロージャのキャプチャ配列に書き戻し
+                frame->closure->captures[slot] = value; 
+                break;
+            }
             case OP_JUMP: {
                 uint32_t offset = get_operand(instruction);
                 frame->ip += offset;
@@ -233,6 +250,39 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 if (!dispatch_send(vm, arg_count, msg_index)) {
                     return INTERPRET_RUNTIME_ERROR;
                 }
+                frame = &vm->frames[vm->frame_count - 1];
+                break;
+            }
+            case OP_SUPER_CALL: {
+                uint8_t arg_count = get_send_args(instruction);
+                uint16_t fn_index = get_send_index(instruction);
+
+                // 実行時探索は 0 回！コンパイル時に特定済みの関数を直接取得
+                Value method_val = frame->chunk->constants[fn_index];
+
+                // ネイティブメソッドの場合
+                if (is_obj(method_val) && ((Obj*)as_obj(method_val))->type == OBJ_NATIVE) {
+                    ObjNative* native = (ObjNative*)as_obj(method_val);
+                    if (!native->function(vm, arg_count)) {
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    break;
+                }
+
+                // JapEng の関数 (ObjFunction) の場合
+                ObjFunction* func = (ObjFunction*)as_obj(method_val);
+
+                if (vm->frame_count >= FRAME_MAX) {
+                    error_runtime(ERR_STACK_OVERFLOW);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                CallFrame* next_frame = &vm->frames[vm->frame_count++];
+                next_frame->closure = NULL;
+                next_frame->chunk = func->chunk;
+                next_frame->ip = func->chunk->code;
+                next_frame->slots = vm->stack_top - (arg_count + 1);
+
                 frame = &vm->frames[vm->frame_count - 1];
                 break;
             }
@@ -408,7 +458,7 @@ InterpretResult interpret(VM* vm, Chunk* chunk)
     return run(vm, 0);
 }
 
-// C言語から JapEng のクロージャ/関数を引数1個で実行し、戻り値を受け取る
+// C言語から JapEng のクロージャ/関数をで実行し、戻り値を受け取る
 bool vm_call_function(VM* vm, Value func_val, uint8_t arg_count, Value* args, Value* out_result)
 {
     if (!is_obj(func_val)) {
@@ -473,69 +523,159 @@ bool vm_call_function(VM* vm, Value func_val, uint8_t arg_count, Value* args, Va
 
 #if DEBUG_TRACE_EXECUTION
 static void print_stack(VM* vm) {
-    printf("\n          ");
+    // fprintf(stderr, "\n          ");
     if (vm->stack == vm->stack_top) {
-        printf("[ empty ]\n");
+        fprintf(stderr, "[ empty ]\n");
         return;
     }
     for (Value* slot = vm->stack; slot < vm->stack_top; slot++) {
         for (int f = 0; f < vm->frame_count; f++) {
             if (slot == vm->frames[f].slots) {
-                printf("| f%d: ", f);
+                fprintf(stderr, "\n          ");
+                fprintf(stderr, "| f%d: ", f);
             }
         }
-        printf("[ ");
+        fprintf(stderr, "[ ");
         if (is_int(*slot)) {
-            printf("%d", as_int(*slot));
+            fprintf(stderr, "%d", as_int(*slot));
         } else if (is_bool(*slot)) {
-            printf("%s", as_bool(*slot) ? "true" : "false");
+            fprintf(stderr, "%s", as_bool(*slot) ? "true" : "false");
         } else if (is_nil(*slot)) {
-            printf("nil");
+            fprintf(stderr, "nil");
         } else if (is_float(*slot)) {
-            printf("%g", as_float(*slot));
+            fprintf(stderr, "%g", as_float(*slot));
         } else if (is_obj(*slot)) {
             Obj* obj = (Obj*)as_obj(*slot);
             if (obj == NULL) {
-                printf("XXX");
+                fprintf(stderr, "XXX");
             } else {
                 switch (obj->type) {
                     case OBJ_CLASS: {
                         ObjClass* klass = (ObjClass*)obj;
-                        printf("<class %s>", klass->name ? klass->name->chars : "Anon");
+                        fprintf(stderr, "<class %s>", klass->name ? klass->name->chars : "Anon");
                         break;
                     }
                     case OBJ_INSTANCE: {
                         ObjInstance* inst = (ObjInstance*)obj;
-                        printf("<inst %s>", (inst->klass && inst->klass->name) 
+                        fprintf(stderr, "<inst %s>", (inst->klass && inst->klass->name) 
                                             ? inst->klass->name->chars : "Anon");
                         break;
                     }
                     case OBJ_STRING: {
                         ObjString* str = (ObjString*)obj;
-                        printf("\"%s\"", str->chars);
+                        fprintf(stderr, "\"%s\"", str->chars);
                         break;
                     }
                     case OBJ_LIST: {
                         ObjList* list = (ObjList*)obj;
-                        printf("<list len:%d>", list->size);
+                        fprintf(stderr, "<list len:%d>", list->size);
                         break;
                     }
                     case OBJ_FUNCTION:
-                        printf("<fn>");
+                        fprintf(stderr, "<fn>");
                         break;
                     case OBJ_CLOSURE:
-                        printf("<closure>");
+                        fprintf(stderr, "<closure>");
                         break;
                     default:
-                        printf("XXX");
+                        fprintf(stderr, "XXX");
                         break;
                 }
             }
         } else {
-            printf("<unknown>");
+            fprintf(stderr, "<unknown>");
         }
-        printf(" ]");
+        fprintf(stderr, " ]");
     }
-    printf("\n\n");
+    fprintf(stderr, "\n\n");
 }
+
+static void print_instruction(CallFrame* frame, uint32_t instruction, uint32_t current_ip)
+{
+    Opcode op = get_op(instruction);
+    uint32_t operand = get_operand(instruction);
+    const char* name = (op < OP_MAX && op_kind[op]) ? op_kind[op] : "UNKNOWN";
+
+    fprintf(stderr, "%04d  op: %-15s", current_ip, name);
+
+    switch (op) {
+        case OP_SEND: {
+            uint8_t argc = get_send_args(instruction);
+            uint16_t sym_idx = get_send_index(instruction);
+            Value sym_val = frame->chunk->constants[sym_idx];
+            const char* msg = (is_obj(sym_val) && ((Obj*)as_obj(sym_val))->type == OBJ_STRING)
+                              ? ((ObjString*)as_obj(sym_val))->chars : "?";
+            fprintf(stderr, "argc: %u, msg: #%s (idx: %u)\n", argc, msg, sym_idx);
+            break;
+        }
+        case OP_SUPER_CALL: {
+            uint8_t argc = get_send_args(instruction);
+            uint16_t fn_idx = get_send_index(instruction);
+            fprintf(stderr, "argc: %u, fn_idx: %u\n", argc, fn_idx);
+            break;
+        }
+        case OP_CONSTANT: {
+            Value val = frame->chunk->constants[operand];
+            fprintf(stderr, "const[%u] = ", operand);
+            if (is_int(val))        fprintf(stderr, "%d\n", as_int(val));
+            else if (is_float(val)) fprintf(stderr, "%g\n", as_float(val));
+            else if (is_bool(val))  fprintf(stderr, "%s\n", as_bool(val) ? "true" : "false");
+            else if (is_nil(val))   fprintf(stderr, "nil\n");
+            else if (is_obj(val)) {
+                Obj* obj = as_obj(val);
+                if (obj->type == OBJ_STRING)   fprintf(stderr, "\"%s\"\n", ((ObjString*)obj)->chars);
+                else if (obj->type == OBJ_CLASS) fprintf(stderr, "<class %s>\n", ((ObjClass*)obj)->name->chars);
+                else fprintf(stderr, "<obj type:%d>\n", obj->type);
+            } else {
+                fprintf(stderr, "<unknown>\n");
+            }
+            break;
+        }
+        case OP_GET_GLOBAL:
+        case OP_SET_GLOBAL: {
+            Value name_val = frame->chunk->constants[operand];
+            const char* gname = (is_obj(name_val) && ((Obj*)as_obj(name_val))->type == OBJ_STRING)
+                                ? ((ObjString*)as_obj(name_val))->chars : "?";
+            fprintf(stderr, "global: '%s' (idx: %u)\n", gname, operand);
+            break;
+        }
+        case OP_GET_LOCAL:
+        case OP_SET_LOCAL:
+            fprintf(stderr, "slot: %u\n", operand);
+            break;
+        case OP_GET_FIELD:
+        case OP_SET_FIELD:
+            fprintf(stderr, "field[%u]\n", operand);
+            break;
+        case OP_GET_UPVALUE:
+        case OP_SET_UPVALUE:
+            fprintf(stderr, "upvalue[%u]\n", operand);
+            break;
+        case OP_JUMP:
+        case OP_JUMP_IF_FALSE:
+            fprintf(stderr, "offset: +%u -> %04d\n", operand, current_ip + 1 + operand);
+            break;
+        case OP_LOOP:
+            fprintf(stderr, "offset: -%u -> %04d\n", operand, current_ip + 1 - operand);
+            break;
+        case OP_POP:
+        case OP_DUP:
+        case OP_RETURN:
+        case OP_NEW_INSTANCE:
+        case OP_ADD:
+        case OP_SUB:
+        case OP_MUL:
+        case OP_DIV:
+        case OP_LESS:
+        case OP_GREAT:
+        case OP_EQUAL:
+        case OP_NEQUAL:
+            fprintf(stderr, "\n"); // オペランド不要な命令
+            break;
+        default:
+            fprintf(stderr, "(operand: %u)\n", operand);
+            break;
+    }
+}
+
 #endif
