@@ -26,6 +26,7 @@ int add_local(Compiler* c, ObjString* name, TypeInfo* type);
 int add_anonymous_local(Compiler* c);
 int add_upvalue(Compiler* compiler, uint8_t index, bool is_local);
 int resolve_upvalue(Compiler* compiler, ObjString* name);
+void emit_load_self(Compiler* c);
 ObjString* get_type_name(ASTNode* type_node);
 bool is_integer_type(ObjString* name);
 bool is_float_type(ObjString* name);

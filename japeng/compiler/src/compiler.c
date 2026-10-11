@@ -91,7 +91,7 @@ void compile(Compiler* c, ASTNode* node)
             if (c->current_class != NULL) {
                 int field_idx = find_field_index(c->current_class, node->identifier.name);
                 if (field_idx != -1) {
-                    emit_inst(c, OP_GET_LOCAL, 0);
+                    emit_load_self(c);
                     emit_inst(c, OP_GET_FIELD, (uint32_t)field_idx);
                     break;
                 }

@@ -259,17 +259,30 @@ ObjFunction* compile_block(Compiler* parent, ASTNode* block_node)
     init_compiler(&block_compiler, fn_chunk);
     block_compiler.enclosing = parent;
     block_compiler.current_class = parent->current_class;
+    if (parent != NULL && parent->current_class != NULL && parent->enclosing == NULL) {
+        block_compiler.is_method = true;
+    } else {
+        block_compiler.is_method = false;
+        block_compiler.locals[0].name = NULL;
+    }
 
     int arity = 0;
     if (block_node->block.args != NULL) {
         compile_block_args(&block_compiler, block_node->block.args, &arity);
     }
 
-
     compile(&block_compiler, block_node->block.body);
 
-    if (!block_node->block.has_ret)
-        emit_inst(&block_compiler, OP_RETURN, 0);
+    if (!block_node->block.has_ret){
+        if (block_compiler.is_method) {
+            // メソッドなら self (スロット 0) を積んでからリターン
+            emit_inst(&block_compiler, OP_GET_LOCAL, 0);
+        } else {
+            // 通常のブロックなら 0 や nil を積んでからリターン
+            emit_constant(&block_compiler, make_int(0));
+        }
+            emit_inst(&block_compiler, OP_RETURN, 0);
+    }
 
     ObjFunction* fn =  new_function(fn_chunk, arity);
 

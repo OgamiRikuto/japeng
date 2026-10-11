@@ -37,31 +37,51 @@ bool compile_compound_assignment(Compiler* c, ASTNode* node)
     }
 
     ASTNode* target = node->send.receiver;
+    ObjString* name = NULL;
+    bool is_explicit_self = false;
+    if (target->kind == AST_IDENTIFIER) name = target->identifier.name;
+    else if (target->kind == AST_SEND && target->send.receiver->kind == AST_IDENTIFIER) {
+        ObjString* rec_name = target->send.receiver->identifier.name;
+        if (rec_name == sym_self) {
+            name = target->send.message->identifier.name;
+            is_explicit_self = true;
+        }
+    }
     if (!target || target->kind != AST_IDENTIFIER) {
         error_compile(node, ERR_COMPOUND_ASSIGN_TARGET);
         exit(EXIT_FAILURE);
     }
 
-    ObjString* name = target->identifier.name;
-
-    // パターン 1: ローカル変数の更新
-    int slot = resolve_local(c, name);
-    if (slot != -1) {
-        emit_inst(c, OP_GET_LOCAL, (uint32_t)slot); // 1. 現在の値をロード
-        compile(c, node->send.args);                 // 2. 右辺の加算値をロード
-        emit_inst(c, op, 0);                         // 3. 演算実行 (OP_ADD 等)
-        emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);  // 4. ローカル変数に書き戻し
-        
-        return true;
+    if (!is_explicit_self) {
+        // パターン 1: ローカル変数の更新
+        int slot = resolve_local(c, name);
+        if (slot != -1) {
+            emit_inst(c, OP_GET_LOCAL, (uint32_t)slot); // 1. 現在の値をロード
+            compile(c, node->send.args);                 // 2. 右辺の加算値をロード
+            emit_inst(c, op, 0);                         // 3. 演算実行 (OP_ADD 等)
+            emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);  // 4. ローカル変数に書き戻し
+            
+            return true;
+        }
+    
+        // パターン 2: アップバリューの更新
+        int upval_slot = resolve_upvalue(c, name);
+        if (upval_slot != -1) {
+            emit_inst(c, OP_GET_UPVALUE, (uint32_t)upval_slot); // 1. 現在の値をロード
+            compile(c, node->send.args);                         // 2. 右辺の加算値をロード
+            emit_inst(c, op, 0);                                 // 3. 演算実行 (OP_ADD 等)
+            emit_inst(c, OP_SET_UPVALUE, (uint32_t)upval_slot);  // 4. アップバリューに書き戻し
+            return true;
+        }
     }
 
-    // パターン 2: フィールド変数 (self) の更新
+    // パターン 3: フィールド変数 (self) の更新
     if (c->current_class != NULL) {
         int field_idx = find_field_index(c->current_class, name);
         if (field_idx != -1) {
             // SET_FIELD 直前のスタックを [self, 新しい値] にするための積み順
-            emit_inst(c, OP_GET_LOCAL, 0);                   // 1. SET_FIELD 用レシーバ (self)
-            emit_inst(c, OP_GET_LOCAL, 0);                   // 2. GET_FIELD 用レシーバ (self)
+            emit_load_self(c);                   // 1. SET_FIELD 用レシーバ (self)
+            emit_load_self(c);                   // 2. GET_FIELD 用レシーバ (self)
             emit_inst(c, OP_GET_FIELD, (uint32_t)field_idx); // 3. 現在のフィールド値を取得
             compile(c, node->send.args);                      // 4. 右辺の加算値をロード
             emit_inst(c, op, 0);                              // 5. 演算実行
@@ -137,12 +157,40 @@ void compile_assignment(Compiler* c, ASTNode* node)
         return;
     }
 
+    if (node->send.receiver->kind == AST_SEND) {
+        ASTNode* lhs_send = node->send.receiver;
+        if (lhs_send->send.receiver->kind == AST_IDENTIFIER) {
+            ObjString* rec_name = lhs_send->send.receiver->identifier.name;
+            if (rec_name == sym_self || rec_name == intern_cstr("自身")) {
+                ObjString* field_name = lhs_send->send.message->identifier.name;
+                if (c->current_class != NULL) {
+                    int field_idx = find_field_index(c->current_class, field_name);
+                    if (field_idx != -1) {
+                        emit_load_self(c);               // 1. self を積む
+                        compile(c, node->send.args);     // 2. 代入する値を積む
+                        emit_inst(c, OP_SET_FIELD, (uint32_t)field_idx); // 3. 代入
+                        emit_inst(c, OP_POP, 0);
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
     if (node->send.receiver->kind == AST_IDENTIFIER) {
         ObjString* target_name = node->send.receiver->identifier.name;
         int slot = resolve_local(c, target_name);
         if (slot != -1) {
             compile(c, node->send.args);
             emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
+            emit_inst(c, OP_POP, 0);
+            return;
+        }
+
+        int upval = resolve_upvalue(c, target_name);
+        if (upval != -1) {
+            compile(c, node->send.args);
+            emit_inst(c, OP_SET_UPVALUE, (uint32_t)upval);
             emit_inst(c, OP_POP, 0);
             return;
         }
@@ -166,8 +214,49 @@ void compile_assignment(Compiler* c, ASTNode* node)
 
 void compile_mesage_send(Compiler* c, ASTNode* node, ObjString* msg)
 {
+    bool is_super = (node->send.receiver->kind == AST_IDENTIFIER &&
+                    (node->send.receiver->identifier.name == sym_super ||
+                     node->send.receiver->identifier.name == intern_cstr("親") ||
+                     node->send.receiver->identifier.name == intern_cstr("基底")));
+
+    if (is_super) {
+        if (c->current_class == NULL || c->current_class->superclass == NULL) {
+            error_compile(node, ERR_UNDEFINED_VAR, "super (親クラスが存在しません)");
+            exit(EXIT_FAILURE);
+        }
+
+        ObjClass* superclass = c->current_class->superclass;
+        Value method_val;
+
+        // ★ 2. コンパイル時に親クラスからメソッドを特定！
+        if (!find_method(superclass, msg, &method_val)) {
+            error_compile(node, ERR_UNDEFINED_MESSAGE, msg->chars);
+            exit(EXIT_FAILURE);
+        }
+
+        // ★ 3. レシーバとして「現在の self (子インスタンス)」を積む
+        emit_load_self(c);
+
+        // ★ 4. 引数をスタックに積む
+        int argc = compile_args(c, node->send.args);
+
+        // ★ 5. 見つかった関数を定数テーブルに置き、直接呼び出し命令を吐く！
+        uint32_t fn_const = add_constant(c->chunk, method_val);
+        write_chunk(c->chunk, make_super_call_inst((uint8_t)argc, (uint16_t)fn_const));
+        return;
+    }
+    
     bool is_self = (node->send.receiver->kind == AST_IDENTIFIER &&
                     node->send.receiver->identifier.name == sym_self);
+
+    if (is_self && node->send.args == NULL && c->current_class != NULL) {
+        int field_idx = find_field_index(c->current_class, msg);
+        if (field_idx != -1) {
+            emit_load_self(c);
+            emit_inst(c, OP_GET_FIELD, (uint32_t)field_idx);
+            return;
+        }
+    }
 
 
     if (is_self) {
@@ -189,7 +278,7 @@ void compile_mesage_send(Compiler* c, ASTNode* node, ObjString* msg)
             return;
         }
     }
-
+  
     compile(c, node->send.receiver);
     int argc = compile_args(c, node->send.args);
 

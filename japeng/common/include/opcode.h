@@ -15,6 +15,7 @@ typedef enum {
     OP_JUMP_IF_FALSE,
     OP_LOOP,
     OP_SEND,
+    OP_SUPER_CALL,
     OP_CALL,
     OP_POP,
     OP_DUP,
@@ -22,6 +23,7 @@ typedef enum {
     OP_NEW_INSTANCE,
     OP_CLOSURE,
     OP_GET_UPVALUE,
+    OP_SET_UPVALUE,
     OP_ADD,
     OP_SUB,
     OP_MUL,
@@ -40,6 +42,10 @@ static inline uint32_t make_inst(Opcode op, uint32_t operand) {
 
 static inline uint32_t make_send_inst(uint8_t arg_count, uint16_t msg_index) {
     return ((uint32_t)OP_SEND << 24) | ((uint32_t)arg_count << 16) | (msg_index & 0xFFFF);
+}
+
+static inline uint32_t make_super_call_inst(uint8_t arg_count, uint16_t fn_index) {
+    return ((uint32_t)OP_SUPER_CALL << 24) | ((uint32_t)arg_count << 16) | (fn_index & 0xFFFF);
 }
 
 /* 命令を取り出す */

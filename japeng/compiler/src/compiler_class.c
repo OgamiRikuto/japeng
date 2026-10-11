@@ -159,7 +159,7 @@ static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
         }
 
         bool is_function = (member_type != NULL && member_type->name != NULL &&
-                            member_type->name == intern_cstr("Function"));
+                            member_type->name == sym_Function);
         
         if (is_function) {
             if (node->field_decl.default_data != NULL &&
@@ -167,8 +167,10 @@ static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
                 ASTNode* send_node = node->field_decl.default_data;
                 if (send_node->send.args && send_node->send.args->kind == AST_BLOCK) {
                     c->current_class = klass;
+                    c->is_method = true;
                     ObjFunction* method_fn = compile_block(c, send_node->send.args);
                     c->current_class = NULL;
+                    c->is_method = false;
     
                     add_method(klass, member_name, make_obj((Obj*)method_fn));
                     if (from_class != NULL) {
@@ -334,6 +336,9 @@ void compile_class_body(Compiler* c, ASTNode* node)
                 compile_class_body(c, super_ast);
             }
         }
+    } else if (klass->name != sym_Object) {
+        klass->superclass = resolve_class(c, sym_Object);
+        klass->superclass_type = new_type_info(sym_Object, 0);
     }
 
     int delegate_count = count_classes(node->class_def.from_classes);

@@ -30,6 +30,7 @@ typedef struct upvalue {
 typedef struct compiler {
     struct compiler* enclosing;
     Chunk* chunk;
+    bool is_method;
 
     Local locals[MAX_LOCALS];
     int local_count;

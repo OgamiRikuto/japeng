@@ -6,6 +6,7 @@ void init_compiler(Compiler* compiler, Chunk* chunk)
 {
     compiler->enclosing = NULL;
     compiler->chunk = chunk;
+    compiler->is_method = false;
     compiler->local_count = 0;
     compiler->scope_depth = 0;
 
@@ -121,6 +122,19 @@ int resolve_upvalue(Compiler* compiler, ObjString* name)
 
     return -1;
 }
+
+void emit_load_self(Compiler* c) 
+{
+    if (c->is_method) {
+        // 通常のメソッド内: スロット 0 が self
+        emit_inst(c, OP_GET_LOCAL, 0);
+    } else {
+        // ネストしたブロック内: 外側のスコープから self をアップバリューとして取得
+        int self_upval = resolve_upvalue(c, sym_self);
+        emit_inst(c, OP_GET_UPVALUE, (uint32_t)self_upval);
+    }
+}
+
 ObjString* get_type_name(ASTNode* type_node) {
     if (type_node == NULL) return NULL;
     if (type_node->kind == AST_IDENTIFIER) {

@@ -7,6 +7,7 @@ typedef struct objString ObjString;
     X(is,           "is") \
     X(are,          "are") \
     X(self,         "self") \
+    X(super,        "super") \
     X(if,           "if") \
     X(elif,         "elif") \
     X(else,         "else") \
