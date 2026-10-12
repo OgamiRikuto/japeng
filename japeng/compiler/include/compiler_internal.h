@@ -7,10 +7,10 @@
 #include "object.h"
 #include "error.h"
 
-#define DEBUG_CHUNK_WRITE 0
-#define DEBUG_CLASS_WRITE 0
-#define DEBUG_COMPILE_KIND 0
-#define DEBUG_LOOP_WRITE 0
+#define DEBUG_CHUNK_WRITE 1
+#define DEBUG_CLASS_WRITE 1
+#define DEBUG_COMPILE_KIND 1
+#define DEBUG_LOOP_WRITE 1
 
 #define error_compile(node, code, ...) \
     error_at((node)->loc, (code), ##__VA_ARGS__)
@@ -40,6 +40,7 @@ void compile_identifier_load(Compiler* compiler, ObjString* name);
 void compile_var_decl(Compiler* c, ASTNode* node);
 void compile_assignment(Compiler* c, ASTNode* node);
 void compile_mesage_send(Compiler* c, ASTNode* node, ObjString* msg);
+void compile_statement_node(Compiler* c, ASTNode* node);
 
 // 制御構文コンパイル関数
 void compile_if(Compiler* c, ASTNode* node);

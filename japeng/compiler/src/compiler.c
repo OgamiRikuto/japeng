@@ -32,7 +32,7 @@ static bool is_if_chain(ASTNode* node)
 
     // if から始まるチェイン (AST_STMT の左が if)
     if (node->kind == AST_STMT && is_clause_msg(node->stmt.left, sym_if)) {
-        return is_chain_clause(node->stmt.left);
+        return is_chain_clause(node->stmt.right);
     }
     return false;
 }
@@ -43,7 +43,7 @@ static bool is_if_chain(ASTNode* node)
 //            msg == sym_multi_eq || msg == sym_div_eq;
 // }
 
-static void compile_statement_node(Compiler* c, ASTNode* node) 
+void compile_statement_node(Compiler* c, ASTNode* node) 
 {
     if (node == NULL) return;
 
@@ -68,7 +68,7 @@ void compile(Compiler* c, ASTNode* node)
 {
     if (node == NULL) return;
 #if DEBUG_COMPILE_KIND
-    printf("[COMPILE] kind=%d\n", node->kind);
+    fprintf(stderr, "[COMPILE] kind=%d\n", node->kind);
 #endif
 
     switch(node->kind) {

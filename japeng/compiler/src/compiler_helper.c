@@ -1,4 +1,5 @@
 #include "compiler_internal.h"
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -7,6 +8,7 @@ void init_compiler(Compiler* compiler, Chunk* chunk)
     compiler->enclosing = NULL;
     compiler->chunk = chunk;
     compiler->is_method = false;
+    compiler->stack_depth = 0;
     compiler->local_count = 0;
     compiler->scope_depth = 0;
 
@@ -19,12 +21,70 @@ void init_compiler(Compiler* compiler, Chunk* chunk)
     compiler->defined_class = new_table(16);
 }
 
-void emit_inst(Compiler* c, Opcode op, uint32_t operand)
-{
+void emit_inst(Compiler* c, Opcode op, uint32_t operand) {
     write_chunk(c->chunk, make_inst(op, operand));
-#if DEBUG_CHUNK_WRITE
-    printf("[EMIT] count=%d, op=%d, operand=%u\n", c->chunk->count, op, operand);
-#endif
+
+    switch (op) {
+        // --- +1: プッシュ系 ---
+        case OP_CONSTANT:
+        case OP_GET_LOCAL:
+        case OP_GET_GLOBAL:
+        case OP_DUP:
+        case OP_CLOSURE:
+        case OP_GET_UPVALUE:
+            c->stack_depth++;
+            break;
+
+        // --- -1: ポップ・二項演算・フィールド代入 ---
+        case OP_POP:
+        case OP_ADD:
+        case OP_SUB:
+        case OP_MUL:
+        case OP_DIV:
+        case OP_LESS:
+        case OP_GREAT:
+        case OP_EQUAL:
+        case OP_NEQUAL:
+        case OP_SET_FIELD: // receiver と value を pop して value を push
+            c->stack_depth--;
+            break;
+
+        // --- ±0: スタック高さが変わらない命令 ---
+        case OP_GET_FIELD:     // receiver を pop して field を push
+        case OP_NEW_INSTANCE:  // class を pop して instance を push
+        case OP_SET_LOCAL:     // peek して代入
+        case OP_SET_GLOBAL:    // peek して代入
+        case OP_SET_UPVALUE:   // peek して代入
+        case OP_JUMP:
+        case OP_JUMP_IF_FALSE: // 条件は peek して分岐
+        case OP_LOOP:
+            break;
+
+        // --- 動的: 引数個数に応じて消費 ---
+        case OP_SEND:
+        case OP_SUPER_CALL:
+            // レシーバ(1) + 引数(argc) を消費して結果(1) を残す
+            c->stack_depth -= get_send_args(operand);
+            break;
+
+        case OP_CALL:
+            // OP_CALL が引数数を持っている場合 (例: operand が argc)
+            c->stack_depth -= operand;
+            break;
+
+        case OP_RETURN:
+            // 関数の戻り値 (1) を消費して終了
+            c->stack_depth--;
+            break;
+
+        case OP_MAX:
+            break;
+    }
+
+    #if DEBUG_CHUNK_WRITE
+    fprintf(stderr, "[EMIT] count=%d, op=%d, operand=%u\n", c->chunk->count, op, operand);
+    #endif
+    assert(c->stack_depth >= 0 && "スタックアンダーフローを検出しました！");
 }
 
 void emit_constant(Compiler* c, Value val)

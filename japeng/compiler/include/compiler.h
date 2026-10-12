@@ -14,6 +14,7 @@ typedef struct loop {
     struct loop* enclosing;
     int start_pos;
     int break_jump;
+    int continue_jump;
 } Loop;
 
 typedef struct local {
@@ -31,6 +32,7 @@ typedef struct compiler {
     struct compiler* enclosing;
     Chunk* chunk;
     bool is_method;
+    int stack_depth;
 
     Local locals[MAX_LOCALS];
     int local_count;

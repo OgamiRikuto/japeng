@@ -370,7 +370,7 @@ void compile_class_body(Compiler* c, ASTNode* node)
     klass->state = CLASS_STATE_COMPILED;
 
 #if DEBUG_CLASS_WRITE
-    printf("=== Compiled Class: %s ===\n", class_name->chars);
+    fprintf(stderr, "=== Compiled Class: %s ===\n", class_name->chars);
     print_class(klass);
 #endif
 

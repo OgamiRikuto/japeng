@@ -9,6 +9,7 @@ static void start_loop(Compiler* c, Loop* loop, int start_pos)
     loop->enclosing = c->current_loop;
     loop->start_pos = start_pos;
     loop->break_jump = -1;
+    loop->continue_jump = -1;
     c->current_loop = loop;
 }
 
@@ -16,22 +17,35 @@ static void end_loop(Compiler* c, Loop* loop)
 {
     int jump = loop->break_jump;
 #if DEBUG_LOOP_WRITE
-    printf("[END_LOOP] start patching, break_jump=%d\n", jump);
+    fprintf(stderr, "[END_LOOP] start patching, break_jump=%d\n", jump);
 #endif
     while (jump != -1) {
         uint32_t raw_inst = c->chunk->code[jump];
         uint32_t next = get_operand(raw_inst);
         int next_jump = (next == SENTINEL_JUMP) ? -1 : (int)next;
 #if DEBUG_LOOP_WRITE
-        printf("  patching jump=%d, raw=0x%08X, next=%d\n", jump, raw_inst, next_jump);
+        fprintf(stderr, "  patching jump=%d, raw=0x%08X, next=%d\n", jump, raw_inst, next_jump);
 #endif
         patch_jump(c, jump);
         jump = next_jump;
     }
     c->current_loop = loop->enclosing;
 #if DEBUG_LOOP_WRITE
-    printf("[END_LOOP] finished\n");
+    fprintf(stderr, "[END_LOOP] finished\n");
 #endif
+}
+
+static void patch_continue_jumps(Compiler* c, Loop* loop)
+{
+    int jump = loop->continue_jump;
+    while (jump != -1) {
+        uint32_t raw_inst = c->chunk->code[jump];
+        uint32_t next = get_operand(raw_inst);
+        int next_jump = (next == SENTINEL_JUMP) ? -1 : (int)next;
+        patch_jump(c, jump);
+        jump = next_jump;
+    }
+    loop->continue_jump = -1;
 }
 
 static void collect_clauses(ASTNode* node, ASTNode** list, int* count, int max)
@@ -74,7 +88,7 @@ void compile_if_chain(Compiler* c, ASTNode* node)
 
             // 3. 真のパス: 条件値を POP してブロック実行
             emit_inst(c, OP_POP, 0);
-            compile(c, block_node->block.body);
+            compile_statement_node(c, block_node->block.body);
 
             // 4. ブロック終了後は if 全体の末尾へ脱出
             exit_jumps[exit_count++] = emit_jump(c, OP_JUMP);
@@ -82,12 +96,14 @@ void compile_if_chain(Compiler* c, ASTNode* node)
             // 5. 偽だったときの着地点をここ（次の節の直前）にパッチ
             patch_jump(c, false_jump);
 
+            c->stack_depth++;
+
             // 6. 偽のパス: 条件値を POP (次の elif の評価や else の実行に備える)
             emit_inst(c, OP_POP, 0);
 
         } else if (msg == sym_else) {
             ASTNode* block_node = clause->send.args;
-            compile(c, block_node->block.body);
+            compile_statement_node(c, block_node->block.body);
         }
     }
 
@@ -107,7 +123,7 @@ void compile_if(Compiler* c, ASTNode* node)
     int then_jump = emit_jump(c, OP_JUMP_IF_FALSE);
     emit_inst(c, OP_POP, 0);
 
-    compile(c, block_node->block.body);
+    compile_statement_node(c, block_node->block.body);
 
     patch_jump(c, then_jump);
     emit_inst(c, OP_POP, 0);
@@ -131,7 +147,7 @@ void compile_repeat(Compiler* c, ASTNode* node)
         int exit_jump = emit_jump(c, OP_JUMP_IF_FALSE);
         emit_inst(c, OP_POP, 0);
     
-        compile(c, block_node->block.body);
+        compile_statement_node(c, block_node->block.body);
     
         emit_loop(c, loop_start);
         patch_jump(c, exit_jump);
@@ -148,7 +164,7 @@ void compile_repeat(Compiler* c, ASTNode* node)
         Loop loop;
         start_loop(c, &loop, loop_start);
     
-        compile(c, node->send.args->block.body);
+        compile_statement_node(c, node->send.args->block.body);
     
         emit_loop(c, loop_start);
     
@@ -192,7 +208,9 @@ void compile_repeat(Compiler* c, ASTNode* node)
         emit_inst(c, OP_POP, 0);
     
         // 4. 本体ブロック実行
-        compile(c, block_node->block.body);
+        compile_statement_node(c, block_node->block.body);
+
+        patch_continue_jumps(c, &loop);
     
         // 5. カウンタ加算: counter = counter + 1
         emit_inst(c, OP_GET_LOCAL, counter_slot);
@@ -231,7 +249,15 @@ void compile_continue(Compiler* c, ASTNode* node)
         error_compile(node, ERR_CONTINUE_OUTSIDE_LOOP);
         exit(EXIT_FAILURE);
     }
-    emit_loop(c, c->current_loop->start_pos);
+
+    // 回数指定ループ等で continue_jump による遅延解決が必要な場合
+    // (start_pos == -1 等をフラグにするか、あるいは常にジャンプチェインにする)
+    int jump = emit_jump(c, OP_JUMP);
+    uint32_t prev = (c->current_loop->continue_jump == -1)
+                    ? SENTINEL_JUMP
+                    : (uint32_t)c->current_loop->continue_jump;
+    c->chunk->code[jump] = make_inst(OP_JUMP, prev);
+    c->current_loop->continue_jump = jump;
 }
 
 static void compile_block_args(Compiler* c, ASTNode* args_node, int* arity)
