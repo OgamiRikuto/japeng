@@ -1,12 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <libgen.h>
+#include "common.h"
 #include "defs.h"
 #include "parse.h"
 
 int parsed_file_count = 0;
 
 int main(int argc, char** argv) {
+    init_symbols();
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <target_file.je>\n", argv[0]);
         return EXIT_FAILURE;
@@ -31,8 +33,10 @@ int main(int argc, char** argv) {
         printf("\n--- %s ---\n", parsed_cd[i]->loc.filename);
         print_ast(parsed_cd[i], 0);
     }
-    printf("\n--- %s ---\n", parsed_je->loc.filename);
-    print_ast(parsed_je, 0);
+    if (parsed_je != NULL) {
+        printf("\n--- %s ---\n", parsed_je->loc.filename);
+        print_ast(parsed_je, 0);
+    }
     
     return EXIT_SUCCESS;
 }

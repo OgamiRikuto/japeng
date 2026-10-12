@@ -5,10 +5,16 @@
 #include "symbol.h"
 #include "object.h"
 #include "error.h"
+#include "preprocessor.h"
 
 int linecounter = 1;
 extern const char* current_filename;
 int yycolumn = 1;
+
+static ObjString* resolve_and_intern(const char* text) {
+    const char* orig = lookup_original_symbol(text);
+    return intern_cstr(orig ? orig : text);
+}
 
 #define YY_USER_ACTION \
     yylloc.first_line   = yylineno; \
@@ -31,8 +37,8 @@ int yycolumn = 1;
 "return"	{ return RETURN; }
 "break"	{ return BREAK; }
 "continue"	{ return CONTINUE; }
-[A-Z][a-zA-Z0-9_]*	{ yylval.symbol = intern_cstr(yytext); return CLASS_NAME; }
-[a-z_][a-zA-Z0-9_]*	{ yylval.symbol = intern_cstr(yytext); return IDENTIFIER; }
+[A-Z][a-zA-Z0-9_]*	{ yylval.symbol = resolve_and_intern(yytext); return CLASS_NAME; }
+[a-z_][a-zA-Z0-9_]*	{ yylval.symbol = resolve_and_intern(yytext); return IDENTIFIER; }
 [0-9]+				{ yylval.int_val = atoi(yytext); return INTEGER; }
 [0-9]*"."[0-9]+		{ yylval.float_val = atof(yytext); return FLOAT; }
 [0-9]*"/"[0-9]+		{ yylval.symbol = intern_cstr(yytext); return FRACTION; }

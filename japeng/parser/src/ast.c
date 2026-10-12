@@ -1,4 +1,6 @@
 #include "ast.h"
+#include "object.h"
+#include "preprocessor.h"
 #include <stdio.h>
 
 typedef struct YYLTYPE {
@@ -55,6 +57,13 @@ ASTNode* create_literal_node(Value val)
 ASTNode* create_identifier_node(ObjString* name)
 {
     ASTNode* node = alloc_node(AST_IDENTIFIER);
+    // if (strncmp(name->chars, "__id_", 5) == 0 || strncmp(name->chars, "CLASSTYPE_", 10) == 0) {
+    //     const char* original = lookup_original_symbol(name->chars);
+    //     if (original != NULL) {
+    //         node->identifier.name = intern_cstr(original);
+    //         return node;
+    //     }
+    // }
     node->identifier.name = name;
     return node;
 }

@@ -9,6 +9,11 @@
 #include "symbol.h"
 #include "object.h"
 #include "error.h"
+#include "preprocessor.h"
+
+typedef struct yy_buffer_state *YY_BUFFER_STATE;
+extern YY_BUFFER_STATE yy_scan_string(const char *str);
+extern void yy_delete_buffer(YY_BUFFER_STATE buffer);
 
 extern FILE* yyin;
 extern int linecounter;
@@ -22,6 +27,8 @@ ASTNode* parsed_cd[MAX_FILES];
 int      parsed_cd_count = 0;
 
 ASTNode* parsed_je = NULL;
+
+char* format_code(const char* src);
 
 static int is_cd_file(const char* filename) 
 {
@@ -37,15 +44,32 @@ static int is_je_file(const char* filename)
     return (strcmp(dot, ".je") == 0);
 }
 
+static int is_jje_file(const char* filename) {
+    const char* dot = strrchr(filename, '.');
+    if (dot == NULL) return 0;
+    return (strcmp(dot, ".jje") == 0);
+}
+
+static int is_jcd_file(const char* filename) {
+    const char* dot = strrchr(filename, '.');
+    if (dot == NULL) return 0;
+    return (strcmp(dot, ".jcd") == 0);
+}
+
+static int is_jp_file(const char* filename) {
+    return (is_jje_file(filename) || is_jcd_file(filename));
+}
+
 static int is_target_file(const char* filename)
 {
-    return is_cd_file(filename) || is_je_file(filename);
+    return is_cd_file(filename) || is_je_file(filename) ||
+           is_jje_file(filename) || is_jcd_file(filename);
 }
 
 bool parse_file(const char* full_path) 
 {
     if (!is_target_file(full_path)) {
-        fprintf(stderr, "Warning: '%s' is not a .cd or .je file. Skipped.\n", full_path);
+        fprintf(stderr, "Warning: '%s' is not a .cd or .je or .jje or .jcd file. Skipped.\n", full_path);
         return false;
     }
 
@@ -54,37 +78,75 @@ bool parse_file(const char* full_path)
         fprintf(stderr, "Error: Cannot open file '%s'\n", full_path);
         return false;
     }
-
-    yyin = file;
+    bool success = false;
     current_filename = strdup(full_path);
-    yyrestart(file);
-    
     linecounter = 1;
     yylineno = 1;
     current_parsed_ast = NULL;
 
-    bool success = false;
-    if (yyparse() == 0 && current_parsed_ast != NULL) {
-        if (is_cd_file(full_path)) {
+    if (is_jp_file(full_path)) {
+        current_lang = LANG_JA;
+        // --- 日本語パイプライン ---
+        fseek(file, 0, SEEK_END);
+        long size = ftell(file);
+        fseek(file, 0, SEEK_SET);
+
+        char* raw_code = malloc(size + 1);
+        fread(raw_code, 1, size, file);
+        raw_code[size] = '\0';
+        fclose(file);
+
+        char* formatted_code = format_code(raw_code);
+
+        if (formatted_code && strcmp(raw_code, formatted_code) != 0) {
+            FILE* wfp = fopen(full_path, "w");
+            if (wfp) {
+                fwrite(formatted_code, 1, strlen(formatted_code), wfp);
+                fclose(wfp);
+                fprintf(stderr, "整形上書き完了: %s\n", full_path);
+            }
+        }
+        free(raw_code);
+
+        char* clean_code = preprocess(formatted_code);
+        fprintf(stderr, "=== PREPROCESS OUTPUT ===\n%s\n=========================\n", clean_code);
+        YY_BUFFER_STATE bp = yy_scan_string(clean_code);
+
+        if (yyparse() == 0 && current_parsed_ast != NULL) {
+            success = true;
+        }
+
+        yy_delete_buffer(bp);
+        free(formatted_code);
+        free(clean_code);
+    } else {
+        // --- 英語パイプライン ---
+        current_lang = LANG_EN;
+        yyin = file;
+        yyrestart(file);
+        if (yyparse() == 0 && current_parsed_ast != NULL) {
+            success = true;
+        }
+        fclose(file);
+    }
+
+    if (success) {
+        if (is_cd_file(full_path) || is_jcd_file(full_path)) {
             if (parsed_cd_count < MAX_FILES) {
                 parsed_cd[parsed_cd_count++] = current_parsed_ast;
-                success = true;
             } else {
                 fprintf(stderr, "Error: Too many .cd files.\n");
             }
-        } else if (is_je_file(full_path)) {
-            if (parsed_je == NULL) {
-                parsed_je = current_parsed_ast;
-                success = true;
-            } else {
+        } else if (is_je_file(full_path) || is_jje_file(full_path)) {
+            if (parsed_je == NULL)  parsed_je = current_parsed_ast;
+            else {
                 fprintf(stderr, "Warning: Multiple .je files found. Overwriting.\n");
                 parsed_je = current_parsed_ast;
-                success = true;
             }
         }
     }
-
-    fclose(file);
+    
+    // fclose(file);
     return success;
 }
 
