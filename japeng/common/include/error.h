@@ -70,4 +70,6 @@ void error_compile(ErrorCode code, ...);
 // VM 実行時エラー用
 void error_runtime(ErrorCode code, ...);
 
+void report_undefined_message(const char* type_name, const char* message_name);
+
 #endif

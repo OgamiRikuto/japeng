@@ -1,4 +1,5 @@
 #include "error.h"
+#include "builtin_convert.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -57,12 +58,12 @@ static const ErrorMessage error_table[ERR_COUNT] = {
         .ja = "ループ外で 'continue' を使用することはできません。"
     },
     [ERR_DELEGATE_CLASS_NOT_FOUND] = {
-        .en = "Delegate class '%s' not found for field '%s'.",
-        .ja = "フィールド '%s' に指定された委譲元クラス '%s' が見つかりません。"
+        .en = "Delegate class '%1$s' not found for field '%2$s'.",
+        .ja = "フィールド '%2$s' に指定された委譲元クラス '%1$s' が見つかりません。"
     },
     [ERR_DELEGATE_METHOD_NOT_FOUND] = {
-        .en = "Method '%s' not found in delegate class '%s'.",
-        .ja = "委譲元クラス '%s' にメソッド '%s' が存在しません。"
+        .en = "Method '%1$s' not found in delegate class '%2$s'.",
+        .ja = "委譲元クラス '%2$s' にメソッド '%1$s' が存在しません。"
     },
     [ERR_METHOD_NO_IMPL] = {
         .en = "Method '%s' must have an implementation or a delegate source.",
@@ -127,24 +128,24 @@ static const ErrorMessage error_table[ERR_COUNT] = {
         .ja = "未知のオペコードです: %d。"
     },
     [ERR_UNDEFINED_CLASS_METHOD] = {
-        .en = "Undefined class method '%s' for '%s'.",
-        .ja = "クラス '%s' にクラスメソッド '%s' が定義されていません。"
+        .en = "Undefined class method '%1$s' for '%2$s'.",
+        .ja = "クラス '%2$s' にクラスメソッド '%1$s' が定義されていません。"
     },
     [ERR_WRONG_ARG_COUNT] = {
-        .en = "Expected %d arguments but got %d.",
-        .ja = "引数の個数が一致しません (期待値: %d, 実際: %d)。"
+        .en = "Expected %1$d arguments but got %2$d.",
+        .ja = "引数の個数が一致しません (期待値: %1$d, 実際: %2$d)。"
     },
     [ERR_STACK_OVERFLOW] = {
         .en = "Stack overflow: frame limit exceeded.",
         .ja = "スタックオーバーフロー: コールフレームの上限を超えました。"
     },
     [ERR_UNDEFINED_MESSAGE] = {
-        .en = "Undefined message '%s'.",
-        .ja = "未定義のメッセージ (メソッド) '%s' が送信されました。"
+        .en = "Undefined message '%1$s' for '%2$s'.",
+        .ja = "型 '%2$s' に未定義のメッセージ (メソッド) '%1$s' が送信されました。"
     },
     [ERR_INDEX_OUT_OF_BOUNDS] = {
-        .en = "Index out of bounds (index: %d, size: %d).",
-        .ja = "インデックスが範囲外です (インデックス: %d, サイズ: %d)。"
+        .en = "Index out of bounds (index: %1$d, size: %2$d).",
+        .ja = "インデックスが範囲外です (インデックス: %1$d, サイズ: %2$d)。"
     },
     [ERR_PRINTLN_ARG_COUNT] = {
         .en = "'println' expects 0 or 1 argument.",
@@ -289,4 +290,12 @@ void error_runtime(ErrorCode code, ...) {
     va_end(args);
 
     fprintf(stderr, "\n");
+}
+
+// 未定義メソッド送信エラーの例 (error.c)
+void report_undefined_message(const char* type_name, const char* message_name) 
+{
+    error_runtime(ERR_UNDEFINED_MESSAGE, 
+        builtin_from_canonical(message_name, current_lang),
+        builtin_from_canonical(type_name, current_lang));
 }
