@@ -49,7 +49,7 @@ int syntax_error_count = 0;
 %token <int_val> HEX
 %token <float_val> FLOAT        "float"
 
-%type <node> program statement statement_list class_def message
+%type <node> program statement statement_list class_def class_def_list message
 %type <node> member member_list receiver return_stmt
 %type <node> class_decl name_def class type_list class_list field_decl
 %type <node> identifier_decl identifier_decl_list statement_list_opt
@@ -66,10 +66,17 @@ program :
     { $$ = $1; 
       current_parsed_ast = $$;
     }
-    | class_def
+    | class_def_list
     { $$ = $1; 
       current_parsed_ast = $$;
     }
+    ;
+
+class_def_list :
+    class_def
+    { $$ = $1; }
+    | class_def_list class_def
+    { $$ = create_stmt_node($1, $2); }
     ;
 
 statement_list : 
