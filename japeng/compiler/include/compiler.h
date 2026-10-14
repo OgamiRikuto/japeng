@@ -8,6 +8,7 @@
 #include "opcode.h"
 #include "class.h"
 
+#define MAX_TYPE_PARAMS 8
 #define MAX_LOCALS 256
 
 typedef struct loop {
@@ -28,11 +29,18 @@ typedef struct upvalue {
     bool is_local;
 } CompilerUpvalue;
 
+typedef struct {
+    ObjString* params[MAX_TYPE_PARAMS];
+    TypeInfo*  args[MAX_TYPE_PARAMS];
+    int        count;
+} TypeEnv;
+
 typedef struct compiler {
     struct compiler* enclosing;
     Chunk* chunk;
     bool is_method;
     int stack_depth;
+    TypeInfo* expected_ret_type;
 
     Local locals[MAX_LOCALS];
     int local_count;
@@ -53,6 +61,8 @@ void emit_inst(Compiler* c, Opcode op, uint32_t operand);
 void emit_constant(Compiler* c, Value val);
 
 void declare_class_skeleton(Compiler* c, ASTNode* node);
+void resolve_class_skeleton_relations(Compiler* c, ASTNode* node);
+void declare_class_signatures(Compiler* c, ASTNode* node);
 void compile_class_body(Compiler* c, ASTNode* node);
 
 

@@ -38,7 +38,7 @@ bool is_builtin(ObjString* name);
 bool compile_compound_assignment(Compiler* c, ASTNode* node);
 void compile_identifier_load(Compiler* compiler, ObjString* name);
 void compile_var_decl(Compiler* c, ASTNode* node);
-void compile_assignment(Compiler* c, ASTNode* node);
+TypeInfo* compile_assignment(Compiler* c, ASTNode* node);
 void compile_mesage_send(Compiler* c, ASTNode* node, ObjString* msg);
 void compile_statement_node(Compiler* c, ASTNode* node);
 
@@ -53,6 +53,16 @@ ObjFunction* compile_block(Compiler* parent, ASTNode* block_node);
 // クラスコンパイル関数
 TypeInfo* build_type_info(ASTNode* node);
 void compile_class_def(Compiler* c, ASTNode* node);
+int count_type_args(ASTNode* node);
+ObjClass* resolve_class(Compiler* c, ObjString* name);
+
+// 型チェック関数
+bool type_equals(TypeInfo* a, TypeInfo* b);
+bool is_assignable(Compiler* c, TypeInfo* target, TypeInfo* source);
+TypeInfo* build_function_type_from_block(ASTNode* block_node);
+TypeInfo* compile_expression(Compiler* c, ASTNode* node);
+TypeInfo* substitute_type(TypeInfo* formal, TypeEnv* env) ;
+TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* rec_type);
 
 
 #endif

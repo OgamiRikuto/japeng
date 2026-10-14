@@ -9,10 +9,12 @@ void init_compiler(Compiler* compiler, Chunk* chunk)
     compiler->chunk = chunk;
     compiler->is_method = false;
     compiler->stack_depth = 0;
+    compiler->expected_ret_type = NULL;
     compiler->local_count = 0;
     compiler->scope_depth = 0;
 
-    compiler->locals[0].name = intern_cstr("self");
+    compiler->locals[0].name = sym_self;
+    compiler->locals[0].type = new_type_info(sym_Object, 0);
     compiler->locals[0].depth = 1;
     compiler->local_count = 1;
     compiler->upvalue_count = 0;
@@ -125,7 +127,7 @@ int add_local(Compiler* c, ObjString* name, TypeInfo* type)
     if (c->local_count >= MAX_LOCALS) {
         Location no_loc = {0};
         error_at(no_loc, ERR_TOO_MANY_LOCALS);
-        exit(EXIT_FAILURE);
+        
     }
 
     int slot = c->local_count++;
@@ -140,7 +142,7 @@ int add_anonymous_local(Compiler* c)
     if (c->local_count >= MAX_LOCALS) {
         Location no_loc = {0};
         error_at(no_loc, ERR_TOO_MANY_LOCALS);
-        exit(EXIT_FAILURE);
+        
     }
 
     int slot = c->local_count++;

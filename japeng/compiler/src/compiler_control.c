@@ -233,7 +233,7 @@ void compile_break(Compiler* c, ASTNode* node)
 {
     if (c->current_loop == NULL) {
         error_compile(node, ERR_BREAK_OUTSIDE_LOOP);
-        exit(EXIT_FAILURE);
+        
     }
     int jump = emit_jump(c, OP_JUMP);
     uint32_t prev = (c->current_loop->break_jump == -1) 
@@ -247,7 +247,7 @@ void compile_continue(Compiler* c, ASTNode* node)
 {
     if (c->current_loop == NULL) {
         error_compile(node, ERR_CONTINUE_OUTSIDE_LOOP);
-        exit(EXIT_FAILURE);
+        
     }
 
     // 回数指定ループ等で continue_jump による遅延解決が必要な場合
@@ -285,11 +285,26 @@ ObjFunction* compile_block(Compiler* parent, ASTNode* block_node)
     init_compiler(&block_compiler, fn_chunk);
     block_compiler.enclosing = parent;
     block_compiler.current_class = parent->current_class;
+    block_compiler.defined_class = parent->defined_class;
+
+    if (block_node->block.rets != NULL) {
+        block_compiler.expected_ret_type = build_type_info(block_node->block.rets);
+    } else {
+        block_compiler.expected_ret_type = new_type_info(sym_Void, 0);
+    }
+
     if (parent != NULL && parent->current_class != NULL && parent->enclosing == NULL) {
         block_compiler.is_method = true;
+        block_compiler.locals[0].name  = sym_self; // または sym_self
+        block_compiler.locals[0].type  = parent->current_class->type; // クラスの型情報
+        block_compiler.locals[0].depth = 0;
+        block_compiler.local_count     = 1;
     } else {
         block_compiler.is_method = false;
-        block_compiler.locals[0].name = NULL;
+        block_compiler.locals[0].name  = NULL;
+        block_compiler.locals[0].type  = NULL;
+        block_compiler.locals[0].depth = 0;
+        block_compiler.local_count     = 1;
     }
 
     int arity = 0;
@@ -299,15 +314,16 @@ ObjFunction* compile_block(Compiler* parent, ASTNode* block_node)
 
     compile(&block_compiler, block_node->block.body);
 
-    if (!block_node->block.has_ret){
+    Chunk* chunk = block_compiler.chunk;
+    if (chunk->count == 0 || chunk->code[chunk->count - 1] != OP_RETURN) {
         if (block_compiler.is_method) {
-            // メソッドなら self (スロット 0) を積んでからリターン
+            // メソッドなら self (スロット 0) を積んでからリターン (Smalltalk流!)
             emit_inst(&block_compiler, OP_GET_LOCAL, 0);
         } else {
             // 通常のブロックなら 0 や nil を積んでからリターン
             emit_constant(&block_compiler, make_int(0));
         }
-            emit_inst(&block_compiler, OP_RETURN, 0);
+        emit_inst(&block_compiler, OP_RETURN, 0);
     }
 
     ObjFunction* fn =  new_function(fn_chunk, arity);
