@@ -55,6 +55,7 @@ int main(int argc, char** argv) {
     }
     
     init_symbols();
+    parse_file("./lib/builtins.cd");
 
     // -d オプションの判定
     if (target_dir != NULL) {
@@ -105,12 +106,22 @@ int main(int argc, char** argv) {
     Compiler compiler;
     init_compiler(&compiler, &main_chunk);
 
-    // 【パス 1】クラスの骨格登録
+
+    // クラスの骨格登録
     for (int i = 0; i < parsed_cd_count; i++) {
         declare_class_skeleton(&compiler, parsed_cd[i]);
     }
+
+    // クラスの継承、委譲関係を登録
+    for (int i = 0; i < parsed_cd_count; i++) {
+        resolve_class_skeleton_relations(&compiler, parsed_cd[i]);
+    }
+
+    for (int i = 0; i < parsed_cd_count; i++) {
+        declare_class_signatures(&compiler, parsed_cd[i]);
+    }
     
-    // 【パス 2】全クラスの中身を解決し、フィールド配置とメソッドを生成
+    // 全クラスの中身を解決し、フィールド配置とメソッドを生成
     for (int i = 0; i < parsed_cd_count; i++) {
         compile_class_body(&compiler, parsed_cd[i]);
     }
@@ -123,6 +134,13 @@ int main(int argc, char** argv) {
     emit_inst(&compiler, OP_RETURN, 0);
 
     write_chunk(&main_chunk, make_inst(OP_RETURN, 0));
+
+    if (had_compile_error) {
+        fprintf(stderr, (current_lang == LANG_JA)
+            ? "\033[1;31m%d 個のエラーが検出されました。\033[0m\n"
+            : "\033[1;31m%d error(s) generated.\033[0m\n", compile_error_count);
+        exit(EXIT_FAILURE);
+    }
 
     // VM 実行
     clock_t start = clock();
