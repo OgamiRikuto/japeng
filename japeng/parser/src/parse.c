@@ -85,7 +85,7 @@ bool parse_file(const char* full_path)
     current_parsed_ast = NULL;
 
     if (is_jp_file(full_path)) {
-        current_lang = LANG_JA;
+        compile_lang = LANG_JA;
         // --- 日本語パイプライン ---
         fseek(file, 0, SEEK_END);
         long size = ftell(file);
@@ -121,7 +121,7 @@ bool parse_file(const char* full_path)
         free(clean_code);
     } else {
         // --- 英語パイプライン ---
-        current_lang = LANG_EN;
+        compile_lang = LANG_EN;
         yyin = file;
         yyrestart(file);
         if (yyparse() == 0 && current_parsed_ast != NULL) {
