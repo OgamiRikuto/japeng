@@ -153,7 +153,7 @@ static void scan_declarations(const char* src) {
 
         // 1. クラス宣言（クラス クラス名:）
         size_t kw_len = 0;
-        const KeywordDef* kw = keyword_match_prefix(&src[i], current_lang, &kw_len);
+        const KeywordDef* kw = keyword_match_prefix(&src[i], compile_lang, &kw_len);
         if (kw && strcmp(kw->replacement, "class ") == 0) {
             int c_start = i + kw_len;
             while (src[c_start] != '\0' && (src[c_start] == ' ' || src[c_start] == '\t')) c_start++;
