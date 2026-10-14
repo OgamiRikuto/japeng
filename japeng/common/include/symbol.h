@@ -14,6 +14,7 @@ typedef struct objString ObjString;
     X(repeat,       "repeat") \
     X(new,          "new") \
     X(call,         "call") \
+    X(Auto,         "Auto") \
     X(SmallInteger, "SmallInteger") \
     X(SmallFloat,   "SmallFloat") \
     X(Function,     "Function") \
@@ -38,7 +39,9 @@ typedef struct objString ObjString;
     X(Integer,      "Integer") \
     X(Float,        "Float") \
     X(String,       "String") \
-    X(List,         "List")
+    X(List,         "List") \
+    X(Void,         "Void") \
+    X(Error,        "Error")
 
 #define DECLARE_SYM(name, str) extern ObjString* sym_##name;
 CORE_SYMBOLS(DECLARE_SYM)

@@ -6,6 +6,7 @@
 #include <string.h>
 
 OutputLang current_lang = LANG_EN;
+OutputLang compile_lang = LANG_EN;
 
 typedef struct {
     const char* en;
@@ -80,6 +81,22 @@ static const ErrorMessage error_table[ERR_COUNT] = {
     [ERR_UNHANDLED_AST_KIND] = {
         .en = "Unhandled ASTNode kind: %d.",
         .ja = "未対応の AST ノード種別です: %d。"
+    },
+    [ERR_TYPE_MISMATCH] = {
+        .en = "Type mismatch: expected '%1$s', got '%2$s'.",
+        .ja = "型の不一致です (期待される型: '%1$s', 実際の型: '%2$s')。"
+    },
+    [ERR_ARG_TYPE_MISMATCH] = {
+        .en = "Type mismatch in argument %1$d: expected '%2$s', got '%3$s'.",
+        .ja = "第 %1$d 引数の型が一致しません (期待される型: '%2$s', 実際の型: '%3$s')。"
+    },
+    [ERR_ARITY_MISMATCH] = {
+        .en = "Arity mismatch: expected %1$d arguments, got %2$d.",
+        .ja = "引数の個数が一致しません (期待値: %1$d, 実際: %2$d)。"
+    },
+    [ERR_RETURN_TYPE_MISMATCH] = {
+        .en = "Return type mismatch: expected '%1$s', got '%2$s'.",
+        .ja = "戻り値の型が一致しません (期待される型: '%1$s', 実際の型: '%2$s')。"
     },
 
     // VM 実行時エラー
@@ -257,8 +274,14 @@ void error_syntax(const char* filename, int line, int col_start, int col_end, co
     print_snippet(fn, line, col_start, col_end);
 }
 
+bool had_compile_error = false;
+int  compile_error_count = 0;
+
 // コンパイルエラー (位置指定)
 void error_at(Location loc, ErrorCode code, ...) {
+    had_compile_error = true;
+    compile_error_count++;
+
     const char* fn = (loc.filename && loc.filename[0] != '\0') ? loc.filename : "input";
     const char* label = (current_lang == LANG_JA) ? "エラー" : "error";
     const char* fmt = (current_lang == LANG_JA) ? error_table[code].ja : error_table[code].en;

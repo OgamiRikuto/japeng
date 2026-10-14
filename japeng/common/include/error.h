@@ -16,6 +16,7 @@ typedef struct location {
 } Location;
 
 extern OutputLang current_lang;
+extern OutputLang compile_lang;
 
 typedef enum {
     // --- 構文エラー  ---
@@ -37,6 +38,10 @@ typedef enum {
     ERR_CLASS_NOT_REGISTERED,
     ERR_CYCLIC_INHERITANCE,
     ERR_UNHANDLED_AST_KIND,
+    ERR_TYPE_MISMATCH,
+    ERR_ARG_TYPE_MISMATCH,
+    ERR_ARITY_MISMATCH,
+    ERR_RETURN_TYPE_MISMATCH,
 
     // --- 実行時エラー ---
     ERR_UNDEFINED_GLOBAL,
@@ -59,6 +64,9 @@ typedef enum {
 
     ERR_COUNT
 } ErrorCode;
+
+extern bool had_compile_error;
+extern int  compile_error_count;
 
 // パーサー構文エラー用 (直前行のセミコロン補正付き)
 void error_syntax(const char* filename, int line, int col_start, int col_end, const char* bison_msg);

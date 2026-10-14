@@ -50,6 +50,7 @@ typedef struct objClass {
     // メソッド
     Table* methods;
     Table* method_from;
+    Table* method_types;;
     
     // フィールド情報
     int field_count; 
@@ -92,6 +93,9 @@ ObjClass* get_method_from(ObjClass* klass, ObjString* name);
 ObjInstance* new_instance(ObjClass* klass);
 
 int find_field_index(ObjClass* klass, ObjString* name);
+
+void add_method_type(ObjClass* klass, ObjString* name, TypeInfo* type);
+TypeInfo* find_method_type(ObjClass* klass, ObjString* name);
 
 
 #endif
