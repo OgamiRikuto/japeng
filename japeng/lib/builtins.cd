@@ -1,0 +1,24 @@
+class Object:
+    print: Function is [];
+    println: Function is [];
+    input: Function is [ ret String; ];
+
+class Integer based Object:
+    tmp: Function is [];
+
+class Float based Object:
+    tmp: Function is []; 
+
+class String based Object:
+    get: Function is [ arg n: Integer; ret String; ];
+    length: Function is [ ret Integer; ];
+    split: Function is [ arg seq: String; ret List String; ];
+    trim: Function is [ ret String; ];
+
+class List Type based Object:
+    push: Function is [ arg val: Type; ];
+    get: Function is [ arg index: Integer; ret Type; ];
+    set: Function is [ arg index: Integer, val: Type; ];
+    length: Function is [ ret Integer; ];
+    swap: Function is [ arg index1:Integer, index2: Integer; ];
+    // map: Function is [ arg lambda: Function; ret List Object; ];
