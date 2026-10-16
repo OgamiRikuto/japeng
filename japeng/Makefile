@@ -36,7 +36,7 @@ VM_OBJS = $(VM_SRCS:.c=.o)
 
 # 1. 既存パーサーテスト (parser/parser-main.c + symbol.c のみ)
 PARSER_MAIN      = parser/parser-main.o
-PARSER_ONLY_OBJS = $(PARSER_MAIN) $(PARSER_OBJS) common/src/symbol.o common/src/object.o common/src/error.o
+PARSER_ONLY_OBJS = $(PARSER_MAIN) $(PARSER_OBJS) common/src/symbol.o common/src/object.o common/src/error.o common/src/builtin_convert.o common/src/bigint.o common/src/literal.o
 
 # 2. 統合テスト (test_cat.c + 全モジュール)
 RUN_MAIN = main.o
