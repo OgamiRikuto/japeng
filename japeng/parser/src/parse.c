@@ -131,6 +131,8 @@ bool parse_file(const char* full_path)
     }
 
     if (success) {
+        current_parsed_ast = fix_precedence(current_parsed_ast);
+        current_parsed_ast = fold_constants(current_parsed_ast);
         if (is_cd_file(full_path) || is_jcd_file(full_path)) {
             if (parsed_cd_count < MAX_FILES) {
                 parsed_cd[parsed_cd_count++] = current_parsed_ast;
@@ -244,7 +246,9 @@ void print_ast(ASTNode* node, int depth)
             
         case AST_LITERAL:
             // 今回はシンプルに値のポインタ/生データを16進数で表示 (NaN Boxing対応)
-            printf("[LITERAL] (Value: %llx)\n", (unsigned long long)node->literal.value);
+            printf("[LITERAL] (Kind: %d, Raw: %s)\n", 
+                    node->literal.kind, 
+                    node->literal.raw ? node->literal.raw->chars : "null");
             break;
             
         case AST_SEND:
@@ -332,7 +336,9 @@ void dump_ast(ASTNode* node, int depth)
             break;
 
         case AST_LITERAL:
-            printf("LITERAL (Value: 0x%016llx)\n", (unsigned long long)node->literal.value);
+            printf("[LITERAL] (Kind: %d, Raw: %s)\n", 
+                    node->literal.kind, 
+                    node->literal.raw ? node->literal.raw->chars : "null");
             break;
 
         case AST_STMT:

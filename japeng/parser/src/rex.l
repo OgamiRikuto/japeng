@@ -39,8 +39,8 @@ static ObjString* resolve_and_intern(const char* text) {
 "continue"	{ return CONTINUE; }
 [A-Z][a-zA-Z0-9_]*	{ yylval.symbol = resolve_and_intern(yytext); return CLASS_NAME; }
 [a-z_][a-zA-Z0-9_]*	{ yylval.symbol = resolve_and_intern(yytext); return IDENTIFIER; }
-[0-9]+				{ yylval.int_val = atoi(yytext); return INTEGER; }
-[0-9]*"."[0-9]+		{ yylval.float_val = atof(yytext); return FLOAT; }
+[0-9]+				{ yylval.literal = new_string(yytext, yyleng); return INTEGER; }
+[0-9]*"."[0-9]+		{ yylval.literal = new_string(yytext, yyleng); return FLOAT; }
 [0-9]*"/"[0-9]+		{ yylval.symbol = intern_cstr(yytext); return FRACTION; }
 0b[0|1]+			{ return BINARY; }
 0x[0-9a-fA-F]+ 		{ return HEX; }

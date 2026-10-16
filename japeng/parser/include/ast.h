@@ -22,6 +22,14 @@ typedef enum {
     AST_CONTINUE
 } ASTNodeType;
 
+typedef enum {
+    TOKEN_INTEGER,
+    TOKEN_FLOAT,
+    TOKEN_STRING,
+    TOKEN_FRACTION,
+    TOKEN_MAX
+} LiteralKind;
+
 typedef struct ASTNode ASTNode;
 
 struct ASTNode {
@@ -40,7 +48,8 @@ struct ASTNode {
         } class;
 
         struct {
-            Value value;
+            LiteralKind kind;
+            ObjString* raw;
         } literal;
 
         struct {
@@ -89,7 +98,7 @@ struct ASTNode {
 
 ASTNode* create_stmt_node(ASTNode*, ASTNode*);
 ASTNode* create_class_node(ASTNode*, ASTNode*);
-ASTNode* create_literal_node(Value);
+ASTNode* create_literal_node(LiteralKind, ObjString*);
 ASTNode* create_identifier_node(ObjString*);
 ASTNode* create_send_node(ASTNode*, ASTNode*, ASTNode*);
 ASTNode* create_block_node(ASTNode*, ASTNode*, ASTNode*);
@@ -99,6 +108,9 @@ ASTNode* create_fielddecl_node(bool, ASTNode*, ASTNode*, ASTNode*, ASTNode*);
 ASTNode* create_return_node(ASTNode*);
 ASTNode* create_break_node();
 ASTNode* create_continue_node();
+
+ASTNode* fix_precedence(ASTNode* node);
+ASTNode* fold_constants(ASTNode* node);
 
 
 #endif

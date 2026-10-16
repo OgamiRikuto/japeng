@@ -13,8 +13,7 @@ int syntax_error_count = 0;
 %locations
 %error-verbose
 %union {
-    int int_val;
-    float float_val;
+    ObjString* literal;
     ObjString* symbol;
     ASTNode* node;
 }
@@ -44,10 +43,10 @@ int syntax_error_count = 0;
 %token <symbol> SP_IDENTIFIER   "operator"
 %token <symbol> STRING          "string"
 %token <symbol> FRACTION        "fraction"
-%token <int_val> INTEGER        "integer"
-%token <int_val> BINARY
-%token <int_val> HEX
-%token <float_val> FLOAT        "float"
+%token <literal> INTEGER        "integer"
+%token <literal> BINARY
+%token <literal> HEX
+%token <literal> FLOAT        "float"
 
 %type <node> program statement statement_list class_def class_def_list message
 %type <node> member member_list receiver return_stmt
@@ -332,21 +331,35 @@ primary :
         $$->loc.column = @1.first_column;
     }
     | SELF      { $$ = create_identifier_node($1); }
-    | INTEGER   { $$ = create_literal_node(make_int($1)); }
-    | FLOAT     { $$ = create_literal_node(make_float($1)); }
-    | FRACTION  { $$ = create_literal_node(make_obj($1)); }
+    | INTEGER   { $$ = create_literal_node(TOKEN_INTEGER, $1); }
+    | FLOAT     { $$ = create_literal_node(TOKEN_FLOAT, $1); }
+    | FRACTION  { $$ = create_literal_node(TOKEN_FRACTION, $1); }
     | BINARY    { }
     | HEX       { }
-    | STRING    { $$ = create_literal_node(make_obj($1)); }
+    | STRING    { $$ = create_literal_node(TOKEN_STRING, $1); }
     | block     { $$ = $1; }
     | L_PAR expression R_PAR { $$ = $2; }
     | SP_IDENTIFIER primary
     {
         if ($1 == sym_minus) {
-            ASTNode* zero = create_literal_node(make_int(0));
-            ASTNode* op   = create_identifier_node($1);
-            $$ = create_send_node(zero, op, $2);
-        } else {
+            if ($2->kind == AST_LITERAL && 
+               ($2->literal.kind == TOKEN_INTEGER || $2->literal.kind == TOKEN_FLOAT)) {
+                
+                char buf[1024];
+                snprintf(buf, sizeof(buf), "-%s", $2->literal.raw->chars);
+                ObjString* neg_raw = new_string(buf, (int)strlen(buf));
+                
+                $$ = create_literal_node($2->literal.kind, neg_raw);
+            } 
+            else {
+                ASTNode* zero = create_literal_node(TOKEN_INTEGER, new_string("0", 1));
+                ASTNode* op   = create_identifier_node(sym_minus);
+                $$ = create_send_node(zero, op, $2);
+            }
+        } else if ($1 == sym_plus) {
+            $$ = $2;
+        } 
+        else {
             // 将来の '!' や '~' などの単項演算子拡張用
             char buf[128];
             snprintf(buf, sizeof(buf), "unsupported unary operator '%s'", $1->chars);

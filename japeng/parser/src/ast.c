@@ -47,10 +47,11 @@ ASTNode* create_class_node(ASTNode* name, ASTNode* type)
     return node;
 }
 
-ASTNode* create_literal_node(Value val)
+ASTNode* create_literal_node(LiteralKind kind, ObjString* raw)
 {
     ASTNode* node = alloc_node(AST_LITERAL);
-    node->literal.value = val;
+    node->literal.kind = kind;
+    node->literal.raw = raw;
     return node;
 }
 

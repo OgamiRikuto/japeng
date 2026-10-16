@@ -190,7 +190,7 @@ static void scan_declarations(const char* src) {
                 if (t_end > t_start) {
                     size_t t_len = t_end - t_start;
                     BuiltinKind kind;
-                    if (!builtin_to_canonical(&src[t_start], t_len, current_lang, &kind)) {
+                    if (!builtin_to_canonical(&src[t_start], t_len, compile_lang, &kind)) {
                         register_type(&src[t_start], t_len);
                     }
                 }
@@ -241,7 +241,7 @@ char* preprocess(const char* src) {
 
         // 4. 予約語置換
         size_t kw_len = 0;
-        const KeywordDef* kw = keyword_match_prefix(&src[r], current_lang, &kw_len);
+        const KeywordDef* kw = keyword_match_prefix(&src[r], compile_lang, &kw_len);
         if (kw) {
             bool is_ha = (strcmp(kw->replacement, " is ") == 0);
             // 置換先が末尾スペース付き（"return ", "class " 等）なら直後が単語でも安全に置換できる
@@ -292,7 +292,7 @@ char* preprocess(const char* src) {
 
         // 5.5 組み込み型・組み込みメソッド（直後が境界なら置換）
         size_t b_len = 0;
-        const BuiltinDef* bdef = builtin_match_prefix(&src[r], current_lang, &b_len);
+        const BuiltinDef* bdef = builtin_match_prefix(&src[r], compile_lang, &b_len);
         if (bdef) {
             const char* next_p = &src[r + b_len];
             if (is_word_boundary(next_p)) {
