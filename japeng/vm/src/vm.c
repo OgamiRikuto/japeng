@@ -1,4 +1,5 @@
 #include "vm.h"
+#include "vm_calc.h"
 #include "common.h"
 #include "native.h"
 #include "builtins.h"
@@ -6,7 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DEBUG_TRACE_EXECUTION 1
+#define DEBUG_TRACE_EXECUTION 0
 
 #if DEBUG_TRACE_EXECUTION 
 static void print_stack(VM* vm);
@@ -29,14 +30,41 @@ const char* op_kind[OP_MAX] = {
     [OP_JUMP]          = "OP_JUMP",
     [OP_JUMP_IF_FALSE] = "OP_JUMP_IF_FALSE",
     [OP_LOOP]          = "OP_LOOP",
-    [OP_ADD]          = "OP_ADD",
-    [OP_SUB]          = "OP_SUB",
-    [OP_MUL]          = "OP_MUL",
-    [OP_DIV]          = "OP_DIV",
+    // 整数算術
+    [OP_ADD_INT]       = "OP_ADD_INT",
+    [OP_SUB_INT]       = "OP_SUB_INT",
+    [OP_MUL_INT]       = "OP_MUL_INT",
+    [OP_DIV_INT]       = "OP_DIV_INT",
+    [OP_REM_INT]       = "OP_REM_INT",
+
+    // Float 算術
+    [OP_ADD_FLOAT]     = "OP_ADD_FLOAT",
+    [OP_SUB_FLOAT]     = "OP_SUB_FLOAT",
+    [OP_MUL_FLOAT]     = "OP_MUL_FLOAT",
+    [OP_DIV_FLOAT]     = "OP_DIV_FLOAT",
+
+    // Decimal 算術
+    [OP_ADD_DEC]       = "OP_ADD_DEC",
+    [OP_SUB_DEC]       = "OP_SUB_DEC",
+    [OP_MUL_DEC]       = "OP_MUL_DEC",
+    [OP_DIV_DEC]       = "OP_DIV_DEC",
+
+    // 文字列結合
+    [OP_CONCAT]        = "OP_CONCAT",
+
+    // 整数高速比較
+    [OP_EQUAL_INT]     = "OP_EQUAL_INT",
+    [OP_NEQUAL_INT]    = "OP_NEQUAL_INT",
+    [OP_LESS_INT]      = "OP_LESS_INT",
+    [OP_GREAT_INT]     = "OP_GREAT_INT",
+    [OP_NLESS_INT]     = "OP_NLESS_INT",
+    [OP_NGREAT_INT]    = "OP_NGREAT_INT",
     [OP_LESS]         = "OP_LESS",
     [OP_GREAT]        = "OP_GREAT",
     [OP_EQUAL]        = "OP_EQUAL",
     [OP_NEQUAL]       = "OP_NEQUAL",
+    [OP_NGREAT]       = "OP_NGREAT",
+    [OP_NLESS]        = "OP_NLESS",
     [OP_CLOSURE]      = "OP_CLOSURE",
     [OP_GET_UPVALUE]  = "OP_GET_UPVALUE",
     [OP_NEW_INSTANCE] = "OP_NEW_INSTANCE"
@@ -308,136 +336,363 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 frame = &vm->frames[vm->frame_count - 1];
                 break;
             }
-            case OP_ADD: {
+            // --- 整数専用算術 ---
+            case OP_ADD_INT: {
                 Value b = pop(vm);
                 Value a = pop(vm);
                 if (is_int(a) && is_int(b)) {
-                    push(vm, make_int(as_int(a) + as_int(b)));
-                } else if (is_float(a) && is_float(b)) {
-                    push(vm, make_float(as_float(a) + as_float(b)));
-                } else {
-                    error_runtime(ERR_TYPE_OP_ADD);
-                    return INTERPRET_RUNTIME_ERROR;
+                    int32_t ia = as_int(a), ib = as_int(b), res;
+                    if (!__builtin_add_overflow(ia, ib, &res)) {
+                        push(vm, make_int(res));
+                        break;
+                    }
+                    push(vm, make_obj((Obj*)bi_from_i64((int64_t)ia + (int64_t)ib)));
+                    break;
                 }
+                push(vm, calc_add_int_slow(a, b));
                 break;
             }
-            case OP_SUB: {
+            case OP_SUB_INT: {
                 Value b = pop(vm);
                 Value a = pop(vm);
                 if (is_int(a) && is_int(b)) {
-                    push(vm, make_int(as_int(a) - as_int(b)));
-                } else if (is_float(a) && is_float(b)) {
-                    push(vm, make_float(as_float(a) - as_float(b)));
-                } else {
-                    error_runtime(ERR_TYPE_OP_SUB);
-                    return INTERPRET_RUNTIME_ERROR;
+                    int32_t ia = as_int(a), ib = as_int(b), res;
+                    if (!__builtin_sub_overflow(ia, ib, &res)) {
+                        push(vm, make_int(res));
+                        break;
+                    }
+                    push(vm, make_obj((Obj*)bi_from_i64((int64_t)ia - (int64_t)ib)));
+                    break;
                 }
+                push(vm, calc_sub_int_slow(a, b));
                 break;
             }
-            case OP_MUL: {
+            case OP_MUL_INT: {
                 Value b = pop(vm);
                 Value a = pop(vm);
                 if (is_int(a) && is_int(b)) {
-                    push(vm, make_int(as_int(a) * as_int(b)));
-                } else if (is_float(a) && is_float(b)) {
-                    push(vm, make_float(as_float(a) * as_float(b)));
-                } else {
-                    error_runtime(ERR_TYPE_OP_MUL);
-                    return INTERPRET_RUNTIME_ERROR;
+                    int32_t ia = as_int(a), ib = as_int(b), res;
+                    if (!__builtin_mul_overflow(ia, ib, &res)) {
+                        push(vm, make_int(res));
+                        break;
+                    }
                 }
+                push(vm, calc_mul_int_slow(a, b));
                 break;
             }
-            case OP_DIV: {
+            case OP_DIV_INT: {
                 Value b = pop(vm);
                 Value a = pop(vm);
                 if (is_int(a) && is_int(b)) {
-                    if (as_int(b) == 0) {
+                    int32_t ia = as_int(a), ib = as_int(b);
+                    if (ib == 0) {
                         error_runtime(ERR_DIVISION_BY_ZERO);
                         return INTERPRET_RUNTIME_ERROR;
                     }
-                    push(vm, make_int(as_int(a) / as_int(b)));
-                } else if (is_float(a) && is_float(b)) {
-                    push(vm, make_float(as_float(a) / as_float(b)));
-                } else {
-                    error_runtime(ERR_TYPE_OP_DIV);
-                    return INTERPRET_RUNTIME_ERROR;
+                    if (ia == INT32_MIN && ib == -1) {
+                        push(vm, make_obj((Obj*)bi_from_i64(-(int64_t)INT32_MIN)));
+                        break;
+                    }
+                    push(vm, make_int(ia / ib));
+                    break;
                 }
+                push(vm, calc_div_int_slow(a, b));
                 break;
             }
-            case OP_LESS: {
+            case OP_REM_INT: {
+                Value b = pop(vm);
+                Value a = pop(vm);
+                if (is_int(a) && is_int(b)) {
+                    int32_t ia = as_int(a), ib = as_int(b);
+                    if (ib == 0) {
+                        error_runtime(ERR_DIVISION_BY_ZERO);
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    push(vm, make_int(ia % ib));
+                    break;
+                }
+                push(vm, calc_rem_int_slow(a, b));
+                break;
+            }
+            case OP_EQUAL_INT: {
+                Value b = pop(vm);
+                Value a = pop(vm);
+                if (is_int(a) && is_int(b)) {
+                    push(vm, make_bool(as_int(a) == as_int(b)));
+                    break;
+                }
+                push(vm, make_bool(calc_compare_int_slow(a, b) == 0));
+                break;
+            }
+            case OP_NEQUAL_INT: {
+                Value b = pop(vm);
+                Value a = pop(vm);
+                if (is_int(a) && is_int(b)) {
+                    push(vm, make_bool(as_int(a) != as_int(b)));
+                    break;
+                }
+                push(vm, make_bool(calc_compare_int_slow(a, b) != 0));
+                break;
+            }
+            case OP_LESS_INT: {
                 Value b = pop(vm);
                 Value a = pop(vm);
                 if (is_int(a) && is_int(b)) {
                     push(vm, make_bool(as_int(a) < as_int(b)));
-                } else if (is_float(a) && is_float(b)) {
-                    push(vm, make_bool(as_float(a) < as_float(b)));
-                } else {
-                    error_runtime(ERR_TYPE_OP_LESS);
-                    return INTERPRET_RUNTIME_ERROR;
+                    break;
                 }
+                push(vm, make_bool(calc_compare_int_slow(a, b) < 0));
                 break;
             }
-            case OP_GREAT: {
+            case OP_GREAT_INT: {
                 Value b = pop(vm);
                 Value a = pop(vm);
                 if (is_int(a) && is_int(b)) {
                     push(vm, make_bool(as_int(a) > as_int(b)));
-                } else if (is_float(a) && is_float(b)) {
-                    push(vm, make_bool(as_float(a) > as_float(b)));
-                } else {
-                    error_runtime(ERR_TYPE_OP_GREAT);
-                    return INTERPRET_RUNTIME_ERROR;
+                    break;
                 }
+                push(vm, make_bool(calc_compare_int_slow(a, b) > 0));
+                break;
+            }
+            case OP_NLESS_INT: { // <=
+                Value b = pop(vm);
+                Value a = pop(vm);
+                if (is_int(a) && is_int(b)) {
+                    push(vm, make_bool(as_int(a) <= as_int(b)));
+                    break;
+                }
+                push(vm, make_bool(calc_compare_int_slow(a, b) <= 0));
+                break;
+            }
+            case OP_NGREAT_INT: { // >=
+                Value b = pop(vm);
+                Value a = pop(vm);
+                if (is_int(a) && is_int(b)) {
+                    push(vm, make_bool(as_int(a) >= as_int(b)));
+                    break;
+                }
+                push(vm, make_bool(calc_compare_int_slow(a, b) >= 0));
+                break;
+            }
+            // --- Float 専用 ---
+            case OP_ADD_FLOAT: {
+                double b = as_float(pop(vm));
+                double a = as_float(pop(vm));
+                push(vm, make_float(a + b));
+                break;
+            }
+            case OP_SUB_FLOAT: {
+                double b = as_float(pop(vm));
+                double a = as_float(pop(vm));
+                push(vm, make_float(a - b));
+                break;
+            }
+            case OP_MUL_FLOAT: {
+                double b = as_float(pop(vm));
+                double a = as_float(pop(vm));
+                push(vm, make_float(a * b));
+                break;
+            }
+            case OP_DIV_FLOAT: {
+                double b = as_float(pop(vm));
+                double a = as_float(pop(vm));
+                push(vm, make_float(a / b));
+                break;
+            }
+
+            // --- Decimal 専用 ---
+            case OP_ADD_DEC: {
+                ObjDecimal* b = as_decimal(pop(vm));
+                ObjDecimal* a = as_decimal(pop(vm));
+                push(vm, make_obj((Obj*)dec_add(a, b)));
+                break;
+            }
+            case OP_SUB_DEC: {
+                ObjDecimal* b = as_decimal(pop(vm));
+                ObjDecimal* a = as_decimal(pop(vm));
+                push(vm, make_obj((Obj*)dec_sub(a, b)));
+                break;
+            }
+            case OP_MUL_DEC: {
+                ObjDecimal* b = as_decimal(pop(vm));
+                ObjDecimal* a = as_decimal(pop(vm));
+                push(vm, make_obj((Obj*)dec_mul(a, b)));
+                break;
+            }
+            case OP_DIV_DEC: {
+                ObjDecimal* b = as_decimal(pop(vm));
+                ObjDecimal* a = as_decimal(pop(vm));
+                push(vm, make_obj((Obj*)dec_div(a, b, 28))); // 規定精度 28 桁
+                break;
+            }
+
+            // --- 文字列結合 ---
+            case OP_CONCAT: {
+                Value b = pop(vm);
+                Value a = pop(vm);
+                push(vm, calc_concat(a, b));
                 break;
             }
             case OP_EQUAL: {
                 Value b = pop(vm);
                 Value a = pop(vm);
-
-                if (a == b) {
-                    push(vm, make_bool(true));
-                    break;
-                }
-
-                if (is_obj(a) && is_obj(b)) {
-                    Obj* obj_a = as_obj(a);
-                    Obj* obj_b = as_obj(b);
-                    if (obj_a->type == OBJ_STRING && obj_b->type == OBJ_STRING) {
-                        ObjString* sa = (ObjString*)obj_a;
-                        ObjString* sb = (ObjString*)obj_b;
-                        bool eq = (sa->length == sb->length) && 
-                                  (memcmp(sa->chars, sb->chars, sa->length) == 0);
-                        push(vm, make_bool(eq));
-                        break;
-                    }
-                }
-                push(vm, make_bool(false));
+                push(vm, make_bool(calc_compare(a, b) == 0));
                 break;
             }
-            case OP_NEQUAL: {
+            case OP_LESS: {
                 Value b = pop(vm);
                 Value a = pop(vm);
-
-                if (a == b) {
-                    push(vm, make_bool(false));
-                    break;
-                }
-
-                if (is_obj(a) && is_obj(b)) {
-                    Obj* obj_a = as_obj(a);
-                    Obj* obj_b = as_obj(b);
-                    if (obj_a->type == OBJ_STRING && obj_b->type == OBJ_STRING) {
-                        ObjString* sa = (ObjString*)obj_a;
-                        ObjString* sb = (ObjString*)obj_b;
-                        bool eq = (sa->length == sb->length) && 
-                                  (memcmp(sa->chars, sb->chars, sa->length) == 0);
-                        push(vm, make_bool(!eq));
-                        break;
-                    }
-                }
-                push(vm, make_bool(true));
+                push(vm, make_bool(calc_compare(a, b) < 0));
                 break;
             }
+            case OP_GREAT: {
+                Value b = pop(vm);
+                Value a = pop(vm);
+                push(vm, make_bool(calc_compare(a, b) > 0));
+                break;
+            }
+            case OP_NLESS: { // <=
+                Value b = pop(vm);
+                Value a = pop(vm);
+                push(vm, make_bool(calc_compare(a, b) <= 0));
+                break;
+            }
+            case OP_NGREAT: { // >=
+                Value b = pop(vm);
+                Value a = pop(vm);
+                push(vm, make_bool(calc_compare(a, b) >= 0));
+                break;
+            }
+            // case OP_ADD: {
+            //     Value b = pop(vm);
+            //     Value a = pop(vm);
+            //     if (is_int(a) && is_int(b)) {
+            //         push(vm, make_int(as_int(a) + as_int(b)));
+            //     } else if (is_float(a) && is_float(b)) {
+            //         push(vm, make_float(as_float(a) + as_float(b)));
+            //     } else {
+            //         error_runtime(ERR_TYPE_OP_ADD);
+            //         return INTERPRET_RUNTIME_ERROR;
+            //     }
+            //     break;
+            // }
+            // case OP_SUB: {
+            //     Value b = pop(vm);
+            //     Value a = pop(vm);
+            //     if (is_int(a) && is_int(b)) {
+            //         push(vm, make_int(as_int(a) - as_int(b)));
+            //     } else if (is_float(a) && is_float(b)) {
+            //         push(vm, make_float(as_float(a) - as_float(b)));
+            //     } else {
+            //         error_runtime(ERR_TYPE_OP_SUB);
+            //         return INTERPRET_RUNTIME_ERROR;
+            //     }
+            //     break;
+            // }
+            // case OP_MUL: {
+            //     Value b = pop(vm);
+            //     Value a = pop(vm);
+            //     if (is_int(a) && is_int(b)) {
+            //         push(vm, make_int(as_int(a) * as_int(b)));
+            //     } else if (is_float(a) && is_float(b)) {
+            //         push(vm, make_float(as_float(a) * as_float(b)));
+            //     } else {
+            //         error_runtime(ERR_TYPE_OP_MUL);
+            //         return INTERPRET_RUNTIME_ERROR;
+            //     }
+            //     break;
+            // }
+            // case OP_DIV: {
+            //     Value b = pop(vm);
+            //     Value a = pop(vm);
+            //     if (is_int(a) && is_int(b)) {
+            //         if (as_int(b) == 0) {
+            //             error_runtime(ERR_DIVISION_BY_ZERO);
+            //             return INTERPRET_RUNTIME_ERROR;
+            //         }
+            //         push(vm, make_int(as_int(a) / as_int(b)));
+            //     } else if (is_float(a) && is_float(b)) {
+            //         push(vm, make_float(as_float(a) / as_float(b)));
+            //     } else {
+            //         error_runtime(ERR_TYPE_OP_DIV);
+            //         return INTERPRET_RUNTIME_ERROR;
+            //     }
+            //     break;
+            // }
+            // case OP_LESS: {
+            //     Value b = pop(vm);
+            //     Value a = pop(vm);
+            //     if (is_int(a) && is_int(b)) {
+            //         push(vm, make_bool(as_int(a) < as_int(b)));
+            //     } else if (is_float(a) && is_float(b)) {
+            //         push(vm, make_bool(as_float(a) < as_float(b)));
+            //     } else {
+            //         error_runtime(ERR_TYPE_OP_LESS);
+            //         return INTERPRET_RUNTIME_ERROR;
+            //     }
+            //     break;
+            // }
+            // case OP_GREAT: {
+            //     Value b = pop(vm);
+            //     Value a = pop(vm);
+            //     if (is_int(a) && is_int(b)) {
+            //         push(vm, make_bool(as_int(a) > as_int(b)));
+            //     } else if (is_float(a) && is_float(b)) {
+            //         push(vm, make_bool(as_float(a) > as_float(b)));
+            //     } else {
+            //         error_runtime(ERR_TYPE_OP_GREAT);
+            //         return INTERPRET_RUNTIME_ERROR;
+            //     }
+            //     break;
+            // }
+            // case OP_EQUAL: {
+            //     Value b = pop(vm);
+            //     Value a = pop(vm);
+
+            //     if (a == b) {
+            //         push(vm, make_bool(true));
+            //         break;
+            //     }
+
+            //     if (is_obj(a) && is_obj(b)) {
+            //         Obj* obj_a = as_obj(a);
+            //         Obj* obj_b = as_obj(b);
+            //         if (obj_a->type == OBJ_STRING && obj_b->type == OBJ_STRING) {
+            //             ObjString* sa = (ObjString*)obj_a;
+            //             ObjString* sb = (ObjString*)obj_b;
+            //             bool eq = (sa->length == sb->length) && 
+            //                       (memcmp(sa->chars, sb->chars, sa->length) == 0);
+            //             push(vm, make_bool(eq));
+            //             break;
+            //         }
+            //     }
+            //     push(vm, make_bool(false));
+            //     break;
+            // }
+            // case OP_NEQUAL: {
+            //     Value b = pop(vm);
+            //     Value a = pop(vm);
+
+            //     if (a == b) {
+            //         push(vm, make_bool(false));
+            //         break;
+            //     }
+
+            //     if (is_obj(a) && is_obj(b)) {
+            //         Obj* obj_a = as_obj(a);
+            //         Obj* obj_b = as_obj(b);
+            //         if (obj_a->type == OBJ_STRING && obj_b->type == OBJ_STRING) {
+            //             ObjString* sa = (ObjString*)obj_a;
+            //             ObjString* sb = (ObjString*)obj_b;
+            //             bool eq = (sa->length == sb->length) && 
+            //                       (memcmp(sa->chars, sb->chars, sa->length) == 0);
+            //             push(vm, make_bool(!eq));
+            //             break;
+            //         }
+            //     }
+            //     push(vm, make_bool(true));
+            //     break;
+            // }
             default: 
                 error_runtime(ERR_UNKNOWN_OPCODE, op);
                 return INTERPRET_RUNTIME_ERROR;
@@ -662,14 +917,34 @@ static void print_instruction(CallFrame* frame, uint32_t instruction, uint32_t c
         case OP_DUP:
         case OP_RETURN:
         case OP_NEW_INSTANCE:
-        case OP_ADD:
-        case OP_SUB:
-        case OP_MUL:
-        case OP_DIV:
+        case OP_CONCAT:
+        case OP_ADD_INT:
+        case OP_SUB_INT:
+        case OP_MUL_INT:
+        case OP_DIV_INT:
+        case OP_REM_INT:
+        case OP_ADD_FLOAT:
+        case OP_SUB_FLOAT:
+        case OP_MUL_FLOAT:
+        case OP_DIV_FLOAT:
+        case OP_ADD_DEC:
+        case OP_SUB_DEC:
+        case OP_MUL_DEC:
+        case OP_DIV_DEC:
         case OP_LESS:
         case OP_GREAT:
         case OP_EQUAL:
         case OP_NEQUAL:
+        case OP_NGREAT:
+        case OP_NLESS:
+        case OP_EQUAL_INT:
+        case OP_NEQUAL_INT:
+        case OP_LESS_INT:
+        case OP_GREAT_INT:
+        case OP_NLESS_INT:
+        case OP_NGREAT_INT:
+        case OP_SHL:
+        case OP_SHR:
             fprintf(stderr, "\n"); // オペランド不要な命令
             break;
         default:

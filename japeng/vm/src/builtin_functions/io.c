@@ -24,6 +24,12 @@ static void print_value(Value value)
             return;
         }
         switch (obj->type) {
+            case OBJ_BIGINTEGER:
+                printf("%s", bi_to_string((BigInteger*)obj)->chars);
+                break;
+            case OBJ_DECIMAL:
+                printf("%s", dec_toString((ObjDecimal*)obj)->chars);
+                break;
             case OBJ_STRING:
                 printf("%s", ((ObjString*)obj)->chars);
                 break;

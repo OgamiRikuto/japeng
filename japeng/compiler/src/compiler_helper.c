@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 void init_compiler(Compiler* compiler, Chunk* chunk)
 {
@@ -39,14 +40,34 @@ void emit_inst(Compiler* c, Opcode op, uint32_t operand) {
 
         // --- -1: ポップ・二項演算・フィールド代入 ---
         case OP_POP:
-        case OP_ADD:
-        case OP_SUB:
-        case OP_MUL:
-        case OP_DIV:
+        case OP_CONCAT:
+        case OP_ADD_INT:
+        case OP_SUB_INT:
+        case OP_MUL_INT:
+        case OP_DIV_INT:
+        case OP_REM_INT:
+        case OP_ADD_FLOAT:
+        case OP_SUB_FLOAT:
+        case OP_MUL_FLOAT:
+        case OP_DIV_FLOAT:
+        case OP_ADD_DEC:
+        case OP_SUB_DEC:
+        case OP_MUL_DEC:
+        case OP_DIV_DEC:
         case OP_LESS:
         case OP_GREAT:
         case OP_EQUAL:
         case OP_NEQUAL:
+        case OP_NGREAT:
+        case OP_NLESS:
+        case OP_EQUAL_INT:
+        case OP_NEQUAL_INT:
+        case OP_LESS_INT:
+        case OP_GREAT_INT:
+        case OP_NLESS_INT:
+        case OP_NGREAT_INT:
+        case OP_SHL:
+        case OP_SHR:
         case OP_SET_FIELD: // receiver と value を pop して value を push
             c->stack_depth--;
             break;
@@ -212,14 +233,20 @@ bool is_integer_type(ObjString* name)
 {
     if (name == NULL) return false;
     return (name == sym_Integer|| 
-            name == sym_SmallInteger);
+            name == sym_SmallInteger ||
+            name == sym_BigInteger);
 }
 
 bool is_float_type(ObjString* name) 
 {
     if (name == NULL) return false;
-    return (name == sym_Float || 
-            name == sym_SmallFloat);
+    return (name == sym_Float);
+}
+
+bool is_decimal_type(ObjString* name)
+{
+    if (name == NULL) return false;
+    return (name == sym_Decimal);
 }
 
 bool is_list_type(ObjString* name)
@@ -240,9 +267,107 @@ bool is_builtin(ObjString* name)
     return  name == sym_Object ||
             name == sym_Integer ||
             name == sym_SmallInteger ||
+            name == sym_BigInteger || 
             name == sym_Float ||
-            name == sym_SmallFloat || 
+            name == sym_Decimal ||
             name == sym_List ||
             name == sym_String
             ;
+}
+
+
+Value parse_ast_literal_with_expected(ASTNode* node, TypeInfo* expected_type, TypeInfo** out_type)
+{
+    LiteralKind kind = node->literal.kind;
+    ObjString* raw   = node->literal.raw;
+    const char* str  = raw->chars;
+    int len          = raw->length;
+
+    // ★ 左辺で Decimal が明示されている場合: 整数・小数問わず ObjDecimal として生成
+    if (expected_type != NULL && is_decimal_type(expected_type->name)) {
+        if (kind == TOKEN_FLOAT || kind == TOKEN_INTEGER) {
+            ObjDecimal* dec = new_decimal_from_string(str, len);
+            if (out_type) *out_type = new_type_info(sym_Decimal, 0);
+            return make_obj((Obj*)dec);
+        }
+    }
+
+    if (expected_type != NULL && is_float_type(expected_type->name)) {
+        if (kind == TOKEN_INTEGER) {
+            char* end;
+            double val = strtod(str, &end);
+            if (out_type) *out_type = new_type_info(sym_Float, 0);
+            return make_float(val);
+        }
+    }
+        
+    // --- 通常の評価 (Decimal 指定がない場合) ---
+    switch (kind) {
+        case TOKEN_INTEGER: {
+            size_t start = (str[0] == '+' || str[0] == '-') ? 1 : 0;
+            size_t num_digits = len - start;
+
+            if (num_digits <= 9) {
+                int32_t val = (int32_t)strtol(str, NULL, 10);
+                if (out_type) *out_type = new_type_info(sym_Integer, 0);
+                return make_int(val);
+            }
+
+            if (num_digits <= 18) {
+                char* end;
+                int64_t val = strtoll(str, &end, 10);
+                if (*end == '\0') {
+                    if (val >= INT32_MIN && val <= INT32_MAX) {
+                        if (out_type) *out_type = new_type_info(sym_Integer, 0);
+                        return make_int((int32_t)val);
+                    }
+                    BigInteger* bi = bi_from_i64(val);
+                    if (out_type) *out_type = new_type_info(sym_Integer, 0);
+                    return make_obj((Obj*)bi);
+                }
+            }
+
+            BigInteger* bi = new_bi_from_string(raw);
+            if (out_type) *out_type = new_type_info(sym_Integer, 0);
+            return make_obj((Obj*)bi);
+        }
+
+        case TOKEN_FLOAT: {
+            char* end;
+            double val = strtod(str, &end);
+
+            // Float 限界超過は Decimal に逃がさずエラーとする
+            if ((val == HUGE_VAL || val == -HUGE_VAL)) {
+                error_compile(node, ERR_FLOAT_OVERFLOW, str);
+                if (out_type) *out_type = new_type_info(sym_Error, 0);
+                return make_nil();
+            }
+
+            if (out_type) *out_type = new_type_info(sym_Float, 0);
+            return make_float(val);
+        }
+
+        case TOKEN_STRING: {
+            if (out_type) *out_type = new_type_info(sym_String, 0);
+            return make_obj((Obj*)raw);
+        }
+
+        // case TOKEN_BINARY: {
+        //     // 0b...
+        //     long long val = strtoll(str + 2, NULL, 2);
+        //     if (out_type) *out_type = new_type_info(sym_Integer, 0);
+        //     return (val >= INT32_MIN && val <= INT32_MAX) ? make_int((int32_t)val) : make_obj((Obj*)bi_from_i64(val));
+        // }
+
+        // case TOKEN_HEX: {
+        //     // 0x...
+        //     long long val = strtoll(str + 2, NULL, 16);
+        //     if (out_type) *out_type = new_type_info(sym_Integer, 0);
+        //     return (val >= INT32_MIN && val <= INT32_MAX) ? make_int((int32_t)val) : make_obj((Obj*)bi_from_i64(val));
+        // }
+
+        default:
+            if (out_type) *out_type = new_type_info(sym_Error, 0);
+            return make_nil();
+    }
 }

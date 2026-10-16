@@ -28,6 +28,14 @@ static const ErrorMessage error_table[ERR_COUNT] = {
         .en = "unexpected token '%s'.",
         .ja = "予期しないトークン '%s' です。"
     },
+    [ERR_SYNTAX_UNEXPECTED] = {
+        .en = "syntax error: unexpected %s.",
+        .ja = "構文エラー: 予期しない %s です。"
+    },
+    [ERR_SYNTAX_UNEXPECTED_EXPECTING] = {
+        .en = "syntax error: unexpected %1$s, expecting %2$s.",
+        .ja = "構文エラー: 予期しない %1$s です (%2$s が必要です)。"
+    },
 
     // コンパイルエラー
     [ERR_UNDEFINED_VAR] = {
@@ -78,9 +86,17 @@ static const ErrorMessage error_table[ERR_COUNT] = {
         .en = "Cyclic inheritance detected involving class '%s'.",
         .ja = "クラス '%s' において循環継承が検出されました。"
     },
+    [ERR_FIELD_INIT_MUST_BE_LITERAL] = {
+        .en = "Field '%s' initial value must be a literal.",
+        .ja = "フィールド '%s' の初期値にはリテラルを指定してください。"
+    },
     [ERR_UNHANDLED_AST_KIND] = {
         .en = "Unhandled ASTNode kind: %d.",
         .ja = "未対応の AST ノード種別です: %d。"
+    },
+    [ERR_FLOAT_OVERFLOW] = {
+        .en = "Float literal '%s' exceeds representable range.",
+        .ja = "浮動小数点数リテラル '%s' が表現範囲を超えています。"
     },
     [ERR_TYPE_MISMATCH] = {
         .en = "Type mismatch: expected '%1$s', got '%2$s'.",
@@ -97,6 +113,10 @@ static const ErrorMessage error_table[ERR_COUNT] = {
     [ERR_RETURN_TYPE_MISMATCH] = {
         .en = "Return type mismatch: expected '%1$s', got '%2$s'.",
         .ja = "戻り値の型が一致しません (期待される型: '%1$s', 実際の型: '%2$s')。"
+    },
+    [ERR_NON_NUMERIC_OPERATION] = {
+        .en = "Operator '%1$s' requires numeric operands, but got '%2$s'.",
+        .ja = "演算 '%1$s' には数値型が必要ですが、'%2$s' が渡されました。"
     },
 
     // VM 実行時エラー
@@ -169,12 +189,85 @@ static const ErrorMessage error_table[ERR_COUNT] = {
         .ja = "'println' に渡せる引数は 0 個または 1 個のみです。"
     }
 };
+
+typedef struct {
+    const char* raw;
+    const char* en;
+    const char* ja;
+} TokenNameMap;
+
+static const TokenNameMap token_names[] = {
+    { "identifier",   "identifier",       "識別子" },
+    { "operator",     "operator",         "演算子" },
+    { "class name",   "class name",       "クラス名" },
+    { "integer",      "integer literal",  "整数リテラル" },
+    { "float",        "float literal",    "小数リテラル" },
+    { "fraction",     "fraction literal", "分数リテラル" },
+    { "string",       "string literal",   "文字列リテラル" },
+    { "self",         "'self'",           "'自身' (self)" },
+    { "class",        "'class'",          "'クラス' (class)" },
+    { "based",        "'based'",          "'基底' (based)" },
+    { "from",         "'from'",           "'委譲' (from)" },
+    { "arg",          "'arg'",            "'引数' (arg)" },
+    { "ret",          "'ret'",            "'返す型' (ret)" },
+    { "return",       "'return'",         "'返値は' (return)" },
+    { "break",        "'break'",          "'中断' (break)" },
+    { "continue",     "'continue'",       "'再開' (continue)" },
+    { "$end",         "end of file",      "ファイルの終端" },
+    { "end of file",  "end of file",      "ファイルの終端" },
+    { "$undefined",   "invalid token",    "無効なトークン" },
+    { ",",            "','",              "',' (読点)" },
+    { ".",            "'.'",              "'.' (中黒)" },
+    { ":",            "':'",              "':' (コロン)" },
+    { ";",            "';'",              "';' (句点)" },
+    { "(",            "'('",              "'(' (丸括弧)" },
+    { ")",            "')'",              "')' (丸括弧閉)" },
+    { "[",            "'['",              "'[' (括弧)" },
+    { "]",            "']'",              "']' (括弧閉)" },
+    { NULL, NULL, NULL }
+};
+
 // 空行またはコメント行かどうかを判定
 static bool is_ignorable_line(const char* s) {
     while (*s == ' ' || *s == '\t' || *s == '\r' || *s == '\n') s++;
     if (*s == '\0') return true;
     if (s[0] == '/' && s[1] == '/') return true;
     return false;
+}
+
+static const char* translate_token(const char* raw, OutputLang lang) {
+    if (!raw) return "";
+    for (int i = 0; token_names[i].raw != NULL; i++) {
+        if (strcmp(raw, token_names[i].raw) == 0) {
+            return (lang == LANG_JA) ? token_names[i].ja : token_names[i].en;
+        }
+    }
+    return raw;
+}
+
+// 期待されるトークン群（"expecting A or B or C"）を言語別に整形
+static void translate_expecting_list(const char* raw_expecting, char* out_buf, size_t out_size, OutputLang lang) {
+    char temp[512];
+    strncpy(temp, raw_expecting, sizeof(temp) - 1);
+    temp[sizeof(temp) - 1] = '\0';
+
+    out_buf[0] = '\0';
+    char* token = strtok(temp, " ");
+    bool first = true;
+
+    while (token != NULL) {
+        if (strcmp(token, "or") == 0) {
+            token = strtok(NULL, " ");
+            continue;
+        }
+        const char* trans = translate_token(token, lang);
+        if (!first) {
+            strncat(out_buf, (lang == LANG_JA) ? " または " : " or ", out_size - strlen(out_buf) - 1);
+        }
+        strncat(out_buf, trans, out_size - strlen(out_buf) - 1);
+        first = false;
+        token = strtok(NULL, " ");
+    }
 }
 
 // 直前の有効なコード行の末尾にキャレットを表示する
@@ -254,22 +347,65 @@ static void print_snippet(const char* filename, int line, int col_start, int col
 void error_syntax(const char* filename, int line, int col_start, int col_end, const char* bison_msg) {
     const char* fn = (filename && filename[0] != '\0') ? filename : "input";
 
-    // ★ セミコロン抜けのパターンを判定
-    // "expecting ;" または "expecting . or ;" の場合、直前行のセミコロン抜けの可能性が極めて高い
+    // セミコロン抜けの先行補正
     bool is_semicolon_related = (strstr(bison_msg, "expecting ;") != NULL ||
                                  strstr(bison_msg, "expecting . or ;") != NULL);
-
     if (is_semicolon_related) {
-        // 直前行の末尾にセミコロンがないか補正表示を試みる
         if (print_previous_line_missing_semicolon(fn, line)) {
-            return; // 直前行の補正表示に成功したため終了
+            return;
         }
     }
 
-    // 通常の構文エラー出力
     const char* label = (current_lang == LANG_JA) ? "構文エラー" : "syntax error";
+    char formatted_msg[1024];
+
+    // Bison メッセージの解析: "syntax error, unexpected TOKEN, expecting EXPECTED..."
+    const char* unexpected_prefix = "unexpected ";
+    const char* expecting_prefix  = ", expecting ";
+    const char* unexp_pos = strstr(bison_msg, unexpected_prefix);
+
+    if (unexp_pos != NULL) {
+        unexp_pos += strlen(unexpected_prefix);
+        const char* exp_pos = strstr(unexp_pos, expecting_prefix);
+
+        char unexp_tok[128];
+        if (exp_pos != NULL) {
+            size_t len = exp_pos - unexp_pos;
+            if (len >= sizeof(unexp_tok)) len = sizeof(unexp_tok) - 1;
+            strncpy(unexp_tok, unexp_pos, len);
+            unexp_tok[len] = '\0';
+
+            const char* exp_tokens_raw = exp_pos + strlen(expecting_prefix);
+            char translated_exp[512];
+            translate_expecting_list(exp_tokens_raw, translated_exp, sizeof(translated_exp), current_lang);
+
+            const char* translated_unexp = translate_token(unexp_tok, current_lang);
+
+            if (current_lang == LANG_JA) {
+                snprintf(formatted_msg, sizeof(formatted_msg), "予期しない %s です (%s が必要です)。",
+                         translated_unexp, translated_exp);
+            } else {
+                snprintf(formatted_msg, sizeof(formatted_msg), "unexpected %s, expecting %s.",
+                         translated_unexp, translated_exp);
+            }
+        } else {
+            strncpy(unexp_tok, unexp_pos, sizeof(unexp_tok) - 1);
+            unexp_tok[sizeof(unexp_tok) - 1] = '\0';
+            const char* translated_unexp = translate_token(unexp_tok, current_lang);
+
+            if (current_lang == LANG_JA) {
+                snprintf(formatted_msg, sizeof(formatted_msg), "予期しない %s です。", translated_unexp);
+            } else {
+                snprintf(formatted_msg, sizeof(formatted_msg), "unexpected %s.", translated_unexp);
+            }
+        }
+    } else {
+        // パースできなかった汎用フォールバック
+        snprintf(formatted_msg, sizeof(formatted_msg), "%s", bison_msg);
+    }
+
     fprintf(stderr, "\033[1m%s:%d:%d: \033[1;31m%s:\033[0m\033[1m %s\033[0m\n", 
-            fn, line, col_start, label, bison_msg);
+            fn, line, col_start, label, formatted_msg);
 
     print_snippet(fn, line, col_start, col_end);
 }

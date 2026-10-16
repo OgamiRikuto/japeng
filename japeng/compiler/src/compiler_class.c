@@ -108,6 +108,7 @@ static Value get_implicit_default_value(ObjString* type_name)
 {
     if (is_integer_type(type_name)) return make_int(0);
     if (is_float_type(type_name)) return make_float(0.0);
+    if (is_decimal_type(type_name)) return make_obj((Obj*)new_decimal_from_i64(0));
     return make_nil();
 }
 
@@ -217,9 +218,22 @@ static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
         FieldInfo f_info = new_field_info(member_name, member_type, from_class, is_static);
         Value init_val = make_nil();
 
-        if (node->field_decl.default_data != NULL &&
-            node->field_decl.default_data->kind == AST_LITERAL) {
-            init_val = node->field_decl.default_data->literal.value;
+        if (node->field_decl.default_data != NULL) {
+            if (node->field_decl.default_data->kind == AST_LITERAL) {
+                TypeInfo* actual_type = NULL;
+                init_val = parse_ast_literal_with_expected(node->field_decl.default_data, member_type, &actual_type);
+                
+                // ★ フィールド宣言型と初期値リテラルの型チェック！
+                if (!is_assignable(c, member_type, actual_type)) {
+                    error_compile(node, ERR_TYPE_MISMATCH,
+                                  member_type ? member_type->name->chars : "unknown",
+                                  actual_type ? actual_type->name->chars : "nil");
+                }
+            } else {
+                // リテラル以外の式（1 + 2 など）は現仕様で非対応ならエラーにする
+                error_compile(node, ERR_FIELD_INIT_MUST_BE_LITERAL, member_name->chars);
+                init_val = get_implicit_default_value(member_type ? member_type->name : NULL);
+            }
         } else {
             init_val = get_implicit_default_value(member_type ? member_type->name : NULL);
         }
@@ -301,8 +315,21 @@ static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
         FieldInfo f_info = new_field_info(target_name, t_info, from_class, is_static);
     
         Value init_val = make_nil();
-        if (args && args->kind == AST_LITERAL) {
-            init_val = args->literal.value;
+        if (args != NULL) {
+            if (args->kind == AST_LITERAL) {
+                TypeInfo* actual_type = NULL;
+                init_val = parse_ast_literal_with_expected(args, t_info, &actual_type);
+
+                // ★ フィールド宣言型と初期値リテラルの型チェック！
+                if (!is_assignable(c, t_info, actual_type)) {
+                    error_compile(node, ERR_TYPE_MISMATCH,
+                                  t_info ? t_info->name->chars : "unknown",
+                                  actual_type ? actual_type->name->chars : "nil");
+                }
+            } else {
+                error_compile(node, ERR_FIELD_INIT_MUST_BE_LITERAL, target_name->chars);
+                init_val = get_implicit_default_value(t_info ? t_info->name : NULL);
+            }
         } else {
             init_val = get_implicit_default_value(t_info ? t_info->name : NULL);
         }
@@ -507,12 +534,14 @@ void compile_class_body(Compiler* c, ASTNode* node)
     print_class(klass);
 #endif
 
-    uint32_t class_const_idx = add_constant(c->chunk, make_obj((Obj*)klass));
-    uint32_t name_sym_idx = add_constant(c->chunk, make_obj((Obj*)class_name));
-
-    emit_inst(c, OP_CONSTANT, class_const_idx);
-    emit_inst(c, OP_SET_GLOBAL, name_sym_idx);
-    emit_inst(c, OP_POP, 0);
+    if (!is_builtin(class_name)) {
+        uint32_t class_const_idx = add_constant(c->chunk, make_obj((Obj*)klass));
+        uint32_t name_sym_idx = add_constant(c->chunk, make_obj((Obj*)class_name));
+        
+        emit_inst(c, OP_CONSTANT, class_const_idx);
+        emit_inst(c, OP_SET_GLOBAL, name_sym_idx);
+        emit_inst(c, OP_POP, 0);
+    } 
 }
 
 void compile_class_def(Compiler* c, ASTNode* node) 

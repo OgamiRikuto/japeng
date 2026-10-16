@@ -2,15 +2,12 @@
 #define COMPILER_INTERNAL_H
 
 #include "compiler.h"
-#include "class.h"
-#include "table.h"
-#include "object.h"
-#include "error.h"
+#include "common.h"
 
-#define DEBUG_CHUNK_WRITE 1
-#define DEBUG_CLASS_WRITE 1
-#define DEBUG_COMPILE_KIND 1
-#define DEBUG_LOOP_WRITE 1
+#define DEBUG_CHUNK_WRITE 0
+#define DEBUG_CLASS_WRITE 0
+#define DEBUG_COMPILE_KIND 0
+#define DEBUG_LOOP_WRITE 0
 
 #define error_compile(node, code, ...) \
     error_at((node)->loc, (code), ##__VA_ARGS__)
@@ -30,9 +27,12 @@ void emit_load_self(Compiler* c);
 ObjString* get_type_name(ASTNode* type_node);
 bool is_integer_type(ObjString* name);
 bool is_float_type(ObjString* name);
+bool is_decimal_type(ObjString* name);
 bool is_list_type(ObjString* name);
 bool is_string_type(ObjString* name);
 bool is_builtin(ObjString* name);
+Value parse_ast_literal(ASTNode* node, TypeInfo** out_type);
+Value parse_ast_literal_with_expected(ASTNode* node, TypeInfo* expected_type, TypeInfo** out_type);
 
 // 基本構文コンパイル関数
 bool compile_compound_assignment(Compiler* c, ASTNode* node);
@@ -59,6 +59,8 @@ ObjClass* resolve_class(Compiler* c, ObjString* name);
 // 型チェック関数
 bool type_equals(TypeInfo* a, TypeInfo* b);
 bool is_assignable(Compiler* c, TypeInfo* target, TypeInfo* source);
+bool is_compound_operator(ObjString* op);
+TypeInfo* resolve_upvalue_type(Compiler* c, ObjString* name);
 TypeInfo* build_function_type_from_block(ASTNode* block_node);
 TypeInfo* compile_expression(Compiler* c, ASTNode* node);
 TypeInfo* substitute_type(TypeInfo* formal, TypeEnv* env) ;

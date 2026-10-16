@@ -185,8 +185,11 @@ void compile_repeat(Compiler* c, ASTNode* node)
         int counter_slot;
         if (block_node->block.args != NULL) {
             ASTNode* id_node = block_node->block.args->var_decl.identifier;
-            ObjString* type_name = block_node->block.args->var_decl.identifier->identifier.name;
-            counter_slot = add_local(c, id_node->identifier.name, new_type_info(type_name, 1));
+            TypeInfo* t_info = build_type_info(block_node->block.args->var_decl.type);
+            if (t_info == NULL) {
+                t_info = new_type_info(sym_Integer, 0);
+            }
+            counter_slot = add_local(c, id_node->identifier.name, t_info);
         } else {
             counter_slot = add_anonymous_local(c);
         }
@@ -202,7 +205,7 @@ void compile_repeat(Compiler* c, ASTNode* node)
         // 条件判定: counter < limit
         emit_inst(c, OP_GET_LOCAL, counter_slot);
         emit_inst(c, OP_GET_LOCAL, limit_slot);
-        emit_inst(c, OP_LESS, 0);
+        emit_inst(c, OP_LESS_INT, 0);
     
         int exit_jump = emit_jump(c, OP_JUMP_IF_FALSE);
         emit_inst(c, OP_POP, 0);
@@ -215,7 +218,7 @@ void compile_repeat(Compiler* c, ASTNode* node)
         // 5. カウンタ加算: counter = counter + 1
         emit_inst(c, OP_GET_LOCAL, counter_slot);
         emit_constant(c, make_int(1));
-        emit_inst(c, OP_ADD, 0);
+        emit_inst(c, OP_ADD_INT, 0);
         emit_inst(c, OP_SET_LOCAL, counter_slot);
         emit_inst(c, OP_POP, 0);
     
