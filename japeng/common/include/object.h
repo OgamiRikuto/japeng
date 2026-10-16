@@ -9,6 +9,8 @@ typedef struct chunk Chunk;
 
 // オブジェクトの種類タグ
 typedef enum {
+    OBJ_BIGINTEGER,
+    OBJ_DECIMAL,
     OBJ_STRING,
     OBJ_FUNCTION,
     OBJ_CLOSURE,

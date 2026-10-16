@@ -16,7 +16,6 @@ typedef struct objString ObjString;
     X(call,         "call") \
     X(Auto,         "Auto") \
     X(SmallInteger, "SmallInteger") \
-    X(SmallFloat,   "SmallFloat") \
     X(Function,     "Function") \
     X(plus,         "+") \
     X(minus,        "-") \
@@ -37,7 +36,9 @@ typedef struct objString ObjString;
     X(rshif,        ">>") \
     X(Object,       "Object") \
     X(Integer,      "Integer") \
+    X(BigInteger,   "BigInteger") \
     X(Float,        "Float") \
+    X(Decimal,      "Decimal") \
     X(String,       "String") \
     X(List,         "List") \
     X(Void,         "Void") \
