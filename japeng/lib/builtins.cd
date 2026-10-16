@@ -9,6 +9,9 @@ class Integer based Object:
 class Float based Object:
     tmp: Function is []; 
 
+class Decimal based Object:
+    tmp: Function is [];
+
 class String based Object:
     get: Function is [ arg n: Integer; ret String; ];
     length: Function is [ ret Integer; ];
