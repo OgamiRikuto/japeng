@@ -10,6 +10,7 @@
 typedef enum {
     AST_STMT,
     AST_CLASS,
+    AST_FUNC_TYPE,
     AST_LITERAL,
     AST_IDENTIFIER,
     AST_SEND,
@@ -49,6 +50,11 @@ struct ASTNode {
             ASTNode* classname;
             ASTNode* types;
         } class;
+
+        struct {
+            ASTNode* params;
+            ASTNode* rets;
+        } func_type;
 
         struct {
             LiteralKind kind;
@@ -101,6 +107,7 @@ struct ASTNode {
 
 ASTNode* create_stmt_node(ASTNode*, ASTNode*);
 ASTNode* create_class_node(ASTNode*, ASTNode*);
+ASTNode* create_func_type_node(ASTNode*, ASTNode*);
 ASTNode* create_literal_node(LiteralKind, ObjString*);
 ASTNode* create_identifier_node(ObjString*);
 ASTNode* create_send_node(ASTNode*, ASTNode*, ASTNode*);

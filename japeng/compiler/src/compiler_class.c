@@ -97,6 +97,15 @@ TypeInfo* build_type_info(ASTNode* node)
         return t_info;
     }
 
+    if (node->kind == AST_FUNC_TYPE) {
+        TypeInfo* params[16]; int p_cnt = 0;
+        TypeInfo* rets[16];   int r_cnt = 0;
+        if (node->func_type.params) collect_ret_types_from_ast(node->func_type.params, params, &p_cnt);
+        if (node->func_type.rets)   collect_ret_types_from_ast(node->func_type.rets, rets, &r_cnt);
+
+        return new_func_type_info(p_cnt, params, r_cnt, rets); // ★ 一撃で安全に生成！
+    }
+
     if (node->kind == AST_IDENTIFIER) {
         return new_type_info(node->identifier.name, 0);
     }

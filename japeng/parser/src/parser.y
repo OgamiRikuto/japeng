@@ -26,6 +26,7 @@ int syntax_error_count = 0;
 %token BREAK        "break"
 %token CONTINUE     "continue"
 %token STATIC       "static"
+%token ELLIPSIS     "..."
 
 %token COMMA        ","
 %token DOT          "."
@@ -57,6 +58,7 @@ int syntax_error_count = 0;
 %type <node> identifier_decl identifier_decl_list statement_list_opt
 %type <node> expression primary block args rets expression_list_opt expression_list
 %type <node> control_chain control_clause_list control_clause
+%type <node> multi_identifier type_list_comma type_list_comma_opt
 
 %nonassoc PREC_EXPR
 %left IDENTIFIER SP_IDENTIFIER
@@ -103,6 +105,21 @@ statement_list_opt :
 statement : 
     message SEMICOLON
     { $$ = $1; }
+    | multi_identifier COLON class SEMICOLON
+    {
+        $$ = create_vardecl_node($1, $3);
+    }
+    | multi_identifier COLON class SP_IDENTIFIER expression_list SEMICOLON
+    {
+        ASTNode* decl = create_vardecl_node($1, $3);
+        ASTNode* msg = create_identifier_node($4);
+        $$ = create_send_node(decl, msg, $5);
+    }
+    | multi_identifier SP_IDENTIFIER expression_list SEMICOLON
+    {
+        ASTNode* msg = create_identifier_node($2);
+        $$ = create_send_node($1, msg, $3);
+    }
     | identifier_decl SEMICOLON
     { $$ = $1; }
     | return_stmt SEMICOLON
@@ -237,6 +254,16 @@ class :
         ASTNode* name = create_identifier_node($1); 
         $$ = create_class_node(name, $2);
     }
+    | ELLIPSIS
+    {
+        ASTNode* name = create_identifier_node(sym_ellipsis);
+        $$ = create_class_node(name, NULL);
+    }
+    | CLASS_NAME L_PAR type_list_comma_opt SEMICOLON type_list_comma_opt R_PAR
+    {
+        $$ = create_func_type_node($3, $5);
+    }
+    ;
     ;
 
 type_list : 
@@ -251,6 +278,20 @@ type_list :
         ASTNode* type = create_class_node(name, NULL); 
         $$ = create_stmt_node($1, type);
     }
+    ;
+
+type_list_comma :
+    class
+    { $$ = $1; }
+    | type_list_comma COMMA class
+    { $$ = create_stmt_node($1, $3); }
+    ;
+
+type_list_comma_opt :
+    /* empty */
+    { $$ = NULL; }
+    | type_list_comma
+    { $$ = $1; }
     ;
 
 class_list : 
@@ -322,6 +363,20 @@ identifier_decl :
     { $$ = create_vardecl_node(create_identifier_node($1), $3);}
     ;
 
+multi_identifier :
+    IDENTIFIER COMMA IDENTIFIER
+    {
+        ASTNode* id1 = create_identifier_node($1);
+        ASTNode* id2 = create_identifier_node($3);
+        $$ = create_stmt_node(id1, id2);
+    }
+    | multi_identifier COMMA IDENTIFIER
+    {
+        ASTNode* id = create_identifier_node($3);
+        $$ = create_stmt_node($1, id);
+    }
+    ;
+
 expression : 
     primary     { $$ = $1; }
     | message %prec PREC_EXPR  { $$ = $1; }
@@ -391,7 +446,7 @@ args :
     ;
 
 rets : 
-    RET type_list
+    RET type_list_comma
     { $$ = $2; }
     ;
 

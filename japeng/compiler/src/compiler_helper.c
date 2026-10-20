@@ -10,7 +10,8 @@ void init_compiler(Compiler* compiler, Chunk* chunk)
     compiler->chunk = chunk;
     compiler->is_method = false;
     compiler->stack_depth = 0;
-    compiler->expected_ret_type = NULL;
+    memset(compiler->expected_ret_types, 0, sizeof(compiler->expected_ret_types));
+    compiler->expected_ret_count = 0;
     compiler->local_count = 0;
     compiler->scope_depth = 0;
 
@@ -97,7 +98,7 @@ void emit_inst(Compiler* c, Opcode op, uint32_t operand) {
 
         case OP_RETURN:
             // 関数の戻り値 (1) を消費して終了
-            c->stack_depth--;
+            c->stack_depth -= operand;
             break;
 
         case OP_MAX:

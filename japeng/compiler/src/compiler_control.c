@@ -290,10 +290,16 @@ ObjFunction* compile_block(Compiler* parent, ASTNode* block_node)
     block_compiler.current_class = parent->current_class;
     block_compiler.defined_class = parent->defined_class;
 
+    block_compiler.expected_ret_count = 0;
     if (block_node->block.rets != NULL) {
-        block_compiler.expected_ret_type = build_type_info(block_node->block.rets);
+        // AST_STMT で並んでいる ret の型ツリーをフラットに集める
+        collect_ret_types_from_ast(block_node->block.rets, 
+                                   block_compiler.expected_ret_types, 
+                                   &block_compiler.expected_ret_count);
     } else {
-        block_compiler.expected_ret_type = new_type_info(sym_Void, 0);
+        // rets 省略時は Void 1個扱い
+        block_compiler.expected_ret_types[0] = new_type_info(sym_Void, 0);
+        block_compiler.expected_ret_count = 1;
     }
 
     if (parent != NULL && parent->current_class != NULL && parent->enclosing == NULL) {
@@ -326,7 +332,7 @@ ObjFunction* compile_block(Compiler* parent, ASTNode* block_node)
             // 通常のブロックなら 0 や nil を積んでからリターン
             emit_constant(&block_compiler, make_int(0));
         }
-        emit_inst(&block_compiler, OP_RETURN, 0);
+        emit_inst(&block_compiler, OP_RETURN, 1);
     }
 
     ObjFunction* fn =  new_function(fn_chunk, arity);

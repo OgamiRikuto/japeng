@@ -51,7 +51,12 @@ void compile_statement_node(Compiler* c, ASTNode* node)
     // ★ 式文の末尾処理（余分な戻り値を捨てる）
     if (node->kind == AST_SEND && node->send.message != NULL) {
 
+        // 宣言代入 (単数・複数) はローカル変数をスタックに残すため POP しない
         if (node->send.receiver != NULL && node->send.receiver->kind == AST_VAR_DECL) 
+            return;
+
+        // ★追加: 複数再代入 (a, b are ...) も内部ですでに各変数を POP 済みのため POP しない！
+        if (node->send.receiver != NULL && node->send.receiver->kind == AST_STMT)
             return;
 
         ObjString* msg = node->send.message->identifier.name;
@@ -60,140 +65,6 @@ void compile_statement_node(Compiler* c, ASTNode* node)
     }
 }
 
-
-// void compile(Compiler* c, ASTNode* node)
-// {
-//     if (node == NULL) return;
-// #if DEBUG_COMPILE_KIND
-//     fprintf(stderr, "[COMPILE] kind=%d\n", node->kind);
-// #endif
-
-//     switch(node->kind) {
-//         case AST_LITERAL: {
-//             emit_constant(c, node->literal.value);
-//             break;
-//         }
-
-//         case AST_IDENTIFIER: {
-//             int slot = resolve_local(c, node->identifier.name);
-//             if (slot != -1) {
-//                 emit_inst(c, OP_GET_LOCAL, (uint32_t)slot);
-//                 break;
-//             } 
-//             int upval = resolve_upvalue(c, node->identifier.name);
-//             if (upval != -1) {
-//                 emit_inst(c, OP_GET_UPVALUE, (uint32_t)upval);
-//                 break;
-//             }
-//             if (c->current_class != NULL) {
-//                 int field_idx = find_field_index(c->current_class, node->identifier.name);
-//                 if (field_idx != -1) {
-//                     emit_load_self(c);
-//                     emit_inst(c, OP_GET_FIELD, (uint32_t)field_idx);
-//                     break;
-//                 }
-//             } 
-//             error_compile(node, ERR_UNDEFINED_VAR, node->identifier.name->chars);
-//             break;
-//         }
-        
-//         case AST_VAR_DECL: {
-//             compile_var_decl(c, node);
-//             break;
-//         }
-        
-//         case AST_SEND: {
-//             if (is_if_chain(node)) {
-//                 compile_if_chain(c, node);
-//                 return;
-//             }
-//             ObjString* msg_sym = node->send.message->identifier.name;
-//             bool is_self = (node->send.receiver->kind == AST_IDENTIFIER &&
-//                             node->send.receiver->identifier.name == sym_self);
-//             if (compile_compound_assignment(c, node)) break;
-//             // AST_SEND 内の代入処理
-//             if (msg_sym == sym_is || msg_sym == sym_are) {
-//                 compile_assignment(c, node);
-//                 break;
-//             }
-//             /* if */
-//             if (is_self && msg_sym == sym_if) {
-//                 compile_if(c, node);
-//                 break;
-//             }
-//             /* repeat */
-//             if (msg_sym == sym_repeat) {
-//                 compile_repeat(c, node);
-//                 break;
-//             }
-//             compile_mesage_send(c, node, msg_sym);
-//             break;
-//         }
-
-//         case AST_BREAK: {
-//             compile_break(c, node);
-//             break;
-//         }
-
-//         case AST_CONTINUE: {
-//             compile_continue(c, node);
-//             break;
-//         }
-
-//         case AST_RETURN: {
-//             TypeInfo* actual_ret = NULL;
-
-//             if (node->ret.expr != NULL) {
-//                 actual_ret = compile_expression(c, node->ret.expr);
-//             } else {
-//                 emit_constant(c, make_int(0));
-//                 actual_ret = new_type_info(sym_Void, 0); // ★ 単なる return; は Void を返す扱い
-//             }
-
-//             if (c->expected_ret_type != NULL) {
-//                 // ★ expected が Void なのに値を返そうとした場合の個別エラー（親切メッセージ）
-//                 if (c->expected_ret_type->name == sym_Void && node->ret.expr != NULL) {
-//                     error_compile(node, ERR_RETURN_TYPE_MISMATCH, "Void (戻り値なし)", actual_ret->name->chars);
-//                 } else if (!is_assignable(c, c->expected_ret_type, actual_ret)) {
-//                     error_compile(node, ERR_RETURN_TYPE_MISMATCH,
-//                                   c->expected_ret_type->name->chars,
-//                                   actual_ret ? actual_ret->name->chars : "nil");
-//                 }
-//             }
-
-//             emit_inst(c, OP_RETURN, 0);
-//             break;
-//         }
-//         case AST_CLASS_DEF: {
-//             compile_class_def(c, node);
-//             break;
-//         }
-//         case AST_STMT: {
-//             if (is_if_chain(node)) {
-//                 compile_if_chain(c, node);
-//                 return;
-//             }
-//             if (node->stmt.left)  compile_statement_node(c, node->stmt.left);
-//             if (node->stmt.right) compile_statement_node(c, node->stmt.right);
-//             break;
-//         }
-
-//         case AST_BLOCK: {
-//             ObjFunction* fn = compile_block(c, node);
-//             uint32_t fn_idx = add_constant(c->chunk, make_obj((Obj*)fn));
-//             if (fn->upvalue_count > 0) {
-//                 emit_inst(c, OP_CLOSURE, fn_idx);
-//             } else {
-//                 emit_constant(c, make_obj((Obj*)fn));
-//             }
-//             break;
-//         }
-
-//         default: 
-//             error_compile(node, ERR_UNHANDLED_AST_KIND, node->kind);
-//             break;
-//     }
-// }
 void compile(Compiler* c, ASTNode* node)
 {
     if (node == NULL) return;
@@ -254,26 +125,44 @@ void compile(Compiler* c, ASTNode* node)
             break;
 
         case AST_RETURN: {
-            TypeInfo* actual_ret = NULL;
+            ASTNode* exprs[16];
+            int expr_count = 0;
 
             if (node->ret.expr != NULL) {
-                actual_ret = compile_expression(c, node->ret.expr);
-            } else {
-                emit_constant(c, make_int(0));
-                actual_ret = new_type_info(sym_Void, 0);
+                collect_args(node->ret.expr, exprs, &expr_count, 16);
             }
 
-            if (c->expected_ret_type != NULL) {
-                if (c->expected_ret_type->name == sym_Void && node->ret.expr != NULL) {
-                    error_compile(node, ERR_RETURN_TYPE_MISMATCH, "Void (戻り値なし)", actual_ret->name->chars);
-                } else if (!is_assignable(c, c->expected_ret_type, actual_ret)) {
-                    error_compile(node, ERR_RETURN_TYPE_MISMATCH,
-                                  c->expected_ret_type->name->chars,
-                                  actual_ret ? actual_ret->name->chars : "nil");
+            // --- 1. 戻り値の個数チェック ---
+            // 期待型が Void 1個の場合、return に式があってはならない
+            if (c->expected_ret_count == 1 && c->expected_ret_types[0]->name == sym_Void) {
+                if (expr_count > 0) {
+                    error_compile(node, ERR_RETURN_TYPE_MISMATCH, "Void (戻り値なし)", "値あり");
                 }
+            } else if (expr_count != c->expected_ret_count) {
+                // 戻り値の個数が宣言と異なる場合
+                error_compile(node, ERR_ARITY_MISMATCH, c->expected_ret_count, expr_count);
             }
 
-            emit_inst(c, OP_RETURN, 0);
+            // --- 2. 各戻り値式の評価・型チェック・コード生成 ---
+            if (expr_count == 0) {
+                emit_inst(c, OP_RETURN, 0);
+            } else {
+                for (int i = 0; i < expr_count; i++) {
+                    TypeInfo* actual_type = compile_expression(c, exprs[i]);
+
+                    // 個数の範囲内であれば、各要素の型チェックを実行
+                    if (i < c->expected_ret_count) {
+                        TypeInfo* expected = c->expected_ret_types[i];
+                        if (expected != NULL && !is_assignable(c, expected, actual_type)) {
+                            error_compile(exprs[i], ERR_RETURN_TYPE_MISMATCH,
+                                          expected->name ? expected->name->chars : "unknown",
+                                          actual_type ? actual_type->name->chars : "nil");
+                        }
+                    }
+                }
+                // 返却個数をオペランドとして発行
+                emit_inst(c, OP_RETURN, (uint32_t)expr_count);
+            }
             break;
         }
 

@@ -47,6 +47,14 @@ ASTNode* create_class_node(ASTNode* name, ASTNode* type)
     return node;
 }
 
+ASTNode* create_func_type_node(ASTNode* params, ASTNode* rets)
+{
+    ASTNode* node = alloc_node(AST_FUNC_TYPE);
+    node->func_type.params = params;
+    node->func_type.rets = rets;
+    return node;
+}
+
 ASTNode* create_literal_node(LiteralKind kind, ObjString* raw)
 {
     ASTNode* node = alloc_node(AST_LITERAL);

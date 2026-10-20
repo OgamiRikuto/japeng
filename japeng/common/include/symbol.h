@@ -6,6 +6,7 @@ typedef struct objString ObjString;
 #define CORE_SYMBOLS(X) \
     X(is,           "is") \
     X(are,          "are") \
+    X(ellipsis,     "...") \
     X(self,         "self") \
     X(super,        "super") \
     X(if,           "if") \

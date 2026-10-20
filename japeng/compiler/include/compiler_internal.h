@@ -34,6 +34,9 @@ bool is_boolean_type(ObjString* name);
 bool is_builtin(ObjString* name);
 Value parse_ast_literal(ASTNode* node, TypeInfo** out_type);
 Value parse_ast_literal_with_expected(ASTNode* node, TypeInfo* expected_type, TypeInfo** out_type);
+void collect_args(ASTNode* node, ASTNode** list, int* count, int max);
+void collect_ret_types_from_ast(ASTNode* node, TypeInfo** list, int* count);
+void collect_identifiers(ASTNode* node, ASTNode** list, int* count);
 
 // 基本構文コンパイル関数
 bool compile_compound_assignment(Compiler* c, ASTNode* node);
@@ -66,6 +69,7 @@ TypeInfo* build_function_type_from_block(ASTNode* block_node);
 TypeInfo* compile_expression(Compiler* c, ASTNode* node);
 TypeInfo* substitute_type(TypeInfo* formal, TypeEnv* env) ;
 TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* rec_type);
+char* type_to_string(TypeInfo* type);
 
 
 #endif

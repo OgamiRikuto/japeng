@@ -125,6 +125,11 @@ ASTNode* fix_precedence(ASTNode* node)
             node->block.rets = fix_precedence(node->block.rets);
             node->block.body = fix_precedence(node->block.body);
             break;
+        
+        case AST_FUNC_TYPE:
+            node->func_type.params = fix_precedence(node->func_type.params);
+            node->func_type.rets   = fix_precedence(node->func_type.rets);
+            break;
 
         case AST_CLASS_DEF:
             node->class_def.class = fix_precedence(node->class_def.class);
@@ -173,7 +178,7 @@ static ASTNode* try_fold_int_binary(ASTNode* node) {
     ASTNode* right = node->send.args;
 
     if (node->send.message->kind != AST_IDENTIFIER) return node;
-    
+
     ObjString* op  = node->send.message->identifier.name;
 
     // 両辺が TOKEN_INTEGER かチェック

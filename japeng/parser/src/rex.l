@@ -67,6 +67,7 @@ static ObjString* resolve_and_intern(const char* text) {
 "/="				{ yylval.symbol = sym_div_eq; return SP_IDENTIFIER; }
 "//".*				{ }
 "/*"				{ comment(); }
+"..."				{ return ELLIPSIS; }
 ","					{ return COMMA; }
 "."					{ return DOT; }
 ":"					{ return COLON; }

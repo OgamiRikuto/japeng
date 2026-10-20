@@ -1,5 +1,6 @@
 #include "class.h"
 #include "table.h" 
+#include "symbol.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,7 +15,7 @@ static void print_type_info(const TypeInfo* type)
         return;
     }
     fprintf(stderr, "%s", type->name ? type->name->chars : "Unknown");
-    if (type->type_arg_count > 0 && type->type_args != NULL) {
+    if (type->type_arg_count > 0) {
         for (int i = 0; i < type->type_arg_count; i++) {
             fprintf(stderr, " ");
             print_type_info(type->type_args[i]);
@@ -160,18 +161,34 @@ void print_instance(ObjInstance* inst)
 }
 
 #endif
-TypeInfo* new_type_info(ObjString* name, int type_arg_count)
-{
-    TypeInfo* t = (TypeInfo*)malloc(sizeof(TypeInfo));
+TypeInfo* new_type_info(ObjString* name, int type_arg_count) {
+    TypeInfo* t = (TypeInfo*)malloc(sizeof(TypeInfo) + sizeof(TypeInfo*) * type_arg_count);
     t->name = name;
     t->type_arg_count = type_arg_count;
-    if (type_arg_count > 0) {
-        t->type_args = (TypeInfo**)malloc(sizeof(TypeInfo*) * type_arg_count);
-        for (int index = 0; index < type_arg_count; index++) {
-            t->type_args[index] = NULL;
+    t->param_count = 0;
+    for (int i = 0; i < type_arg_count; i++) t->type_args[i] = NULL;
+    return t;
+}
+
+TypeInfo* new_func_type_info(int param_count, TypeInfo** params, int ret_count, TypeInfo** rets) 
+{
+    int total_types = param_count + (ret_count > 0 ? ret_count : 1);
+    TypeInfo* t = (TypeInfo*)malloc(sizeof(TypeInfo) + sizeof(TypeInfo*) * total_types);
+    t->name = sym_Function;
+    t->type_arg_count = total_types;
+    t->param_count = param_count;
+
+    // 引数型をセット
+    for (int i = 0; i < param_count; i++) {
+        t->type_args[i] = params[i];
+    }
+    // 戻り値型をセット (0個なら Void)
+    if (ret_count > 0) {
+        for (int i = 0; i < ret_count; i++) {
+            t->type_args[param_count + i] = rets[i];
         }
     } else {
-        t->type_args = NULL;
+        t->type_args[param_count] = new_type_info(sym_Void, 0);
     }
     return t;
 }

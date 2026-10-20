@@ -40,7 +40,9 @@ typedef struct compiler {
     Chunk* chunk;
     bool is_method;
     int stack_depth;
-    TypeInfo* expected_ret_type;
+    
+    TypeInfo* expected_ret_types[16];
+    int expected_ret_count;
 
     Local locals[MAX_LOCALS];
     int local_count;

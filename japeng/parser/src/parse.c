@@ -211,6 +211,20 @@ void print_ast(ASTNode* node, int depth)
             }
             print_ast(node->class_def.members, depth + 1);
             break;
+
+        case AST_FUNC_TYPE:
+            printf("[FUNC_TYPE]\n");
+            if (node->func_type.params) {
+                for (int i = 0; i <= depth; i++) printf("  | ");
+                printf(" [PARAMS]\n");
+                print_ast(node->func_type.params, depth + 2);
+            }
+            if (node->func_type.rets) {
+                for (int i = 0; i <= depth; i++) printf("  | ");
+                printf(" [RETURNS]\n");
+                print_ast(node->func_type.rets, depth + 2);
+            }
+            break;
             
         case AST_FIELD_DECL:
             printf("[FIELD_DECL] (static: %s)\n", node->field_decl.is_static ? "true" : "false");
@@ -322,6 +336,12 @@ void dump_ast(ASTNode* node, int depth)
             if (node->class_def.super_class) dump_ast(node->class_def.super_class, depth + 1);
             if (node->class_def.from_classes) dump_ast(node->class_def.from_classes, depth + 1);
             dump_ast(node->class_def.members, depth + 1);
+            break;
+            
+        case AST_FUNC_TYPE:
+            printf("FUNC_TYPE\n");
+            if (node->func_type.params) dump_ast(node->func_type.params, depth + 1);
+            if (node->func_type.rets) dump_ast(node->func_type.rets, depth + 1);
             break;
 
         case AST_SEND:

@@ -11,8 +11,9 @@ typedef struct table Table;
 // 型データ (名前, 型, 型数)
 typedef struct typeInfo {
     ObjString* name;
-    struct typeInfo** type_args;
     int type_arg_count;
+    int param_count;
+    struct typeInfo* type_args[];
 } TypeInfo;
 
 // フィールドデータ (名前, 型, 委譲元, 静的か)
@@ -73,6 +74,8 @@ void print_instance(ObjInstance* inst);
 #endif
 
 TypeInfo* new_type_info(ObjString* name, int type_arg_count);
+
+TypeInfo* new_func_type_info(int param_count, TypeInfo** params, int ret_count, TypeInfo** rets);
 FieldInfo new_field_info(ObjString* name, TypeInfo* type,
                           ObjClass* from_class, bool is_static);
 ObjClass* new_class(ObjString* name, TypeInfo* type, 
