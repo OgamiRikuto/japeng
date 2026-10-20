@@ -41,6 +41,8 @@ typedef struct objString ObjString;
     X(Decimal,      "Decimal") \
     X(String,       "String") \
     X(List,         "List") \
+    X(Boolean,      "Boolean") \
+    X(Null,         "Null") \
     X(Void,         "Void") \
     X(Error,        "Error")
 

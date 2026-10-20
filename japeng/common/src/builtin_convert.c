@@ -20,6 +20,9 @@ static const KeywordDef keyword_table[] = {
     { "elif ",     "またもし"},
     { "else ",     "その他なら"},
     { "repeat ",   "繰り返す"},
+    { "true",      "真"},
+    { "false",     "偽"},
+    { "null",      "空"},
 
     // プリプロセスで構文展開・正規化される独自予約語
     { " is ",     "は"     },
@@ -39,6 +42,8 @@ static const BuiltinDef builtin_table[] = {
     { "BigFloat",     "大実数型",     BUILTIN_TYPE },
     { "String",       "文字列型",     BUILTIN_TYPE },
     { "List",         "リスト型",     BUILTIN_TYPE },
+    { "Boolean",      "論理型",       BUILTIN_TYPE },
+    { "Void",         "無型",         BUILTIN_TYPE },
     
     // --- 組み込みメソッド (BUILTIN_METHOD) ---
     { "print",        "出力",         BUILTIN_METHOD },

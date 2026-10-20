@@ -187,6 +187,14 @@ static const ErrorMessage error_table[ERR_COUNT] = {
     [ERR_PRINTLN_ARG_COUNT] = {
         .en = "'println' expects 0 or 1 argument.",
         .ja = "'println' に渡せる引数は 0 個または 1 個のみです。"
+    },
+    [ERR_CANNOT_ACCESS_FIELD_ON_CLASS] = {
+        .en = "Cannot access instance field from an uninstantiated class.",
+        .ja = "インスタンス化されていないクラスからフィールドにアクセスすることはできません。"
+    },
+    [ERR_NULL_REFERENCE] = {
+        .en = "Null reference error: Attempted to access '%s' on null.",
+        .ja = "Null参照エラー: null に対する '%s' のアクセスまたは呼び出しです。"
     }
 };
 
