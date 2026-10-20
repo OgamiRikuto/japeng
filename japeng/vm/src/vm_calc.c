@@ -173,6 +173,11 @@ Value calc_add(Value a, Value b) {
 // 三値比較: a < b なら -1, a == b なら 0, a > b なら 1
 int calc_compare(Value a, Value b) 
 {
+    if (a == b) return 0;
+
+    // 片方だけが nil の場合、絶対に一致しない
+    if (is_nil(a) || is_nil(b)) return (is_nil(a) ? -1 : 1);
+    
     // 1. Float 同士
     if (is_float(a) && is_float(b)) {
         double fa = as_float(a);

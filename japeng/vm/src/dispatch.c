@@ -15,6 +15,11 @@ bool dispatch_send(VM* vm, uint8_t arg_count, uint16_t msg_index)
 
     Value receiver = peek(vm, arg_count);
 
+    if (is_nil(receiver)) {
+        error_runtime(ERR_NULL_REFERENCE, msg_sym->chars);
+        return false;
+    }
+
     // 1. クラスオブジェクトへの 'new' メッセージ
     if (is_obj(receiver) && ((Obj*)as_obj(receiver))->type == OBJ_CLASS) {
         ObjClass* klass = (ObjClass*)as_obj(receiver);
@@ -22,6 +27,31 @@ bool dispatch_send(VM* vm, uint8_t arg_count, uint16_t msg_index)
             ObjInstance* inst = new_instance(klass);
             *(vm->stack_top - 1 - arg_count) = make_obj((Obj*)inst);
             return true;
+        }
+
+        Value method_val;
+        if (find_method(klass, msg_sym, &method_val)) {
+            if (is_obj(method_val) && ((Obj*)as_obj(method_val))->type == OBJ_NATIVE) {
+                ObjNative* native = (ObjNative*)as_obj(method_val);
+                return native->function(vm, arg_count);
+            }
+
+            if (is_obj(method_val) && ((Obj*)as_obj(method_val))->type == OBJ_FUNCTION) {
+                ObjFunction* func = (ObjFunction*)as_obj(method_val);
+
+                if (vm->frame_count >= FRAME_MAX) {
+                    error_runtime(ERR_STACK_OVERFLOW);
+                    return false;
+                }
+
+                CallFrame* next_frame = &vm->frames[vm->frame_count++];
+                next_frame->closure = NULL;
+                next_frame->chunk = func->chunk;
+                next_frame->ip = func->chunk->code;
+                next_frame->slots = vm->stack_top - (arg_count + 1);
+
+                return true;
+            }
         }
         error_runtime(ERR_UNDEFINED_CLASS_METHOD,
                 msg_sym->chars, klass->name ? klass->name->chars : "Anonymous");
@@ -97,6 +127,20 @@ bool dispatch_send(VM* vm, uint8_t arg_count, uint16_t msg_index)
         }
     }
 
-    error_runtime(ERR_UNDEFINED_MESSAGE, msg_sym->chars);
+    const char* type_name = "Unknown";
+    if (is_obj(receiver)) {
+        Obj* obj = as_obj(receiver);
+        if (obj->type == OBJ_INSTANCE) {
+            ObjInstance* inst = (ObjInstance*)obj;
+            if (inst->klass && inst->klass->name) type_name = inst->klass->name->chars;
+        } else if (obj->type == OBJ_CLASS) {
+            ObjClass* cls = (ObjClass*)obj;
+            if (cls->name) type_name = cls->name->chars;
+        }
+    } else if (klass && klass->name) {
+        type_name = klass->name->chars;
+    }
+
+    error_runtime(ERR_UNDEFINED_MESSAGE, type_name, msg_sym->chars);
     return false;
 }

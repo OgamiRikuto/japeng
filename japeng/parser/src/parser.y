@@ -47,6 +47,9 @@ int syntax_error_count = 0;
 %token <literal> BINARY
 %token <literal> HEX
 %token <literal> FLOAT        "float"
+%token <literal> TRUE_LITERAL   "true"
+%token <literal> FALSE_LITERAL  "false"
+%token <literal> NULL_LITERAL   "null"
 
 %type <node> program statement statement_list class_def class_def_list message
 %type <node> member member_list receiver return_stmt
@@ -334,6 +337,9 @@ primary :
     | INTEGER   { $$ = create_literal_node(TOKEN_INTEGER, $1); }
     | FLOAT     { $$ = create_literal_node(TOKEN_FLOAT, $1); }
     | FRACTION  { $$ = create_literal_node(TOKEN_FRACTION, $1); }
+    | TRUE_LITERAL  { $$ = create_literal_node(TOKEN_TRUE, $1); }
+    | FALSE_LITERAL { $$ = create_literal_node(TOKEN_FALSE, $1); }
+    | NULL_LITERAL  { $$ = create_literal_node(TOKEN_NULL, $1); }
     | BINARY    { }
     | HEX       { }
     | STRING    { $$ = create_literal_node(TOKEN_STRING, $1); }
@@ -419,7 +425,7 @@ expression_list :
     ; 
 
 return_stmt : 
-    RETURN expression_list
+    RETURN expression_list_opt
     { $$ = create_return_node($2); }
     ;
 

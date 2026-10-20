@@ -153,7 +153,7 @@ static void scan_declarations(const char* src) {
 
         // 1. クラス宣言（クラス クラス名:）
         size_t kw_len = 0;
-        const KeywordDef* kw = keyword_match_prefix(&src[i], compile_lang, &kw_len);
+        const KeywordDef* kw = keyword_match_prefix(&src[i], LANG_JA, &kw_len);
         if (kw && strcmp(kw->replacement, "class ") == 0) {
             int c_start = i + kw_len;
             while (src[c_start] != '\0' && (src[c_start] == ' ' || src[c_start] == '\t')) c_start++;
@@ -190,7 +190,7 @@ static void scan_declarations(const char* src) {
                 if (t_end > t_start) {
                     size_t t_len = t_end - t_start;
                     BuiltinKind kind;
-                    if (!builtin_to_canonical(&src[t_start], t_len, compile_lang, &kind)) {
+                    if (!builtin_to_canonical(&src[t_start], t_len, LANG_JA, &kind)) {
                         register_type(&src[t_start], t_len);
                     }
                 }
@@ -241,7 +241,7 @@ char* preprocess(const char* src) {
 
         // 4. 予約語置換
         size_t kw_len = 0;
-        const KeywordDef* kw = keyword_match_prefix(&src[r], compile_lang, &kw_len);
+        const KeywordDef* kw = keyword_match_prefix(&src[r], LANG_JA, &kw_len);
         if (kw) {
             bool is_ha = (strcmp(kw->replacement, " is ") == 0);
             // 置換先が末尾スペース付き（"return ", "class " 等）なら直後が単語でも安全に置換できる
@@ -292,7 +292,7 @@ char* preprocess(const char* src) {
 
         // 5.5 組み込み型・組み込みメソッド（直後が境界なら置換）
         size_t b_len = 0;
-        const BuiltinDef* bdef = builtin_match_prefix(&src[r], compile_lang, &b_len);
+        const BuiltinDef* bdef = builtin_match_prefix(&src[r], LANG_JA, &b_len);
         if (bdef) {
             const char* next_p = &src[r + b_len];
             if (is_word_boundary(next_p)) {
@@ -345,12 +345,15 @@ char* preprocess(const char* src) {
                 const char* ph = register_identifier(&src[id_start], id_len);
                 strcpy(&out[w], ph);
                 w += strlen(ph);
+                continue;
             }
-            continue;
         }
 
         // 9. その他
-        out[w++] = src[r++];
+        int clen = utf8_char_len((unsigned char)src[r]);
+        while (clen-- > 0) {
+            out[w++] = src[r++];
+        }
     }
 
     out[w] = '\0';

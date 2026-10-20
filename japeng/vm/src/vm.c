@@ -191,9 +191,19 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 break;
             }
             case OP_GET_FIELD: {
-                uint32_t field_idx = get_operand(instruction);
                 Value receiver = pop(vm);
 
+                if (is_nil(receiver)) {
+                    error_runtime(ERR_NULL_REFERENCE, "field");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                
+                if (!is_obj(receiver) || ((Obj*)as_obj(receiver))->type != OBJ_INSTANCE) {
+                    error_runtime(ERR_CANNOT_ACCESS_FIELD_ON_CLASS); 
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                
+                uint32_t field_idx = get_operand(instruction);
                 ObjInstance* instance = (ObjInstance*)as_obj(receiver);
                 push(vm, instance->fields[field_idx]);
                 break;
@@ -202,6 +212,11 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 uint32_t field_idx = get_operand(instruction);
                 Value value = pop(vm);
                 Value receiver = pop(vm);
+
+                if (is_nil(receiver)) {
+                    error_runtime(ERR_NULL_REFERENCE, "field");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
 
                 ObjInstance* instance = (ObjInstance*)as_obj(receiver);
                 instance->fields[field_idx] = value;
@@ -537,6 +552,12 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 Value b = pop(vm);
                 Value a = pop(vm);
                 push(vm, make_bool(calc_compare(a, b) == 0));
+                break;
+            }
+            case OP_NEQUAL: {
+                Value b = pop(vm);
+                Value a = pop(vm);
+                push(vm, make_bool(calc_compare(a, b) != 0));
                 break;
             }
             case OP_LESS: {

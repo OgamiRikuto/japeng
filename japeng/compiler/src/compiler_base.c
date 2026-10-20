@@ -283,7 +283,9 @@ void compile_var_decl(Compiler* c, ASTNode* node)
         emit_constant(c, make_obj((Obj*)new_list()));
     } else if (is_string_type(type_name)) {
         emit_constant(c, make_obj((Obj*)new_string("", 0)));
-    } else {
+    } else if (is_boolean_type(type_name)) {
+        emit_constant(c, make_bool(false));
+    }else {
         uint32_t class_sym_idx = add_constant(c->chunk, make_obj((Obj*)type_name));
         emit_inst(c, OP_GET_GLOBAL, class_sym_idx);
         emit_inst(c, OP_NEW_INSTANCE, 0);
@@ -302,12 +304,17 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
         ObjString* type_name = get_type_name(decl->var_decl.type);
         TypeInfo* declared_type = build_type_info(decl->var_decl.type);
 
+        bool is_null_literal = (node->send.args != NULL && 
+                                node->send.args->kind == AST_LITERAL && 
+                                node->send.args->literal.kind == TOKEN_NULL);
+
         // -----------------------------------------------------
         // 1-A. 通常の値代入 (基本型、関数ブロック、auto の場合)
         // -----------------------------------------------------
         if (is_builtin(type_name) || 
             type_name == sym_Auto || 
             type_name == sym_Function ||
+            is_null_literal ||
             (node->send.args != NULL && node->send.args->kind == AST_BLOCK)) {
 
             ObjString* msg = node->send.message->identifier.name;

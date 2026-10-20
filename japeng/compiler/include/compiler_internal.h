@@ -30,6 +30,7 @@ bool is_float_type(ObjString* name);
 bool is_decimal_type(ObjString* name);
 bool is_list_type(ObjString* name);
 bool is_string_type(ObjString* name);
+bool is_boolean_type(ObjString* name);
 bool is_builtin(ObjString* name);
 Value parse_ast_literal(ASTNode* node, TypeInfo** out_type);
 Value parse_ast_literal_with_expected(ASTNode* node, TypeInfo* expected_type, TypeInfo** out_type);

@@ -261,6 +261,12 @@ bool is_string_type(ObjString* name)
     return (name == sym_String);
 }
 
+bool is_boolean_type(ObjString* name) 
+{
+    if (name == NULL) return false;
+    return (name == sym_Boolean);
+}
+
 bool is_builtin(ObjString* name)
 {
     if (name == NULL) return false;
@@ -271,7 +277,9 @@ bool is_builtin(ObjString* name)
             name == sym_Float ||
             name == sym_Decimal ||
             name == sym_List ||
-            name == sym_String
+            name == sym_String ||
+            name == sym_Boolean ||
+            name == sym_Void
             ;
 }
 
@@ -350,6 +358,21 @@ Value parse_ast_literal_with_expected(ASTNode* node, TypeInfo* expected_type, Ty
         case TOKEN_STRING: {
             if (out_type) *out_type = new_type_info(sym_String, 0);
             return make_obj((Obj*)raw);
+        }
+
+        case TOKEN_TRUE: {
+            if (out_type) *out_type = new_type_info(sym_Boolean, 0);
+            return make_bool(true);
+        }
+
+        case TOKEN_FALSE: {
+            if (out_type) *out_type = new_type_info(sym_Boolean, 0);
+            return make_bool(false);
+        }
+
+        case TOKEN_NULL: {
+            if (out_type) *out_type = new_type_info(sym_Null, 0);
+            return make_nil();
         }
 
         // case TOKEN_BINARY: {

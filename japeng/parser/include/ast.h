@@ -27,6 +27,9 @@ typedef enum {
     TOKEN_FLOAT,
     TOKEN_STRING,
     TOKEN_FRACTION,
+    TOKEN_TRUE,
+    TOKEN_FALSE,
+    TOKEN_NULL,
     TOKEN_MAX
 } LiteralKind;
 

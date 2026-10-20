@@ -112,6 +112,17 @@ bool is_assignable(Compiler* c, TypeInfo* target, TypeInfo* source) {
     // 1. auto なら無条件で代入可能（推論で確定させる） source->name == sym_Autoはまた考慮
     if (target->name == sym_Auto || source->name == sym_Auto) return true;
 
+    if (source->name == sym_Null) {
+        // Integer, Float, Boolean, Decimal 等の生の値型への代入は弾く
+        if (!is_integer_type(target->name) &&
+            !is_float_type(target->name) &&
+            !is_decimal_type(target->name) &&
+            !is_boolean_type(target->name)) {
+            return true;
+        }
+        return false;
+    }
+
     // 2. Object 型へのアップキャスト
     if (target->name == sym_Object) return true;
 
@@ -202,8 +213,10 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
     }
 
     // 2. Void に対するメソッド呼び出しは専用のエラーを出す
-    if (rec_type->name == sym_Void) {
-        error_compile(send_node, ERR_UNDEFINED_MESSAGE, send_node->send.message->identifier.name->chars, "Void");
+    if (rec_type->name == sym_Void || rec_type->name == sym_Null) {
+        error_compile(send_node, ERR_UNDEFINED_MESSAGE, 
+                      send_node->send.message->identifier.name->chars, 
+                      rec_type->name->chars);
         return new_type_info(sym_Error, 0);
     }
 
@@ -366,6 +379,15 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                     return c->current_class->field_infos[field_idx].type;
                 }
             }
+            ObjClass* klass = resolve_class(c, node->identifier.name);
+            if (klass != NULL) {
+                // クラスオブジェクトそのものをスタックに積む
+                uint32_t const_idx = add_constant(c->chunk, make_obj((Obj*)klass));
+                emit_inst(c, OP_CONSTANT, const_idx);
+
+                // 型としてそのクラス自身を返す
+                return new_type_info(klass->name, 0);
+            }
             error_compile(node, ERR_UNDEFINED_VAR, node->identifier.name->chars);
             emit_constant(c, make_nil());
             return new_type_info(sym_Error, 0);
@@ -516,12 +538,32 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                     return new_type_info(sym_Error, 0);
                 }
 
-                // ★ 同型チェック (暗黙の異型比較を弾く)
+                bool is_equality = (msg == sym_equal || msg == sym_nequal);
+                bool has_null = (lhs->name == sym_Null || rhs->name == sym_Null);
+
+                if (is_equality && has_null) {
+                    TypeInfo* non_null = (lhs->name == sym_Null) ? rhs : lhs;
+                    // 生の数値型や Boolean と null の比較は弾く
+                    if (is_integer_type(non_null->name) ||
+                        is_float_type(non_null->name) ||
+                        is_decimal_type(non_null->name) ||
+                        is_boolean_type(non_null->name)) {
+                        error_compile(node, ERR_TYPE_MISMATCH, non_null->name->chars, sym_Null->chars);
+                        return new_type_info(sym_Error, 0);
+                    }
+
+                    // オブジェクト/ポインタ同士の比較命令を発行
+                    if (msg == sym_equal)  emit_inst(c, OP_EQUAL, 0);
+                    if (msg == sym_nequal) emit_inst(c, OP_NEQUAL, 0);
+                    return new_type_info(sym_Boolean, 0);
+                }
+
+
+                // 同型チェック (暗黙の異型比較を弾く)
                 if (!type_equals(lhs, rhs)) {
                     error_compile(node, ERR_TYPE_MISMATCH, lhs->name->chars, rhs->name->chars);
                     return new_type_info(sym_Error, 0);
                 }
-
                 // 1. 整数型同士
                 if (is_integer_type(lhs->name)) {
                     if (msg == sym_equal)       emit_inst(c, OP_EQUAL_INT, 0);
@@ -530,7 +572,7 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                     else if (msg == sym_gt)     emit_inst(c, OP_GREAT_INT, 0);
                     else if (msg == sym_nless)  emit_inst(c, OP_NLESS_INT, 0);
                     else if (msg == sym_ngt)    emit_inst(c, OP_NGREAT_INT, 0);
-                    return new_type_info(sym_Integer, 0);
+                    return new_type_info(sym_Boolean, 0);
                 }
 
                 // 2. Float / Decimal / String
@@ -541,7 +583,7 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                     else if (msg == sym_gt)     emit_inst(c, OP_GREAT, 0);
                     else if (msg == sym_nless)  emit_inst(c, OP_NLESS, 0);
                     else if (msg == sym_ngt)    emit_inst(c, OP_NGREAT, 0);
-                    return new_type_info(sym_Integer, 0);
+                    return new_type_info(sym_Boolean, 0);
                 }
 
                 return resolve_method_call_type(c, node, lhs);

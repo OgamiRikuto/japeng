@@ -4,6 +4,22 @@
 #include <stdbool.h>
 #include <ctype.h>
 
+// 正しいカタカナ判定ヘルパー
+static inline bool is_prev_katakana(const char* src, int r) {
+    if (r < 3) return false;
+    unsigned char b1 = (unsigned char)src[r - 3];
+    unsigned char b2 = (unsigned char)src[r - 2];
+    unsigned char b3 = (unsigned char)src[r - 1];
+
+    if (b1 == 0xE3) {
+        // 0xE3 0x82 0xA1 (ァ) 〜 0xE3 0x82 0xBF (タ)
+        if (b2 == 0x82 && b3 >= 0xA1) return true;
+        // 0xE3 0x83 0x80 (ダ) 〜 0xE3 0x83 0xBF (ヿ) 全域をカバー！
+        if (b2 == 0x83 && b3 <= 0xBF) return true;
+    }
+    return false;
+}
+
 // --- パス 1: 全角の半角正規化（文字列・コメント保護） ---
 static char* normalize_chars(const char* src) 
 {
@@ -53,10 +69,24 @@ static char* normalize_chars(const char* src)
         }
 
         // 4. 全角長音・全角マイナス ➜ '-'
-        if (((unsigned char)src[r] == 0xE3 && (unsigned char)src[r + 1] == 0x83 && (unsigned char)src[r + 2] == 0xBC) ||
-            ((unsigned char)src[r] == 0xE2 && (unsigned char)src[r + 1] == 0x88 && (unsigned char)src[r + 2] == 0x92)) {
+        if ((unsigned char)src[r] == 0xE2 && (unsigned char)src[r + 1] == 0x88 && (unsigned char)src[r + 2] == 0x92) {
             out[w++] = '-';
             r += 3;
+            continue;
+        }
+
+        // 4.5 長音・ハイフンキー (0xE3 0x83 0xBC)
+        if ((unsigned char)src[r] == 0xE3 && (unsigned char)src[r + 1] == 0x83 && (unsigned char)src[r + 2] == 0xBC) {
+            // 直前がカタカナなら「伸ばし棒」としてそのまま通す！
+            if (is_prev_katakana(src, r)) {
+                out[w++] = src[r++];
+                out[w++] = src[r++];
+                out[w++] = src[r++];
+            } else {
+                // カタカナ以外（空白、数字、記号の直後）なら「マイナス演算子」とみなして '-' に変換！
+                out[w++] = '-';
+                r += 3;
+            }
             continue;
         }
 

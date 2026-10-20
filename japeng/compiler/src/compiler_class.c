@@ -109,6 +109,7 @@ static Value get_implicit_default_value(ObjString* type_name)
     if (is_integer_type(type_name)) return make_int(0);
     if (is_float_type(type_name)) return make_float(0.0);
     if (is_decimal_type(type_name)) return make_obj((Obj*)new_decimal_from_i64(0));
+    if (is_boolean_type(type_name)) return make_bool(false);
     return make_nil();
 }
 

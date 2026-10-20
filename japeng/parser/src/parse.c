@@ -112,7 +112,7 @@ bool parse_file(const char* full_path)
         fprintf(stderr, "=== PREPROCESS OUTPUT ===\n%s\n=========================\n", clean_code);
         YY_BUFFER_STATE bp = yy_scan_string(clean_code);
 
-        if (yyparse() == 0 && current_parsed_ast != NULL) {
+        if (yyparse() == 0 && current_parsed_ast != NULL && syntax_error_count == 0) {
             success = true;
         }
 
@@ -124,7 +124,7 @@ bool parse_file(const char* full_path)
         compile_lang = LANG_EN;
         yyin = file;
         yyrestart(file);
-        if (yyparse() == 0 && current_parsed_ast != NULL) {
+        if (yyparse() == 0 && current_parsed_ast != NULL && syntax_error_count == 0) {
             success = true;
         }
         fclose(file);

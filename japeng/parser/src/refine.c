@@ -166,8 +166,14 @@ Value parse_ast_literal(ASTNode* node, TypeInfo** out_type);
 
 // 左右が両方とも整数リテラルの場合、コンパイル時に計算して 1 つのリテラルノードに潰す
 static ASTNode* try_fold_int_binary(ASTNode* node) {
+    if (!node || !node->send.receiver || !node->send.args || !node->send.message) {
+        return node;
+    }
     ASTNode* left  = node->send.receiver;
     ASTNode* right = node->send.args;
+
+    if (node->send.message->kind != AST_IDENTIFIER) return node;
+    
     ObjString* op  = node->send.message->identifier.name;
 
     // 両辺が TOKEN_INTEGER かチェック
