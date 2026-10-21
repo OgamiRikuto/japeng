@@ -132,25 +132,48 @@ void compile(Compiler* c, ASTNode* node)
                 collect_args(node->ret.expr, exprs, &expr_count, 16);
             }
 
-            // --- 1. 戻り値の個数チェック ---
-            // 期待型が Void 1個の場合、return に式があってはならない
+            // =========================================================
+            // ★ トップレベル (main.je 直下) の return: プロセスの終了コードを返す
+            // =========================================================
+            if (c->enclosing == NULL) {
+                if (expr_count > 1) {
+                    error_compile(node, ERR_ARITY_MISMATCH, 1, expr_count);
+                    return;
+                }
+
+                if (expr_count == 1) {
+                    TypeInfo* actual_type = compile_expression(c, exprs[0]);
+                    TypeInfo* expected = new_type_info(sym_Integer, 0);
+
+                    if (!is_assignable(c, expected, actual_type)) {
+                        error_compile(exprs[0], ERR_RETURN_TYPE_MISMATCH,
+                                      expected->name->chars, actual_type->name->chars);
+                    }
+                } else {
+                    // 式なし return; は正常終了 0 扱い
+                    emit_constant(c, make_int(0));
+                }
+
+                emit_inst(c, OP_RETURN, 1);
+                break;
+            }
+
+            // =========================================================
+            // ブロック (関数) 内の厳格チェック (既存コード)
+            // =========================================================
             if (c->expected_ret_count == 1 && c->expected_ret_types[0]->name == sym_Void) {
                 if (expr_count > 0) {
                     error_compile(node, ERR_RETURN_TYPE_MISMATCH, "Void (戻り値なし)", "値あり");
                 }
             } else if (expr_count != c->expected_ret_count) {
-                // 戻り値の個数が宣言と異なる場合
                 error_compile(node, ERR_ARITY_MISMATCH, c->expected_ret_count, expr_count);
             }
 
-            // --- 2. 各戻り値式の評価・型チェック・コード生成 ---
             if (expr_count == 0) {
                 emit_inst(c, OP_RETURN, 0);
             } else {
                 for (int i = 0; i < expr_count; i++) {
                     TypeInfo* actual_type = compile_expression(c, exprs[i]);
-
-                    // 個数の範囲内であれば、各要素の型チェックを実行
                     if (i < c->expected_ret_count) {
                         TypeInfo* expected = c->expected_ret_types[i];
                         if (expected != NULL && !is_assignable(c, expected, actual_type)) {
@@ -160,7 +183,6 @@ void compile(Compiler* c, ASTNode* node)
                         }
                     }
                 }
-                // 返却個数をオペランドとして発行
                 emit_inst(c, OP_RETURN, (uint32_t)expr_count);
             }
             break;

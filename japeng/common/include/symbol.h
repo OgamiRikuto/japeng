@@ -13,6 +13,7 @@ typedef struct objString ObjString;
     X(elif,         "elif") \
     X(else,         "else") \
     X(repeat,       "repeat") \
+    X(init,         "init") \
     X(new,          "new") \
     X(call,         "call") \
     X(Auto,         "Auto") \
@@ -44,6 +45,7 @@ typedef struct objString ObjString;
     X(List,         "List") \
     X(Boolean,      "Boolean") \
     X(Null,         "Null") \
+    X(__multi__,    "__multi__") \
     X(Void,         "Void") \
     X(Error,        "Error")
 

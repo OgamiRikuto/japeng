@@ -127,7 +127,7 @@ bool compile_compound_assignment(Compiler* c, ASTNode* node)
         name = target->identifier.name;
     } else if (target->kind == AST_SEND && target->send.receiver->kind == AST_IDENTIFIER) {
         ObjString* rec_name = target->send.receiver->identifier.name;
-        if (rec_name == sym_self || rec_name == intern_cstr("自身")) {
+        if (rec_name == sym_self) {
             name = target->send.message->identifier.name;
             is_explicit_self = true;
         }
@@ -201,7 +201,7 @@ void compile_var_decl(Compiler* c, ASTNode* node)
     TypeInfo* t_info     = build_type_info(node->var_decl.type);
     ObjString* type_name = t_info ? t_info->name : get_type_name(node->var_decl.type);
 
-    ASTNode* vars[16];
+    ASTNode* vars[MAX_ARGS];
     int var_count = 0;
     collect_identifiers(node->var_decl.identifier, vars, &var_count);
 
@@ -245,13 +245,13 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
         ASTNode* var_tree = node->send.receiver->var_decl.identifier;
         TypeInfo* declared_type = build_type_info(node->send.receiver->var_decl.type);
 
-        ASTNode* vars[16];
+        ASTNode* vars[MAX_ARGS];
         int var_count = 0;
         collect_identifiers(var_tree, vars, &var_count);
 
-        ASTNode* exprs[16];
+        ASTNode* exprs[MAX_ARGS];
         int expr_count = 0;
-        collect_args(node->send.args, exprs, &expr_count, 16);
+        collect_args(node->send.args, exprs, &expr_count, MAX_ARGS);
 
         // ---------------------------------------------------------
         // パターン 1: 式が 1 対 1 で並んでいる場合 (a, b: Type are 1, 2;)
@@ -287,7 +287,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
             TypeInfo* rhs_type = compile_expression(c, exprs[0]);
 
             // 多値戻り値 (__multi__) かチェック
-            if (rhs_type != NULL && rhs_type->name == intern_cstr("__multi__")) {
+            if (rhs_type != NULL && rhs_type->name == sym___multi__) {
                 int actual_ret_count = rhs_type->type_arg_count;
 
                 // 個数チェック
@@ -316,19 +316,21 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
             error_compile(node, ERR_ARITY_MISMATCH, var_count, 1);
             return new_type_info(sym_Error, 0);
         }
+        error_compile(node, ERR_ARITY_MISMATCH, var_count, expr_count);
+        return new_type_info(sym_Error, 0);
     }
 
     // =========================================================
     // ケース B: 複数変数再代入 (a, b are 30, 40;)
     // =========================================================
     if (node->send.receiver->kind == AST_STMT) {
-        ASTNode* vars[16];
+        ASTNode* vars[MAX_ARGS];
         int var_count = 0;
         collect_identifiers(node->send.receiver, vars, &var_count);
 
-        ASTNode* exprs[16];
+        ASTNode* exprs[MAX_ARGS];
         int expr_count = 0;
-        collect_args(node->send.args, exprs, &expr_count, 16);
+        collect_args(node->send.args, exprs, &expr_count, MAX_ARGS);
 
         // ---------------------------------------------------------
         // パターン 1: 式が 1 対 1 で並んでいる場合 (a, b are 30, 40;)
@@ -359,7 +361,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
         if (expr_count == 1) {
             TypeInfo* rhs_type = compile_expression(c, exprs[0]);
 
-            if (rhs_type != NULL && rhs_type->name == intern_cstr("__multi__")) {
+            if (rhs_type != NULL && rhs_type->name == sym___multi__) {
                 int actual_ret_count = rhs_type->type_arg_count;
 
                 if (actual_ret_count != var_count) {
@@ -368,7 +370,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                 }
 
                 // 1. 各変数の存在と型チェック
-                int slots[16];
+                int slots[MAX_ARGS];
                 for (int i = 0; i < var_count; i++) {
                     slots[i] = resolve_local(c, vars[i]->identifier.name);
                     if (slots[i] == -1) {
@@ -430,46 +432,41 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
             // =====================================================
             // ★ List の複数初期化 (例: arr: List Integer are 0, 1;)
             // =====================================================
-            if (is_list_type(type_name) && (msg == sym_is || msg == sym_are)) {
+            ASTNode* elems[MAX_ELEMENTS];
+            int elem_count = 0;
+            collect_args(node->send.args, elems, &elem_count, MAX_ELEMENTS);
+
+            if (is_list_type(type_name) && elem_count > 1) {
                 int slot = add_local(c, var_name, declared_type);
 
-                // 1. 空の List インスタンスを生成してスタックに積む
+                // 空の List インスタンスを生成してスタックに積む
                 uint32_t list_sym = add_constant(c->chunk, make_obj((Obj*)sym_List));
                 emit_inst(c, OP_GET_GLOBAL, list_sym);
                 emit_inst(c, OP_NEW_INSTANCE, 0); // スタック: [ <List> ]
 
-                // 2. are の右辺引数をフラットに集める
-                ASTNode* elems[64];
-                int elem_count = 0;
-                collect_args(node->send.args, elems, &elem_count, 64);
-
-                // 期待される要素型を取得 (List<Integer> なら Integer)
+                // 期待される要素型を取得 (List String なら String)
                 TypeInfo* expected_elem = (declared_type->type_arg_count > 0) 
                                           ? declared_type->type_args[0] 
                                           : NULL;
 
                 uint32_t push_sym = add_constant(c->chunk, make_obj((Obj*)intern_cstr("push")));
 
-                // 3. 各要素を評価・型チェック・push
+                // 各要素を評価・型チェック・push
                 for (int i = 0; i < elem_count; i++) {
-                    emit_inst(c, OP_DUP, 0); // [ <List>, <List> ]
+                    emit_inst(c, OP_DUP, 0);
 
-                    // 右辺要素の式を評価して実際の型を取得
-                    TypeInfo* actual_elem = compile_expression(c, elems[i]); // [ <List>, <List>, elem ]
+                    TypeInfo* actual_elem = compile_expression(c, elems[i]);
 
-                    // ★ 要素ごとの静的型チェック！
                     if (expected_elem != NULL && !is_assignable(c, expected_elem, actual_elem)) {
                         error_compile(elems[i], ERR_TYPE_MISMATCH,
                                       expected_elem->name->chars,
                                       actual_elem ? actual_elem->name->chars : "nil");
                     }
 
-                    // list push elem を呼び出す
                     write_chunk(c->chunk, make_send_inst(1, (uint16_t)push_sym));
-                    emit_inst(c, OP_POP, 0); // push の戻り値を捨てる -> [ <List> ]
+                    emit_inst(c, OP_POP, 0);
                 }
 
-                // 4. 完成したリストをローカル変数に格納
                 emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
                 return declared_type;
             }
@@ -521,7 +518,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
         if (node->send.args != NULL) {
             emit_inst(c, OP_DUP, 0);
             int argc = compile_args(c, node->send.args);
-            uint32_t init_sym = add_constant(c->chunk, make_obj((Obj*)intern_cstr("init")));
+            uint32_t init_sym = add_constant(c->chunk, make_obj((Obj*)sym_init));
             write_chunk(c->chunk, make_send_inst((uint16_t)argc, (uint16_t)init_sym));
             emit_inst(c, OP_POP, 0); // init の戻り値を POP
         }
@@ -538,7 +535,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
         ASTNode* lhs_send = node->send.receiver;
         if (lhs_send->send.receiver->kind == AST_IDENTIFIER) {
             ObjString* rec_name = lhs_send->send.receiver->identifier.name;
-            if (rec_name == sym_self || rec_name == intern_cstr("自身")) {
+            if (rec_name == sym_self) {
                 ObjString* field_name = lhs_send->send.message->identifier.name;
                 if (c->current_class != NULL) {
                     int field_idx = find_field_index(c->current_class, field_name);
@@ -617,9 +614,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
 void compile_mesage_send(Compiler* c, ASTNode* node, ObjString* msg)
 {
     bool is_super = (node->send.receiver->kind == AST_IDENTIFIER &&
-                    (node->send.receiver->identifier.name == sym_super ||
-                     node->send.receiver->identifier.name == intern_cstr("親") ||
-                     node->send.receiver->identifier.name == intern_cstr("基底")));
+                    (node->send.receiver->identifier.name == sym_super));
 
     if (is_super) {
         if (c->current_class == NULL || c->current_class->superclass == NULL) {
@@ -650,87 +645,4 @@ void compile_mesage_send(Compiler* c, ASTNode* node, ObjString* msg)
 
     compile_expression(c, node);
 
-    // bool is_self = (node->send.receiver->kind == AST_IDENTIFIER &&
-    //                 node->send.receiver->identifier.name == sym_self);
-
-    // if (is_self && node->send.args == NULL && c->current_class != NULL) {
-    //     int field_idx = find_field_index(c->current_class, msg);
-    //     if (field_idx != -1) {
-    //         emit_load_self(c);
-    //         emit_inst(c, OP_GET_FIELD, (uint32_t)field_idx);
-    //         return;
-    //     }
-    // }
-
-    // if (is_self) {
-    //     int var_slot = resolve_local(c, msg);
-    //     int upval_slot = (var_slot == -1) ? resolve_upvalue(c, msg) : -1;
-
-    //     if (var_slot != -1 || upval_slot != -1) {
-    //         TypeInfo* fn_type = (var_slot != -1) ? c->locals[var_slot].type : NULL;
-
-    //         // ★ 1. 実引数を配列に集める（最大16個）
-    //         ASTNode* args[16];
-    //         int actual_argc = 0;
-    //         collect_args(node->send.args, args, &actual_argc, 16);
-
-    //         // ★ 通常関数（シグネチャあり）の場合
-    //         if (fn_type != NULL && fn_type->name == sym_Function && fn_type->type_arg_count > 0) {
-    //             int expected_argc = fn_type->type_arg_count - 1; // 末尾は戻り値型
-
-    //             // 引数の個数チェック
-    //             if (actual_argc != expected_argc) {
-    //                 error_compile(node, ERR_ARITY_MISMATCH, expected_argc, actual_argc);
-    //                 exit(EXIT_FAILURE);
-    //             }
-
-    //             // レシーバ（関数オブジェクト）を積む
-    //             emit_inst(c, OP_GET_LOCAL, (uint32_t)var_slot);
-
-    //             // ★ 2. 配列から 1 つずつ取り出して評価＆型チェック！
-    //             for (int i = 0; i < actual_argc; i++) {
-    //                 TypeInfo* arg_type = compile_expression(c, args[i]);
-    //                 if (!is_assignable(c, fn_type->type_args[i], arg_type)) {
-    //                     error_compile(args[i], ERR_ARG_TYPE_MISMATCH, i + 1,
-    //                                   fn_type->type_args[i]->name->chars, 
-    //                                   arg_type ? arg_type->name->chars : "nil");
-    //                     exit(EXIT_FAILURE);
-    //                 }
-    //             }
-    //         } else {
-    //             // 高階関数（シグネチャなし）は従来通り
-    //             if (var_slot != -1) emit_inst(c, OP_GET_LOCAL, (uint32_t)var_slot);
-    //             else                emit_inst(c, OP_GET_UPVALUE, (uint32_t)upval_slot);
-    //             compile_args(c, node->send.args);
-    //         }
-
-    //         uint32_t call_sym = add_constant(c->chunk, make_obj((Obj*)intern_cstr("call")));
-    //         write_chunk(c->chunk, make_send_inst((uint16_t)actual_argc, (uint16_t)call_sym));
-    //         return;
-    //     }
-    // }
-
-    // TypeInfo* rec_type = compile_expression(c, node->send.receiver);
-    // if (rec_type != NULL && rec_type->name != sym_Object && rec_type->name != sym_Error) {
-    //     if (resolve_method_call_type(c, node, rec_type) != NULL) {
-    //         return;
-    //     }
-    // }
-  
-    // compile(c, node->send.receiver);
-    // int argc = compile_args(c, node->send.args);
-
-    // if (argc == 1) {
-    //     if (msg == sym_plus) {emit_inst(c, OP_ADD, 0); return;}
-    //     if (msg == sym_minus) {emit_inst(c, OP_SUB, 0); return;}
-    //     if (msg == sym_multi) {emit_inst(c, OP_MUL, 0); return;}
-    //     if (msg == sym_div) {emit_inst(c, OP_DIV, 0); return;}
-    //     if (msg == sym_equal) {emit_inst(c, OP_EQUAL, 0); return;}
-    //     if (msg == sym_nequal) {emit_inst(c, OP_NEQUAL, 0); return;}
-    //     if (msg == sym_less) {emit_inst(c, OP_LESS, 0); return;}
-    //     if (msg == sym_gt) {emit_inst(c, OP_GREAT, 0); return;}
-    // }
-
-    // uint32_t sym_const = add_constant(c->chunk, make_obj((Obj*)msg));
-    // write_chunk(c->chunk, make_send_inst((uint16_t)argc, (uint16_t)sym_const));
 }

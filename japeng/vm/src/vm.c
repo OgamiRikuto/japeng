@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DEBUG_TRACE_EXECUTION 0
+#define DEBUG_TRACE_EXECUTION 1
 
 #if DEBUG_TRACE_EXECUTION 
 static void print_stack(VM* vm);
@@ -336,13 +336,24 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 push(vm, peek(vm, 0));
                 break; 
             case OP_RETURN: {
-                Value result = pop(vm);
+                uint8_t ret_count = (uint8_t)get_operand(instruction);
+                Value ret_values[16];
+
+                // 1. スタックトップから戻り値を順番に取り出す (逆順に取り出して正順に並べる)
+                for (int i = ret_count - 1; i >= 0; i--) {
+                    ret_values[i] = pop(vm);
+                }
 
                 CallFrame* ending_frame = frame;
                 vm->frame_count--;
 
+                // 2. コールフレームのスタックを巻き戻す
                 vm->stack_top = ending_frame->slots;
-                push(vm, result);
+
+                // 3. 正順 (第1戻り値, 第2戻り値, ...) でスタックに積み直す
+                for (int i = 0; i < ret_count; i++) {
+                    push(vm, ret_values[i]);
+                }
 
                 if (vm->frame_count == stop_frame_count) {
                     return INTERPRET_OK;
@@ -724,7 +735,8 @@ static InterpretResult run(VM* vm, int stop_frame_count)
 InterpretResult interpret(VM* vm, Chunk* chunk)
 {
     reset_stack(vm);
-    push(vm, make_nil());
+    ObjInstance* top_level_self = new_instance(vm->class_object);
+    push(vm, make_obj((Obj*)top_level_self));
     
     CallFrame* frame = &vm->frames[vm->frame_count++];
     frame->closure = NULL;

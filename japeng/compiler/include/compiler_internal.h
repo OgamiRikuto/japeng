@@ -9,6 +9,14 @@
 #define DEBUG_COMPILE_KIND 0
 #define DEBUG_LOOP_WRITE 0
 
+#ifndef MAX_ARGS
+#define MAX_ARGS 16
+#endif
+
+#ifndef MAX_ELEMENTS
+#define MAX_ELEMENTS 64
+#endif
+
 #define error_compile(node, code, ...) \
     error_at((node)->loc, (code), ##__VA_ARGS__)
 
@@ -65,7 +73,7 @@ bool type_equals(TypeInfo* a, TypeInfo* b);
 bool is_assignable(Compiler* c, TypeInfo* target, TypeInfo* source);
 bool is_compound_operator(ObjString* op);
 TypeInfo* resolve_upvalue_type(Compiler* c, ObjString* name);
-TypeInfo* build_function_type_from_block(ASTNode* block_node);
+TypeInfo* build_function_type_from_block(Compiler* c, ASTNode* block_node);
 TypeInfo* compile_expression(Compiler* c, ASTNode* node);
 TypeInfo* substitute_type(TypeInfo* formal, TypeEnv* env) ;
 TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* rec_type);

@@ -102,6 +102,10 @@ static const ErrorMessage error_table[ERR_COUNT] = {
         .en = "Type mismatch: expected '%1$s', got '%2$s'.",
         .ja = "型の不一致です (期待される型: '%1$s', 実際の型: '%2$s')。"
     },
+    [ERR_ASSIGN_TYPE_MISMATCH] = {
+    .en = "Cannot assign value of type '%1$s' to variable '%2$s' of type '%3$s'.",
+    .ja = "型 '%3$s' の変数 '%2$s' に型 '%1$s' の値を代入することはできません。"
+},
     [ERR_ARG_TYPE_MISMATCH] = {
         .en = "Type mismatch in argument %1$d: expected '%2$s', got '%3$s'.",
         .ja = "第 %1$d 引数の型が一致しません (期待される型: '%2$s', 実際の型: '%3$s')。"
@@ -117,6 +121,18 @@ static const ErrorMessage error_table[ERR_COUNT] = {
     [ERR_NON_NUMERIC_OPERATION] = {
         .en = "Operator '%1$s' requires numeric operands, but got '%2$s'.",
         .ja = "演算 '%1$s' には数値型が必要ですが、'%2$s' が渡されました。"
+    },
+    [ERR_DEFAULT_ARG_ORDER] = {
+        .en = "Parameter without default value cannot follow parameter with default value.",
+        .ja = "デフォルト値を持つ引数の後にデフォルト値のない引数を配置することはできません。"
+    },
+    [ERR_ARITY_RANGE_MISMATCH] = {
+        .en = "Arity mismatch: expected %1$d to %2$d arguments, got %3$d.",
+        .ja = "引数の個数が一致しません (期待値: %1$d〜%2$d, 実際: %3$d)。"
+    },
+    [ERR_ARG_INIT_MUST_BE_LITERAL] = {
+        .en = "Default value for parameter '%s' must be a literal.",
+        .ja = "引数 '%s' のデフォルト値にはリテラルを指定してください。"
     },
 
     // VM 実行時エラー

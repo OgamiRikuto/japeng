@@ -55,8 +55,8 @@ int syntax_error_count = 0;
 %type <node> program statement statement_list class_def class_def_list message
 %type <node> member member_list receiver return_stmt
 %type <node> class_decl name_def class type_list class_list field_decl
-%type <node> identifier_decl identifier_decl_list statement_list_opt
-%type <node> expression primary block args rets expression_list_opt expression_list
+%type <node> identifier_decl statement_list_opt
+%type <node> expression primary block args arg_decl_list arg_decl rets expression_list_opt expression_list
 %type <node> control_chain control_clause_list control_clause
 %type <node> multi_identifier type_list_comma type_list_comma_opt
 
@@ -441,20 +441,36 @@ block :
     ;
 
 args : 
-    ARG identifier_decl_list
+    ARG arg_decl_list
     { $$ = $2; }
+    ;
+
+arg_decl_list : 
+    arg_decl
+    { $$ = $1; }
+    | arg_decl_list COMMA arg_decl
+    { $$ = create_stmt_node($1, $3); }
+    ;
+
+arg_decl : 
+    IDENTIFIER COLON class
+    { $$ = create_vardecl_node(create_identifier_node($1), $3); }
+    | SP_IDENTIFIER COLON class
+    { $$ = create_vardecl_node(create_identifier_node($1), $3); }
+    | IDENTIFIER COLON class SP_IDENTIFIER expression
+    {
+        if ($4 != sym_is) {
+            yyerror("expected 'is' for default parameter value.");
+        }
+        ASTNode* decl = create_vardecl_node(create_identifier_node($1), $3);
+        decl->var_decl.default_val = $5;
+        $$ = decl;
+    }
     ;
 
 rets : 
     RET type_list_comma
     { $$ = $2; }
-    ;
-
-identifier_decl_list : 
-    identifier_decl 
-    { $$ = $1; }
-    | identifier_decl_list COMMA identifier_decl
-    { $$ = create_stmt_node($1, $3); }
     ;
 
 receiver : 

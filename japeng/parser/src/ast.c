@@ -102,6 +102,7 @@ ASTNode* create_vardecl_node(ASTNode* identifier, ASTNode* type)
     node->var_decl.is_static = false;
     node->var_decl.identifier = identifier;
     node->var_decl.type = type;
+    node->var_decl.default_val = NULL;
     return node;
 }
 

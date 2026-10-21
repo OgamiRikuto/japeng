@@ -67,28 +67,6 @@ static TypeInfo* peek_identifier_type(Compiler* c, ASTNode* node) {
 
     return NULL;
 }
-// メッセージ送信の戻り値型を解決する箇所
-// static TypeInfo* resolve_operator_type(TypeInfo* receiver_type, ObjString* op, TypeInfo* arg_type)
-// {
-//     if (receiver_type == NULL || op == NULL) return NULL;
-//     ObjString* rec_name = receiver_type->name;
-
-//     // 1. 比較演算子 (<, >, <=, >=, =, !=)
-//     // 数値や文字列の比較結果は、常に真偽値 (JapEng では Integer の 0 / 1)
-//     if (is_compare_operator(op)) return new_type_info(sym_Integer, 0);
-
-//     // 2. 数値の四則演算 (+, -, *, /, %)
-//     if (is_integer_type(rec_name) || is_float_type(rec_name) || is_decimal_type(rec_name)) {
-//         if (is_calc_operator(op)) return new_type_info(rec_name, 0);
-//     }
-
-//     // 3. 文字列の結合 (+)
-//     if (rec_name == sym_String && op == sym_plus) {
-//         return new_type_info(sym_String, 0);
-//     }
-
-//     return NULL; // 特殊演算子でなければ、通常のメソッド検索へ流す
-// }
 
 // 2つの型が完全一致しているか判定
 bool type_equals(TypeInfo* a, TypeInfo* b) {
@@ -174,6 +152,28 @@ bool is_assignable(Compiler* c, TypeInfo* target, TypeInfo* source) {
     // 4. 型の完全一致
     if (type_equals(target, source)) return true;
 
+    if (target->name == source->name && 
+        target->type_arg_count > 0 && 
+        target->type_arg_count == source->type_arg_count) {
+        
+        bool all_match = true;
+        for (int i = 0; i < target->type_arg_count; i++) {
+            TypeInfo* t_arg = target->type_args[i];
+            TypeInfo* s_arg = source->type_args[i];
+
+            // どちらかが Auto なら互換とする
+            if (t_arg->name == sym_Auto || s_arg->name == sym_Auto) {
+                continue;
+            }
+
+            if (!is_assignable(c, t_arg, s_arg)) {
+                all_match = false;
+                break;
+            }
+        }
+        if (all_match) return true;
+    }
+
     // 5. 継承関係チェック
     ObjClass* src_class = resolve_class(c, source->name);
     while (src_class != NULL && src_class->superclass != NULL) {
@@ -184,18 +184,114 @@ bool is_assignable(Compiler* c, TypeInfo* target, TypeInfo* source) {
     return false;
 }
 
-// ブロックの引数型を収集する再帰ヘルパー
-static void collect_block_arg_types(ASTNode* node, TypeInfo** list, int* count) 
+static void collect_block_arg_info(Compiler* c, ASTNode* node, 
+                                   TypeInfo** param_types, Value* default_vals, 
+                                   int* param_count, int* min_param_count) 
 {
     if (node == NULL) return;
     if (node->kind == AST_STMT) {
-        collect_block_arg_types(node->stmt.left, list, count);
-        collect_block_arg_types(node->stmt.right, list, count);
+        collect_block_arg_info(c, node->stmt.left, param_types, default_vals, param_count, min_param_count);
+        collect_block_arg_info(c, node->stmt.right, param_types, default_vals, param_count, min_param_count);
         return;
     }
     if (node->kind == AST_VAR_DECL) {
-        list[(*count)++] = build_type_info(node->var_decl.type);
+        int idx = (*param_count)++;
+        TypeInfo* t = build_type_info(node->var_decl.type);
+        param_types[idx] = t;
+
+        if (node->var_decl.default_val != NULL) {
+            // ★ リテラル限定チェック（式やオブジェクト生成をここで弾く！）
+            if (node->var_decl.default_val->kind != AST_LITERAL) {
+                ObjString* name = node->var_decl.identifier ? node->var_decl.identifier->identifier.name : sym_Function;
+                error_compile(node->var_decl.default_val, ERR_ARG_INIT_MUST_BE_LITERAL, name->chars);
+                default_vals[idx] = make_nil();
+            } else {
+                TypeInfo* actual_type = NULL;
+                default_vals[idx] = parse_ast_literal_with_expected(node->var_decl.default_val, t, &actual_type);
+                if (!is_assignable(c, t, actual_type)) {
+                    error_compile(node->var_decl.default_val, ERR_TYPE_MISMATCH,
+                                  type_to_string(t), type_to_string(actual_type));
+                }
+            }
+        } else {
+            // デフォルト値なし引数
+            if (*min_param_count < idx) {
+                // デフォルト値あり引数の後ろにデフォルト値なし引数が配置された！
+                error_compile(node, ERR_DEFAULT_ARG_ORDER);
+            }
+            default_vals[idx] = make_nil();
+            (*min_param_count)++;
+        }
     }
+}
+
+// ブロックの引数型を収集する再帰ヘルパー
+// static void collect_block_arg_types(ASTNode* node, TypeInfo** list, int* count) 
+// {
+//     if (node == NULL) return;
+//     if (node->kind == AST_STMT) {
+//         collect_block_arg_types(node->stmt.left, list, count);
+//         collect_block_arg_types(node->stmt.right, list, count);
+//         return;
+//     }
+//     if (node->kind == AST_VAR_DECL) {
+//         list[(*count)++] = build_type_info(node->var_decl.type);
+//     }
+// }
+
+// 型情報の中の target_sym (sym_Auto) を replacement (具象型) に再帰置換する汎用関数
+static TypeInfo* replace_type_param(TypeInfo* type, ObjString* target_sym, TypeInfo* replacement)
+{
+    if (type == NULL || replacement == NULL) return type;
+
+    // 1. 自身が置換対象 (例: Auto 単体)
+    if (type->name == target_sym) {
+        return replacement;
+    }
+
+    // 2. ジェネリクス型や Function 型の場合、型引数を再帰置換
+    if (type->type_arg_count > 0) {
+        TypeInfo* new_t = new_type_info(type->name, type->type_arg_count);
+        for (int i = 0; i < type->type_arg_count; i++) {
+            new_t->type_args[i] = replace_type_param(type->type_args[i], target_sym, replacement);
+        }
+        new_t->param_count     = type->param_count;
+        new_t->min_param_count = type->min_param_count;
+        for (int i = 0; i < type->param_count; i++) {
+            new_t->default_values[i] = type->default_values[i];
+        }
+        return new_t;
+    }
+
+    return type;
+}
+
+// 実引数（ブロック等）の戻り値から、Auto を置き換えるべき具象型を抽出する
+static TypeInfo* infer_auto_from_args(TypeInfo* concrete_fn_type, ASTNode** args, int actual_argc)
+{
+    for (int i = 0; i < actual_argc && i < concrete_fn_type->param_count; i++) {
+        TypeInfo* formal_param = concrete_fn_type->type_args[i];
+
+        // 仮引数が Function 型で、その戻り値に Auto が指定されている場合
+        if (formal_param != NULL && formal_param->name == sym_Function && 
+            formal_param->type_arg_count > formal_param->param_count) {
+            
+            TypeInfo* formal_ret = formal_param->type_args[formal_param->param_count];
+            if (formal_ret != NULL && formal_ret->name == sym_Auto) {
+                // 実引数がブロックで、明示的な戻り値型 (rets) を持っている場合
+                if (args[i]->kind == AST_BLOCK && args[i]->block.rets != NULL) {
+                    TypeInfo* block_rets[MAX_ARGS];
+                    int b_rcnt = 0;
+                    collect_ret_types_from_ast(args[i]->block.rets, block_rets, &b_rcnt);
+                    if (b_rcnt > 0 && block_rets[0] != NULL && 
+                        block_rets[0]->name != sym_Auto && block_rets[0]->name != sym_Void) {
+                        return block_rets[0]; // 呼び出し時に確定した真の型！
+                    }
+                }
+            }
+        }
+    }
+    return NULL;
 }
 
 // rets の AST_STMT ツリーからすべての型を配列に集めるヘルパー
@@ -211,14 +307,25 @@ void collect_ret_types_from_ast(ASTNode* node, TypeInfo** list, int* count)
 }
 
 // ブロックから詳細な Function 型 [引数1, 引数2, ..., 戻り値] を構築
-TypeInfo* build_function_type_from_block(ASTNode* block_node) 
+TypeInfo* build_function_type_from_block(Compiler* c, ASTNode* block_node) 
 {
-    TypeInfo* params[16]; int p_cnt = 0;
-    TypeInfo* rets[16];   int r_cnt = 0;
-    collect_block_arg_types(block_node->block.args, params, &p_cnt);
+    TypeInfo* params[16];
+    Value default_vals[16];
+    int param_count = 0;
+    int min_param_count = 0;
+
+    collect_block_arg_info(c, block_node->block.args, params, default_vals, &param_count, &min_param_count);
+
+    TypeInfo* rets[16]; int r_cnt = 0;
     if (block_node->block.rets) collect_ret_types_from_ast(block_node->block.rets, rets, &r_cnt);
 
-    return new_func_type_info(p_cnt, params, r_cnt, rets); // ★ 同じ関数で統一！
+    TypeInfo* fn_type = new_func_type_info(param_count, params, r_cnt, rets);
+    fn_type->min_param_count = min_param_count;
+    for (int i = 0; i < param_count; i++) {
+        fn_type->default_values[i] = default_vals[i];
+    }
+
+    return fn_type;
 }
 
 // ASTやシグネチャ内の型変数を、実型に再帰置換する (上部に配置)
@@ -226,23 +333,33 @@ TypeInfo* substitute_type(TypeInfo* formal, TypeEnv* env)
 {
     if (formal == NULL) return new_type_info(sym_Error, 0);
 
-    // 1. この型名自体が型パラメータ (Key や Value など) かチェック
+    // 1. 型パラメータの置換
     for (int i = 0; i < env->count; i++) {
         if (formal->name == env->params[i]) {
-            return env->args[i]; // 実型 (String や Integer) に置換！
+            return env->args[i];
         }
     }
 
-    // 2. もし List[Key] のようにネストしたジェネリクスなら、中身も再帰置換
+    // 2. ジェネリクス型 / Function 型の中身を再帰置換
     if (formal->type_arg_count > 0) {
         TypeInfo* new_t = new_type_info(formal->name, formal->type_arg_count);
         for (int i = 0; i < formal->type_arg_count; i++) {
             new_t->type_args[i] = substitute_type(formal->type_args[i], env);
         }
+
+        // ★ Function 型の場合、消えてしまっていたメタデータを復元・継承！
+        if (formal->name == sym_Function) {
+            new_t->param_count     = formal->param_count;
+            new_t->min_param_count = formal->min_param_count;
+            for (int i = 0; i < formal->param_count; i++) {
+                new_t->default_values[i] = formal->default_values[i];
+            }
+        }
+
         return new_t;
     }
 
-    // 3. 通常の具象型（Integer, String など）ならそのまま
+    // 3. 通常の具象型
     return formal;
 }
 
@@ -261,6 +378,13 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
         error_compile(send_node, ERR_UNDEFINED_MESSAGE, 
                       send_node->send.message->identifier.name->chars, 
                       rec_type->name->chars);
+        return new_type_info(sym_Error, 0);
+    }
+
+    if (rec_type->name == sym___multi__) {
+        error_compile(send_node, ERR_UNDEFINED_MESSAGE, 
+                      send_node->send.message->identifier.name->chars, 
+                      "複数戻り値 (多値)");
         return new_type_info(sym_Error, 0);
     }
 
@@ -302,37 +426,72 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
     // 4. シグネチャの完全置換
     TypeInfo* concrete_fn_type = substitute_type(formal_fn_type, &env);
 
-    // 5. 引数の個数チェック
-    int expected_argc = concrete_fn_type->type_arg_count - 1;
+    // ★ 5. 引数の個数チェック（デフォルト引数 min_param_count 〜 param_count に対応）
+    int min_argc = concrete_fn_type->min_param_count;
+    int max_argc = concrete_fn_type->param_count;
+
     ASTNode* args[16];
     int actual_argc = 0;
     collect_args(send_node->send.args, args, &actual_argc, 16);
 
-    if (actual_argc != expected_argc) {
-        error_compile(send_node, ERR_ARITY_MISMATCH, expected_argc, actual_argc);
+    // 引数個数が範囲外の場合にエラー
+    if (actual_argc < min_argc || actual_argc > max_argc) {
+        if (min_argc == max_argc) {
+            error_compile(send_node, ERR_ARITY_MISMATCH, max_argc, actual_argc);
+        } else {
+            error_compile(send_node, ERR_ARITY_RANGE_MISMATCH, min_argc, max_argc, actual_argc);
+        }
         return new_type_info(sym_Error, 0);
     }
 
-    // ★ 注意: レシーバは呼び出し元（compile_expression）ですでにスタックに積まれているので、
-    // ここでは実引数だけをスタックに積んで型チェックする！
+    // レシーバは呼び出し元（compile_expression）ですでにスタックに積まれているので、
+    // ここでは渡された実引数だけをスタックに積んで型チェックする！
     for (int i = 0; i < actual_argc; i++) {
         TypeInfo* arg_type = compile_expression(c, args[i]);
         TypeInfo* expected_arg_type = concrete_fn_type->type_args[i];
 
-        // ★ expected_arg_type が NULL でないかチェックし、安全に型照合
         if (expected_arg_type == NULL || !is_assignable(c, expected_arg_type, arg_type)) {
             error_compile(args[i], ERR_ARG_TYPE_MISMATCH, i + 1,
-                          expected_arg_type ? expected_arg_type->name->chars : "unknown",
-                          arg_type ? arg_type->name->chars : "nil");
+                          type_to_string(expected_arg_type),
+                          type_to_string(arg_type));
         }
     }
 
-    // 6. OP_SEND 発行
-    uint32_t sym_const = add_constant(c->chunk, make_obj((Obj*)msg));
-    write_chunk(c->chunk, make_send_inst((uint16_t)actual_argc, (uint16_t)sym_const));
+    // ★ 6. 省略されたデフォルト引数をスタックに補完する！
+    for (int i = actual_argc; i < max_argc; i++) {
+        emit_constant(c, concrete_fn_type->default_values[i]);
+    }
 
-    // 置換後の真の戻り値型を返す！
-    return concrete_fn_type->type_args[expected_argc];
+    // ★ 7. 最大引数数 (max_argc) で OP_SEND 発行！
+    uint32_t sym_const = add_constant(c->chunk, make_obj((Obj*)msg));
+    write_chunk(c->chunk, make_send_inst((uint16_t)max_argc, (uint16_t)sym_const));
+
+    // 8. 戻り値型を返す（param_count 以降が戻り値型）
+    int ret_count = concrete_fn_type->type_arg_count - concrete_fn_type->param_count;
+    if (ret_count <= 0) {
+        return new_type_info(sym_Void, 0);
+    }
+
+    TypeInfo* ret_type = concrete_fn_type->type_args[concrete_fn_type->param_count];
+
+    // 実引数（ブロック等）の戻り値型から Auto を具象型に推論し、汎用的に置換！
+    // (ret_type が単体の Auto でも、List Auto でも、Map Key Auto でも等しく具象化される)
+    TypeInfo* inferred = infer_auto_from_args(concrete_fn_type, args, actual_argc);
+    if (inferred != NULL) {
+        ret_type = replace_type_param(ret_type, sym_Auto, inferred);
+    }
+
+    if (ret_count == 1) {
+        return ret_type;
+    }
+
+    // 多値戻り値 (__multi__)
+    TypeInfo* multi_ret = new_type_info(sym___multi__, ret_count);
+    for (int i = 0; i < ret_count; i++) {
+        multi_ret->type_args[i] = concrete_fn_type->type_args[concrete_fn_type->param_count + i];
+    }
+    c->stack_depth += (ret_count - 1);
+    return multi_ret;
 }
 
 static void compile_binary_operands(Compiler* c, ASTNode* node, TypeInfo** out_lhs, TypeInfo** out_rhs)
@@ -417,7 +576,7 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
             ObjFunction* fn = compile_block(c, node);
             uint32_t fn_idx = add_constant(c->chunk, make_obj((Obj*)fn));
             emit_inst(c, (fn->upvalue_count > 0) ? OP_CLOSURE : OP_CONSTANT, fn_idx);
-            return build_function_type_from_block(node);
+            return build_function_type_from_block(c, node);
         }
 
         case AST_SEND: {
@@ -442,7 +601,6 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                     collect_args(node->send.args, args, &actual_argc, 16);
 
                     if (fn_type != NULL && fn_type->name == sym_Function && fn_type->type_arg_count > 0) {
-                        // 引数に "..." が含まれているかチェック
                         bool has_ellipsis = false;
                         for (int k = 0; k < fn_type->param_count; k++) {
                             if (fn_type->type_args[k]->name == sym_ellipsis) {
@@ -451,9 +609,16 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                             }
                         }
 
-                        // "..." を含まない厳格シグネチャの場合のみ、引数個数の一致を強制
-                        if (!has_ellipsis && actual_argc != fn_type->param_count) {
-                            error_compile(node, ERR_ARITY_MISMATCH, fn_type->param_count, actual_argc);
+                        int min_argc = fn_type->min_param_count;
+                        int max_argc = fn_type->param_count;
+
+                        if (!has_ellipsis && (actual_argc < min_argc || actual_argc > max_argc)) {
+                            if (min_argc == max_argc) {
+                                error_compile(node, ERR_ARITY_MISMATCH, max_argc, actual_argc);
+                            } else {
+                                error_compile(node, ERR_ARITY_RANGE_MISMATCH, min_argc, max_argc, actual_argc);
+                            }
+                            emit_constant(c, make_nil());
                             return new_type_info(sym_Error, 0);
                         }
                     }
@@ -472,17 +637,26 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                                 TypeInfo* expected_arg_type = fn_type->type_args[i];
                                 if (expected_arg_type != NULL && !is_assignable(c, expected_arg_type, arg_type)) {
                                     error_compile(args[i], ERR_ARG_TYPE_MISMATCH, i + 1,
-                                                  expected_arg_type ? expected_arg_type->name->chars : "unknown",
-                                                  arg_type ? arg_type->name->chars : "nil");
+                                                    type_to_string(expected_arg_type),
+                                                    type_to_string(arg_type));
                                     // return new_type_info(sym_Error, 0);
                                 }
                             }
                         }
                     }
 
+                    if (fn_type != NULL && fn_type->name == sym_Function) {
+                        for (int i = actual_argc; i < fn_type->param_count; i++) {
+                            emit_constant(c, fn_type->default_values[i]);
+                        }
+                    }
+
+                    int call_argc = (fn_type && fn_type->name == sym_Function && fn_type->param_count > actual_argc)
+                                    ? fn_type->param_count : actual_argc;
+
                     // #call メッセージを送信！
                     uint32_t call_sym = add_constant(c->chunk, make_obj(((Obj*)sym_call)));
-                    write_chunk(c->chunk, make_send_inst((uint16_t)actual_argc, (uint16_t)call_sym));
+                    write_chunk(c->chunk, make_send_inst((uint16_t)call_argc, (uint16_t)call_sym));
 
                     // 関数の戻り値型を返す（Function型の末尾が戻り値型）
                     if (fn_type != NULL && fn_type->type_arg_count > 0) {
@@ -491,7 +665,7 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                             return fn_type->type_args[fn_type->param_count];
                         } else if (ret_count > 1) {
                             // 多値戻り値型 (__multi__) としてパッケージ化して返す
-                            TypeInfo* multi_ret = new_type_info(intern_cstr("__multi__"), ret_count);
+                            TypeInfo* multi_ret = new_type_info(sym___multi__, ret_count);
                             for (int i = 0; i < ret_count; i++) {
                                 multi_ret->type_args[i] = fn_type->type_args[fn_type->param_count + i];
                             }

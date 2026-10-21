@@ -200,7 +200,7 @@ static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
                     c->is_method = false;
     
                     add_method(klass, member_name, make_obj((Obj*)method_fn));
-                    add_method_type(klass, member_name, build_function_type_from_block(send_node->send.args));
+                    add_method_type(klass, member_name, build_function_type_from_block(c, send_node->send.args));
                     if (from_class != NULL) {
                         add_method_from(klass, member_name, from_class);
                     }
@@ -297,17 +297,7 @@ static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
         }
 
         if (args && args->kind == AST_BLOCK) {
-            // c->current_class = klass;
-            // ObjFunction* method_fn = compile_block(c, args);
-            // c->current_class = NULL;
-            // add_method(klass, target_name, make_obj((Obj*)method_fn));
-            // add_method_type(klass, target_name, build_function_type_from_block(args));
-
-            // if (from_class != NULL) {
-            //     add_method_from(klass, target_name, from_class);
-            // }
-            // return;
-            add_method_type(klass, target_name, build_function_type_from_block(args));
+            add_method_type(klass, target_name, build_function_type_from_block(c, args));
             if (args->block.body != NULL) {
                 c->current_class = klass;
                 ObjFunction* method_fn = compile_block(c, args);
@@ -441,7 +431,7 @@ static void declare_class_member_signatures(Compiler* c, ObjClass* klass, ASTNod
 
         if (target_name && args && args->kind == AST_BLOCK) {
             // ★ 型シグネチャだけを先に登録しておく！
-            add_method_type(klass, target_name, build_function_type_from_block(args));
+            add_method_type(klass, target_name, build_function_type_from_block(c, args));
         }
         return;
     }
@@ -454,7 +444,7 @@ static void declare_class_member_signatures(Compiler* c, ObjClass* klass, ASTNod
             if (node->field_decl.default_data && node->field_decl.default_data->kind == AST_SEND) {
                 ASTNode* send_node = node->field_decl.default_data;
                 if (send_node->send.args && send_node->send.args->kind == AST_BLOCK) {
-                    add_method_type(klass, member_name, build_function_type_from_block(send_node->send.args));
+                    add_method_type(klass, member_name, build_function_type_from_block(c, send_node->send.args));
                 }
             }
         }

@@ -13,6 +13,8 @@ typedef struct typeInfo {
     ObjString* name;
     int type_arg_count;
     int param_count;
+    int min_param_count;
+    Value default_values[16];
     struct typeInfo* type_args[];
 } TypeInfo;
 

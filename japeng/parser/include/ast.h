@@ -82,6 +82,7 @@ struct ASTNode {
             bool is_static;
             ASTNode* identifier;
             ASTNode* type;
+            ASTNode* default_val;
         } var_decl;
         
         struct {

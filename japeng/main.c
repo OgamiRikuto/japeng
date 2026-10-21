@@ -130,10 +130,10 @@ int main(int argc, char** argv) {
     compile(&compiler, parsed_je);
     
     // スクリプト末尾の安全終了
-    emit_constant(&compiler, make_nil());
-    emit_inst(&compiler, OP_RETURN, 0);
+    emit_constant(&compiler, make_int(0));
+    emit_inst(&compiler, OP_RETURN, 1);
 
-    write_chunk(&main_chunk, make_inst(OP_RETURN, 0));
+    write_chunk(&main_chunk, make_inst(OP_RETURN, 1));
 
     if (had_compile_error) {
         fprintf(stderr, (current_lang == LANG_JA)
@@ -149,6 +149,14 @@ int main(int argc, char** argv) {
 
     printf("Pure VM Time: %f ms\n", (double)(end - start) / CLOCKS_PER_SEC * 1000.0);
 
+    int exit_code = 0;
+    if (result == INTERPRET_OK && vm.stack_top > vm.stack) {
+        Value exit_val = pop(&vm);
+        if (is_int(exit_val)) {
+            exit_code = as_int(exit_val);
+        }
+    }
+
     // 後始末
     free_chunk(&main_chunk);
     free_vm(&vm);
@@ -161,5 +169,5 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
-    return EXIT_SUCCESS;
+    return exit_code;
 }

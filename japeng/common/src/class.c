@@ -166,6 +166,8 @@ TypeInfo* new_type_info(ObjString* name, int type_arg_count) {
     t->name = name;
     t->type_arg_count = type_arg_count;
     t->param_count = 0;
+    t->min_param_count = 0;
+    for (int i = 0; i < 16; i++) t->default_values[i] = make_nil();
     for (int i = 0; i < type_arg_count; i++) t->type_args[i] = NULL;
     return t;
 }
@@ -177,6 +179,8 @@ TypeInfo* new_func_type_info(int param_count, TypeInfo** params, int ret_count, 
     t->name = sym_Function;
     t->type_arg_count = total_types;
     t->param_count = param_count;
+    t->min_param_count = param_count;
+    for (int i = 0; i < 16; i++) t->default_values[i] = make_nil();
 
     // 引数型をセット
     for (int i = 0; i < param_count; i++) {
