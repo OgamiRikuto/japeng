@@ -19,6 +19,9 @@ typedef struct objString ObjString;
     X(Auto,         "Auto") \
     X(SmallInteger, "SmallInteger") \
     X(Function,     "Function") \
+    X(and,          "and") \
+    X(or,           "or") \
+    X(not,          "!") \
     X(plus,         "+") \
     X(minus,        "-") \
     X(multi,        "*") \
@@ -34,8 +37,17 @@ typedef struct objString ObjString;
     X(minus_eq,     "-=") \
     X(multi_eq,     "*=") \
     X(div_eq,       "/=") \
-    X(lshif,        "<<") \
-    X(rshif,        ">>") \
+    X(shl,          "<<") \
+    X(shr,          ">>") \
+    X(band,         "&") \
+    X(bor,          "|") \
+    X(bxor,         "^") \
+    X(bnot,         "~") \
+    X(shl_eq,       "<<=") \
+    X(shr_eq,       ">>=") \
+    X(band_eq,      "&=") \
+    X(bor_eq,       "|=") \
+    X(bxor_eq,      "^=") \
     X(Object,       "Object") \
     X(Integer,      "Integer") \
     X(BigInteger,   "BigInteger") \

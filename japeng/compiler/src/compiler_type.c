@@ -43,7 +43,16 @@ static bool is_calc_operator(ObjString* op)
 bool is_compound_operator(ObjString* op)
 {
     return  op == sym_plus_eq || op == sym_minus_eq ||
-            op == sym_multi_eq || op == sym_div_eq;
+            op == sym_multi_eq || op == sym_div_eq  ||
+            op == sym_band_eq  || op == sym_bor_eq  ||
+            op == sym_bxor_eq  || op == sym_shl_eq  || op == sym_shr_eq;
+}
+
+static bool is_bitwise_operator(ObjString* op)
+{
+    return op == sym_shl || op == sym_shr ||
+           op == sym_band  || op == sym_bor   ||
+           op == sym_bxor;
 }
 
 static bool is_raw_numeric_literal(ASTNode* node) {
@@ -196,9 +205,14 @@ static void collect_block_arg_info(Compiler* c, ASTNode* node,
     }
     if (node->kind == AST_VAR_DECL) {
         int idx = (*param_count)++;
-        TypeInfo* t = build_type_info(node->var_decl.type);
-        param_types[idx] = t;
 
+        TypeInfo* t = build_type_info(node->var_decl.type);
+        if (t != NULL && t->name == sym_Function && node->var_decl.type->kind != AST_FUNC_TYPE) {
+            ObjString* arg_name = node->var_decl.identifier ? node->var_decl.identifier->identifier.name : sym_Function;
+            error_compile(node, ERR_FUNCTION_REQUIRES_SIGNATURE, arg_name->chars);
+        }
+
+        param_types[idx] = t;
         if (node->var_decl.default_val != NULL) {
             // ★ リテラル限定チェック（式やオブジェクト生成をここで弾く！）
             if (node->var_decl.default_val->kind != AST_LITERAL) {
@@ -678,6 +692,101 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                 }
             }
 
+            if (msg == sym_bnot && node->send.args == NULL) {
+                TypeInfo* rec_type = compile_expression(c, node->send.receiver);
+                if (!is_integer_type(rec_type->name)) {
+                    error_compile(node, ERR_TYPE_MISMATCH, sym_Integer->chars, rec_type->name->chars);
+                    return new_type_info(sym_Error, 0);
+                }
+                emit_inst(c, OP_BNOT, 0);
+                return rec_type;
+            }
+
+            // ★ ビット・シフト二項演算 (<<, >>, &, |, ^)
+            if (is_bitwise_operator(msg)) {
+                TypeInfo* lhs = NULL;
+                TypeInfo* rhs = NULL;
+                compile_binary_operands(c, node, &lhs, &rhs);
+
+                if (!is_integer_type(lhs->name) || !is_integer_type(rhs->name)) {
+                    error_compile(node, ERR_TYPE_MISMATCH, sym_Integer->chars, 
+                                  !is_integer_type(lhs->name) ? lhs->name->chars : rhs->name->chars);
+                    return new_type_info(sym_Error, 0);
+                }
+
+                if (msg == sym_shl)     emit_inst(c, OP_SHL, 0);
+                else if (msg == sym_shr) emit_inst(c, OP_SHR, 0);
+                else if (msg == sym_band)  emit_inst(c, OP_BAND, 0);
+                else if (msg == sym_bor)   emit_inst(c, OP_BOR, 0);
+                else if (msg == sym_bxor)  emit_inst(c, OP_BXOR, 0);
+
+                return lhs; // Integer
+            }
+            // 短絡論理積
+            if (msg == sym_and) {
+                // 1. 左辺の評価
+                TypeInfo* lhs_type = compile_expression(c, node->send.receiver);
+                if (!is_boolean_type(lhs_type->name)) {
+                    error_compile(node->send.receiver, ERR_TYPE_MISMATCH, sym_Boolean->chars, lhs_type->name->chars);
+                    return new_type_info(sym_Error, 0);
+                }
+
+                // 2. 偽なら右辺を評価せず終了地点へジャンプ (スタック上の lhs はそのまま残す)
+                int false_jump = emit_jump(c, OP_JUMP_IF_FALSE);
+
+                // 3. 真のパス: スタック上の真値を捨てて、右辺を評価
+                emit_inst(c, OP_POP, 0);
+                TypeInfo* rhs_type = compile_expression(c, node->send.args);
+                if (!is_boolean_type(rhs_type->name)) {
+                    error_compile(node->send.args, ERR_TYPE_MISMATCH, sym_Boolean->chars, rhs_type->name->chars);
+                    return new_type_info(sym_Error, 0);
+                }
+
+                // 4. ジャンプ先をパッチ (左辺が偽だった場合はここに着地し、左辺値がスタックトップに残る)
+                patch_jump(c, false_jump);
+                return new_type_info(sym_Boolean, 0);
+            }
+
+            // 短絡論理和 (or)
+            if (msg == sym_or) {
+                // 1. 左辺の評価
+                TypeInfo* lhs_type = compile_expression(c, node->send.receiver);
+                if (!is_boolean_type(lhs_type->name)) {
+                    error_compile(node->send.receiver, ERR_TYPE_MISMATCH, sym_Boolean->chars, lhs_type->name->chars);
+                    return new_type_info(sym_Error, 0);
+                }
+
+                // 2. 偽なら右辺を評価する場所へジャンプ
+                int eval_rhs_jump = emit_jump(c, OP_JUMP_IF_FALSE);
+
+                // 3. 真のパス: 右辺を評価せず式末尾へ脱出 (真値がスタックに残る)
+                int exit_jump = emit_jump(c, OP_JUMP);
+
+                // 4. 偽のパス: 偽値を捨てて右辺を評価
+                patch_jump(c, eval_rhs_jump);
+                emit_inst(c, OP_POP, 0);
+
+                TypeInfo* rhs_type = compile_expression(c, node->send.args);
+                if (!is_boolean_type(rhs_type->name)) {
+                    error_compile(node->send.args, ERR_TYPE_MISMATCH, sym_Boolean->chars, rhs_type->name->chars);
+                    return new_type_info(sym_Error, 0);
+                }
+
+                // 5. 式末尾へのジャンプ先をパッチ
+                patch_jump(c, exit_jump);
+                return new_type_info(sym_Boolean, 0);
+            }
+            // 単項論理否定 
+            if (msg == sym_not && node->send.args == NULL) {
+                TypeInfo* rec_type = compile_expression(c, node->send.receiver);
+                if (!is_boolean_type(rec_type->name)) {
+                    error_compile(node, ERR_TYPE_MISMATCH, sym_Boolean->chars, rec_type->name->chars);
+                    return new_type_info(sym_Error, 0);
+                }
+                emit_inst(c, OP_NOT, 0);
+                return rec_type; // Boolean
+            }
+
             // ★ 算術二項演算 (+, -, *, /)
             if (is_calc_operator(msg)) {
                 TypeInfo* lhs = NULL;
@@ -831,22 +940,26 @@ static void type_to_string_rec(TypeInfo* type, char* out, size_t max_len)
     }
 
     // 1. 高階関数の場合: Function(引数...; 戻り値...)
-    if (type->name == sym_Function && type->type_arg_count > 0) {
+    if (type->name == sym_Function) {
         strncat(out, "Function(", max_len - strlen(out) - 1);
 
-        // 引数リスト
+        // 引数リスト (0個なら何も出力されない)
         for (int i = 0; i < type->param_count; i++) {
             if (i > 0) strncat(out, ", ", max_len - strlen(out) - 1);
             type_to_string_rec(type->type_args[i], out, max_len);
         }
 
-        strncat(out, "; ", max_len - strlen(out) - 1);
+        // 必ずセミコロンを出力
+        strncat(out, ";", max_len - strlen(out) - 1);
 
-        // 戻り値リスト
+        // 戻り値リスト (0個なら何も出力されない)
         int ret_count = type->type_arg_count - type->param_count;
-        for (int i = 0; i < ret_count; i++) {
-            if (i > 0) strncat(out, ", ", max_len - strlen(out) - 1);
-            type_to_string_rec(type->type_args[type->param_count + i], out, max_len);
+        if (ret_count > 0) {
+            strncat(out, " ", max_len - strlen(out) - 1);
+            for (int i = 0; i < ret_count; i++) {
+                if (i > 0) strncat(out, ", ", max_len - strlen(out) - 1);
+                type_to_string_rec(type->type_args[type->param_count + i], out, max_len);
+            }
         }
 
         strncat(out, ")", max_len - strlen(out) - 1);

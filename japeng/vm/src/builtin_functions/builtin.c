@@ -22,11 +22,15 @@ void init_builtin_classes(VM* vm)
     vm->class_object = new_class(sym_Object, o_info, NULL, NULL, 0);
     setup_print(vm, vm->class_object);
 
-    // Integer クラス (Object を継承)
-    vm->class_integer = new_class(sym_Integer, new_type_info(sym_Integer, 0), vm->class_object, o_info, 0);
+    // Integer, Float, Decimal クラス
+    setup_number(vm, o_info);
+
+    // Boolean クラス
+    setup_boolean(vm, o_info);
 
     // List クラス
-    setup_list(vm, vm->class_object, o_info);
+    setup_list(vm, o_info);
+    
     // String クラス
-    setup_string(vm, vm->class_object, o_info);
+    setup_string(vm, o_info);
 }

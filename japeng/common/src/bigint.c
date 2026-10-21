@@ -661,3 +661,165 @@ BigInteger* bi_abs_copy(const BigInteger* bi)
     }
     return copy;
 }
+
+// =============================================================================
+// べき乗 (繰り返し自乗法: Exponentiation by squaring)
+// =============================================================================
+BigInteger* bi_pow(const BigInteger* base, uint64_t exp) 
+{
+    if (exp == 0) {
+        return bi_from_i64(1);
+    }
+    if (bi_is_zero(base)) {
+        return bi_from_i64(0);
+    }
+
+    BigInteger* result = bi_from_i64(1);
+    BigInteger* cur = bi_copy(base);
+
+    while (exp > 0) {
+        if (exp & 1) {
+            BigInteger* next_res = bi_mul(result, cur);
+            free_bi(result);
+            result = next_res;
+        }
+        exp >>= 1;
+        if (exp > 0) {
+            BigInteger* next_cur = bi_mul(cur, cur);
+            free_bi(cur);
+            cur = next_cur;
+        }
+    }
+
+    free_bi(cur);
+    return result;
+}
+
+// =============================================================================
+// 高速バイナリ GCD (Stein's Algorithm for BigInteger)
+// =============================================================================
+
+// 末尾の連続する 0 ビット数をカウント (Trailing Zeros)
+static size_t bi_ctz(const BigInteger* a) 
+{
+    if (bi_is_zero(a)) return 0;
+    size_t count = 0;
+    for (size_t i = 0; i < a->length; i++) {
+        if (a->nums[i] == 0) {
+            count += 32;
+        } else {
+            count += (size_t)__builtin_ctz(a->nums[i]);
+            break;
+        }
+    }
+    return count;
+}
+
+// インプレース右シフト (メモリ確保なしで直接ビットシフト)
+static void bi_shr_inplace(BigInteger* a, size_t shift_bits) 
+{
+    if (shift_bits == 0 || bi_is_zero(a)) return;
+
+    size_t word_shift = shift_bits / 32;
+    int bit_shift = (int)(shift_bits % 32);
+
+    if (word_shift >= a->length) {
+        a->nums[0] = 0;
+        a->length = 1;
+        a->sign = true;
+        return;
+    }
+
+    size_t new_len = a->length - word_shift;
+
+    if (bit_shift == 0) {
+        memmove(a->nums, a->nums + word_shift, sizeof(uint32_t) * new_len);
+    } else {
+        // 下位ワードから上位を参照して安全に詰める
+        for (size_t j = 0; j < new_len; j++) {
+            uint32_t low = a->nums[j + word_shift] >> bit_shift;
+            uint32_t high = (j + word_shift + 1 < a->length) 
+                            ? (a->nums[j + word_shift + 1] << (32 - bit_shift)) 
+                            : 0;
+            a->nums[j] = low | high;
+        }
+    }
+    a->length = new_len;
+    trim(a);
+}
+
+// インプレース減算: a = a - b (前提: a >= b >= 0)
+static void bi_sub_inplace(BigInteger* a, const BigInteger* b) 
+{
+    uint64_t borrow = 0;
+    for (size_t i = 0; i < b->length; i++) {
+        uint64_t l = a->nums[i];
+        uint64_t r = (uint64_t)b->nums[i] + borrow;
+        if (l < r) {
+            a->nums[i] = (uint32_t)((l + (1ULL << 32)) - r);
+            borrow = 1;
+        } else {
+            a->nums[i] = (uint32_t)(l - r);
+            borrow = 0;
+        }
+    }
+    for (size_t i = b->length; i < a->length; i++) {
+        uint64_t l = a->nums[i];
+        if (l < borrow) {
+            a->nums[i] = (uint32_t)((l + (1ULL << 32)) - borrow);
+            borrow = 1;
+        } else {
+            a->nums[i] = (uint32_t)(l - borrow);
+            borrow = 0;
+        }
+    }
+    trim(a);
+}
+
+// バイナリ GCD 本体
+BigInteger* bi_gcd(const BigInteger* a, const BigInteger* b) 
+{
+    if (bi_is_zero(a)) return bi_abs_copy(b);
+    if (bi_is_zero(b)) return bi_abs_copy(a);
+
+    BigInteger* u = bi_abs_copy(a);
+    BigInteger* v = bi_abs_copy(b);
+
+    // 1. 共通の 2 の因数 2^k を抽出
+    size_t u_shift = bi_ctz(u);
+    size_t v_shift = bi_ctz(v);
+    size_t common_shift = (u_shift < v_shift) ? u_shift : v_shift;
+
+    // 2. u と v を奇数にする
+    bi_shr_inplace(u, u_shift);
+    bi_shr_inplace(v, v_shift);
+
+    // 3. ループ（除算を一切使わず、減算とビットシフトだけで収束）
+    while (!bi_is_zero(v)) {
+        int cmp = bi_compare_abs(u, v);
+        if (cmp > 0) {
+            // u > v の場合スワップして常に u <= v を維持
+            BigInteger* tmp = u;
+            u = v;
+            v = tmp;
+        } else if (cmp == 0) {
+            break;
+        }
+
+        // v = v - u (奇数 - 奇数 なので結果は必ず偶数！)
+        bi_sub_inplace(v, u);
+
+        // v の末尾ゼロをすべて右シフトして奇数に戻す
+        size_t s = bi_ctz(v);
+        bi_shr_inplace(v, s);
+    }
+
+    // 4. 共通の 2^k を掛け戻す (左シフト)
+    BigInteger* result = bi_shl(u, common_shift);
+    result->sign = true;
+
+    free_bi(u);
+    free_bi(v);
+
+    return result;
+}

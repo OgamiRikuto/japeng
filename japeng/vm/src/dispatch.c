@@ -128,7 +128,9 @@ bool dispatch_send(VM* vm, uint8_t arg_count, uint16_t msg_index)
     }
 
     const char* type_name = "Unknown";
-    if (is_obj(receiver)) {
+    if (klass && klass->name) {
+        type_name = klass->name->chars;
+    } else if (is_obj(receiver)) {
         Obj* obj = as_obj(receiver);
         if (obj->type == OBJ_INSTANCE) {
             ObjInstance* inst = (ObjInstance*)obj;

@@ -160,10 +160,10 @@ static bool native_list_map(VM* vm, uint8_t arg_count)
     return true;
 }
 
-void setup_list(VM* vm, ObjClass* super_class, TypeInfo* t_info)
+void setup_list(VM* vm, TypeInfo* o_info)
 {
     TypeInfo* l_info = new_type_info(sym_List, 1);
-    vm->class_list = new_class(sym_List, l_info, vm->class_object, t_info, 0);
+    vm->class_list = new_class(sym_List, l_info, vm->class_object, o_info, 0);
 
     define_native(vm->class_list, "init",   native_list_init);
     define_native(vm->class_list, "push",   native_list_push);

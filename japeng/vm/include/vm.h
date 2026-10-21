@@ -32,6 +32,8 @@ typedef struct vm{
     ObjClass* class_object;
     ObjClass* class_integer;
     ObjClass* class_float;
+    ObjClass* class_decimal;
+    ObjClass* class_boolean;
     ObjClass* class_string;
     ObjClass* class_list;
 } VM;

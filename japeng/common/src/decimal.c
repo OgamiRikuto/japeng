@@ -35,22 +35,7 @@ int64_t gcd_i64(int64_t a, int64_t b)
 // BigInteger 同士のユークリッド互除法 GCD
 BigInteger* dec_gcd(BigInteger* a, BigInteger* b) 
 {
-    if (bi_is_zero(a)) return bi_abs_copy(b);
-    if (bi_is_zero(b)) return bi_abs_copy(a);
-
-    BigInteger* u = bi_abs_copy(a);
-    BigInteger* v = bi_abs_copy(b);
-
-    while (!bi_is_zero(v)) {
-        BigInteger* r = bi_mod(u, v);
-        free_bi(u);
-        u = v;
-        v = r;
-    }
-
-    free_bi(v);
-    u->sign = true;
-    return u;
+    return bi_gcd(a, b);
 }
 
 // =============================================================================

@@ -37,6 +37,8 @@ static ObjString* resolve_and_intern(const char* text) {
 "return"	{ return RETURN; }
 "break"	{ return BREAK; }
 "continue"	{ return CONTINUE; }
+"and"	{ yylval.symbol = sym_and; return SP_IDENTIFIER; }
+"or"	{ yylval.symbol = sym_or;  return SP_IDENTIFIER; }
 "true"	{ yylval.literal = new_string(yytext, yyleng); return TRUE_LITERAL; }
 "false"	{ yylval.literal = new_string(yytext, yyleng); return FALSE_LITERAL; }
 "null"	{ yylval.literal = new_string(yytext, yyleng); return NULL_LITERAL; }
@@ -59,12 +61,22 @@ static ObjString* resolve_and_intern(const char* text) {
 "<"					{ yylval.symbol = sym_less; return SP_IDENTIFIER; }
 ">="				{ yylval.symbol = sym_nless; return SP_IDENTIFIER; }
 "<="				{ yylval.symbol = sym_ngt; return SP_IDENTIFIER; }
-"<<"				{ yylval.symbol = sym_lshif; return SP_IDENTIFIER; }
-">>"				{ yylval.symbol = sym_rshif; return SP_IDENTIFIER; }
 "+="				{ yylval.symbol = sym_plus_eq; return SP_IDENTIFIER; }
 "-="				{ yylval.symbol = sym_minus_eq; return SP_IDENTIFIER; }
 "*="				{ yylval.symbol = sym_multi_eq; return SP_IDENTIFIER; }
 "/="				{ yylval.symbol = sym_div_eq; return SP_IDENTIFIER; }
+"&="				{ yylval.symbol = sym_band_eq; return SP_IDENTIFIER; }
+"|="				{ yylval.symbol = sym_bor_eq; return SP_IDENTIFIER; }
+"^="				{ yylval.symbol = sym_bxor_eq; return SP_IDENTIFIER; }
+"<<="				{ yylval.symbol = sym_shl_eq; return SP_IDENTIFIER; }
+">>="				{ yylval.symbol = sym_shr_eq; return SP_IDENTIFIER; }
+"<<"				{ yylval.symbol = sym_shl; return SP_IDENTIFIER; }
+">>"				{ yylval.symbol = sym_shr; return SP_IDENTIFIER; }
+"&"					{ yylval.symbol = sym_band;  return SP_IDENTIFIER; }
+"|"					{ yylval.symbol = sym_bor;   return SP_IDENTIFIER; }
+"^"					{ yylval.symbol = sym_bxor;  return SP_IDENTIFIER; }
+"~"					{ yylval.symbol = sym_bnot;  return SP_IDENTIFIER; }
+"!"					{ yylval.symbol = sym_not; return SP_IDENTIFIER; }
 "//".*				{ }
 "/*"				{ comment(); }
 "..."				{ return ELLIPSIS; }

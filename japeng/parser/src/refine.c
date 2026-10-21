@@ -18,8 +18,18 @@ static int get_binary_precedence(const ObjString* op) {
         return 50;
     }
     // ビットシフト
-    if (op == sym_lshif || op == sym_rshif) {
+    if (op == sym_shl || op == sym_shr) {
+        return 45;
+    }
+    // ★ ビット演算 (&, ^, |)
+    if (op == sym_band) {
         return 40;
+    }
+    if (op == sym_bxor) {
+        return 38;
+    }
+    if (op == sym_bor) {
+        return 36;
     }
     // 大小比較
     if (op == sym_gt || op == sym_less || 
@@ -30,14 +40,21 @@ static int get_binary_precedence(const ObjString* op) {
     if (op == sym_equal || op == sym_nequal) {
         return 20;
     }
+    if (op == sym_and) {
+        return 16;
+    }
+    if (op == sym_or) {
+        return 14;
+    }
     // 代入系演算子
     if (op == sym_is || op == sym_are || 
         op == sym_plus_eq || op == sym_minus_eq ||
-        op == sym_multi_eq || op == sym_div_eq) {
+        op == sym_multi_eq || op == sym_div_eq ||
+        op == sym_band_eq || op == sym_bor_eq ||
+        op == sym_bxor_eq || op == sym_shl_eq || op == sym_shr_eq) {
         return 10;
     }
 
-    // ★ 通常のメソッド呼び出し (run1, println 等) は回転させない！
     return 0;
 }
 

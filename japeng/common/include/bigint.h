@@ -35,21 +35,15 @@ int bi_compare_abs(const BigInteger* lhs, const BigInteger* rhs);
 int compare_bi(const BigInteger* lhs, const BigInteger* rhs);
 
 BigInteger* bi_shl(BigInteger* a, size_t shift_bits);
-
 BigInteger* bi_shr(BigInteger* a, size_t shift_bits);
-
 BigInteger* bi_add(BigInteger* lhs, BigInteger* rhs);
-
 BigInteger* bi_sub(BigInteger* lhs, BigInteger* rhs);
-
 BigInteger* bi_mul(BigInteger* lhs, BigInteger* rhs);
-
 BigInteger* bi_div(BigInteger* lhs, BigInteger* rhs);
-
 BigInteger* bi_mod(BigInteger* lhs, BigInteger* rhs);
-
+BigInteger* bi_pow(const BigInteger* base, uint64_t exp);
+BigInteger* bi_gcd(const BigInteger* a, const BigInteger* b);
 BigInteger* new_bi_from_string(ObjString* string);
-
 ObjString* bi_to_string(const BigInteger* bi);
 
 bool        bi_is_zero(const BigInteger* bi);

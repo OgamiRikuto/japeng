@@ -4,10 +4,10 @@
 #include <stdint.h>
 
 typedef enum {
-    OP_CONSTANT,
-    OP_GET_LOCAL,
-    OP_SET_LOCAL,
-    OP_GET_GLOBAL,
+    OP_CONSTANT,        // 0
+    OP_GET_LOCAL,       // 1
+    OP_SET_LOCAL,       // 2
+    OP_GET_GLOBAL,      // 3
     OP_SET_GLOBAL,
     OP_GET_FIELD,
     OP_SET_FIELD,
@@ -52,6 +52,11 @@ typedef enum {
     OP_NGREAT_INT,
     OP_SHL,
     OP_SHR,
+    OP_BAND,
+    OP_BOR,
+    OP_BXOR,
+    OP_BNOT,
+    OP_NOT,
     OP_MAX
 } Opcode;
 

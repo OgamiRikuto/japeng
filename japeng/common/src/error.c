@@ -134,6 +134,10 @@ static const ErrorMessage error_table[ERR_COUNT] = {
         .en = "Default value for parameter '%s' must be a literal.",
         .ja = "引数 '%s' のデフォルト値にはリテラルを指定してください。"
     },
+    [ERR_FUNCTION_REQUIRES_SIGNATURE] = {
+        .en = "Function declaration for '%s' requires a signature (e.g. 'Function(;)' or 'Function(Arg; Ret)').",
+        .ja = "'%s' の関数型宣言にはシグネチャの指定が必要です (例: 'Function(;)' や 'Function(引数型; 戻り値型)')。"
+    },
 
     // VM 実行時エラー
     [ERR_UNDEFINED_GLOBAL] = {
@@ -194,7 +198,7 @@ static const ErrorMessage error_table[ERR_COUNT] = {
     },
     [ERR_UNDEFINED_MESSAGE] = {
         .en = "Undefined message '%1$s' for '%2$s'.",
-        .ja = "型 '%2$s' に未定義のメッセージ (メソッド) '%1$s' が送信されました。"
+        .ja = "型 '%1$s' に未定義のメッセージ (メソッド) '%2$s' が送信されました。"
     },
     [ERR_INDEX_OUT_OF_BOUNDS] = {
         .en = "Index out of bounds (index: %1$d, size: %2$d).",

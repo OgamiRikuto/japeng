@@ -69,11 +69,16 @@ void emit_inst(Compiler* c, Opcode op, uint32_t operand) {
         case OP_NGREAT_INT:
         case OP_SHL:
         case OP_SHR:
+        case OP_BAND:
+        case OP_BOR:
+        case OP_BXOR:
         case OP_SET_FIELD: // receiver と value を pop して value を push
             c->stack_depth--;
             break;
 
         // --- ±0: スタック高さが変わらない命令 ---
+        case OP_BNOT:
+        case OP_NOT:
         case OP_GET_FIELD:     // receiver を pop して field を push
         case OP_NEW_INSTANCE:  // class を pop して instance を push
         case OP_SET_LOCAL:     // peek して代入

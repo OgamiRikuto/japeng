@@ -419,8 +419,13 @@ primary :
             }
         } else if ($1 == sym_plus) {
             $$ = $2;
-        } 
-        else {
+        } else if ($1 == sym_bnot) {
+            ASTNode* op = create_identifier_node(sym_bnot);
+            $$ = create_send_node($2, op, NULL);
+        }else if ($1 == sym_not) {
+            ASTNode* op = create_identifier_node(sym_not);
+            $$ = create_send_node($2, op, NULL);
+        } else {
             // 将来の '!' や '~' などの単項演算子拡張用
             char buf[128];
             snprintf(buf, sizeof(buf), "unsupported unary operator '%s'", $1->chars);

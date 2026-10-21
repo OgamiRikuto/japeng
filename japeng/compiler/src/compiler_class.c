@@ -167,6 +167,13 @@ static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
         ASTNode*   from_node   = node->field_decl.from_class;
         bool       is_static   = node->field_decl.is_static;
 
+        if (member_type != NULL && member_type->name == sym_Function &&
+            node->field_decl.type->kind != AST_FUNC_TYPE &&
+            node->field_decl.default_data == NULL) {
+            
+            error_compile(node, ERR_FUNCTION_REQUIRES_SIGNATURE, member_name->chars);
+        }
+
         ObjClass* from_class = NULL;
         if (from_node != NULL) {
             ObjString* from_name = get_class_name_from_node(from_node);

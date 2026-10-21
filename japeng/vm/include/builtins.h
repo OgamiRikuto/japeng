@@ -9,10 +9,11 @@
 
 void define_native(ObjClass* klass, const char* name, NativeFn func);
 void init_builtin_classes(VM* vm);
-// bool native_println(VM* vm, uint8_t arg_count);
-// bool native_print(VM* vm, uint8_t arg_count);
+
 void setup_print(VM* vm, ObjClass* klass);
+void setup_number(VM* vm, TypeInfo* o_info);
+void setup_boolean(VM* vm, TypeInfo* o_info);
 void list_append(ObjList* list, Value val);
-void setup_list(VM* vm, ObjClass* super_class, TypeInfo* t_info);
-void setup_string(VM* vm, ObjClass* super_class, TypeInfo* t_info);
+void setup_list(VM* vm, TypeInfo* o_info);
+void setup_string(VM* vm, TypeInfo* o_info);
 #endif

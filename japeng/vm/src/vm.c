@@ -65,6 +65,13 @@ const char* op_kind[OP_MAX] = {
     [OP_NEQUAL]       = "OP_NEQUAL",
     [OP_NGREAT]       = "OP_NGREAT",
     [OP_NLESS]        = "OP_NLESS",
+    [OP_SHL]           = "OP_SHL",
+    [OP_SHR]           = "OP_SHR",
+    [OP_BAND]          = "OP_BAND",
+    [OP_BOR]           = "OP_BOR",
+    [OP_BXOR]          = "OP_BXOR",
+    [OP_BNOT]          = "OP_BNOT",
+    [OP_NOT]           = "OP_NOT",
     [OP_CLOSURE]      = "OP_CLOSURE",
     [OP_GET_UPVALUE]  = "OP_GET_UPVALUE",
     [OP_NEW_INSTANCE] = "OP_NEW_INSTANCE"
@@ -106,10 +113,20 @@ ObjClass* get_class_for_value(VM* vm, Value val)
     if (is_int(val)) {
         return vm->class_integer;
     }
+    if (is_float(val)) {
+        return vm->class_float;
+    }
+    if (is_bool(val)) {
+        return vm->class_boolean;
+    }
 
     if (is_obj(val)) {
         Obj* obj = as_obj(val);
         switch (obj->type) {
+            case OBJ_BIGINTEGER:
+                return vm->class_integer;
+            case OBJ_DECIMAL:
+                return vm->class_decimal;
             case OBJ_INSTANCE:
                 return ((ObjInstance*)obj)->klass;
             case OBJ_LIST:
@@ -595,136 +612,83 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 push(vm, make_bool(calc_compare(a, b) >= 0));
                 break;
             }
-            // case OP_ADD: {
-            //     Value b = pop(vm);
-            //     Value a = pop(vm);
-            //     if (is_int(a) && is_int(b)) {
-            //         push(vm, make_int(as_int(a) + as_int(b)));
-            //     } else if (is_float(a) && is_float(b)) {
-            //         push(vm, make_float(as_float(a) + as_float(b)));
-            //     } else {
-            //         error_runtime(ERR_TYPE_OP_ADD);
-            //         return INTERPRET_RUNTIME_ERROR;
-            //     }
-            //     break;
-            // }
-            // case OP_SUB: {
-            //     Value b = pop(vm);
-            //     Value a = pop(vm);
-            //     if (is_int(a) && is_int(b)) {
-            //         push(vm, make_int(as_int(a) - as_int(b)));
-            //     } else if (is_float(a) && is_float(b)) {
-            //         push(vm, make_float(as_float(a) - as_float(b)));
-            //     } else {
-            //         error_runtime(ERR_TYPE_OP_SUB);
-            //         return INTERPRET_RUNTIME_ERROR;
-            //     }
-            //     break;
-            // }
-            // case OP_MUL: {
-            //     Value b = pop(vm);
-            //     Value a = pop(vm);
-            //     if (is_int(a) && is_int(b)) {
-            //         push(vm, make_int(as_int(a) * as_int(b)));
-            //     } else if (is_float(a) && is_float(b)) {
-            //         push(vm, make_float(as_float(a) * as_float(b)));
-            //     } else {
-            //         error_runtime(ERR_TYPE_OP_MUL);
-            //         return INTERPRET_RUNTIME_ERROR;
-            //     }
-            //     break;
-            // }
-            // case OP_DIV: {
-            //     Value b = pop(vm);
-            //     Value a = pop(vm);
-            //     if (is_int(a) && is_int(b)) {
-            //         if (as_int(b) == 0) {
-            //             error_runtime(ERR_DIVISION_BY_ZERO);
-            //             return INTERPRET_RUNTIME_ERROR;
-            //         }
-            //         push(vm, make_int(as_int(a) / as_int(b)));
-            //     } else if (is_float(a) && is_float(b)) {
-            //         push(vm, make_float(as_float(a) / as_float(b)));
-            //     } else {
-            //         error_runtime(ERR_TYPE_OP_DIV);
-            //         return INTERPRET_RUNTIME_ERROR;
-            //     }
-            //     break;
-            // }
-            // case OP_LESS: {
-            //     Value b = pop(vm);
-            //     Value a = pop(vm);
-            //     if (is_int(a) && is_int(b)) {
-            //         push(vm, make_bool(as_int(a) < as_int(b)));
-            //     } else if (is_float(a) && is_float(b)) {
-            //         push(vm, make_bool(as_float(a) < as_float(b)));
-            //     } else {
-            //         error_runtime(ERR_TYPE_OP_LESS);
-            //         return INTERPRET_RUNTIME_ERROR;
-            //     }
-            //     break;
-            // }
-            // case OP_GREAT: {
-            //     Value b = pop(vm);
-            //     Value a = pop(vm);
-            //     if (is_int(a) && is_int(b)) {
-            //         push(vm, make_bool(as_int(a) > as_int(b)));
-            //     } else if (is_float(a) && is_float(b)) {
-            //         push(vm, make_bool(as_float(a) > as_float(b)));
-            //     } else {
-            //         error_runtime(ERR_TYPE_OP_GREAT);
-            //         return INTERPRET_RUNTIME_ERROR;
-            //     }
-            //     break;
-            // }
-            // case OP_EQUAL: {
-            //     Value b = pop(vm);
-            //     Value a = pop(vm);
-
-            //     if (a == b) {
-            //         push(vm, make_bool(true));
-            //         break;
-            //     }
-
-            //     if (is_obj(a) && is_obj(b)) {
-            //         Obj* obj_a = as_obj(a);
-            //         Obj* obj_b = as_obj(b);
-            //         if (obj_a->type == OBJ_STRING && obj_b->type == OBJ_STRING) {
-            //             ObjString* sa = (ObjString*)obj_a;
-            //             ObjString* sb = (ObjString*)obj_b;
-            //             bool eq = (sa->length == sb->length) && 
-            //                       (memcmp(sa->chars, sb->chars, sa->length) == 0);
-            //             push(vm, make_bool(eq));
-            //             break;
-            //         }
-            //     }
-            //     push(vm, make_bool(false));
-            //     break;
-            // }
-            // case OP_NEQUAL: {
-            //     Value b = pop(vm);
-            //     Value a = pop(vm);
-
-            //     if (a == b) {
-            //         push(vm, make_bool(false));
-            //         break;
-            //     }
-
-            //     if (is_obj(a) && is_obj(b)) {
-            //         Obj* obj_a = as_obj(a);
-            //         Obj* obj_b = as_obj(b);
-            //         if (obj_a->type == OBJ_STRING && obj_b->type == OBJ_STRING) {
-            //             ObjString* sa = (ObjString*)obj_a;
-            //             ObjString* sb = (ObjString*)obj_b;
-            //             bool eq = (sa->length == sb->length) && 
-            //                       (memcmp(sa->chars, sb->chars, sa->length) == 0);
-            //             push(vm, make_bool(!eq));
-            //             break;
-            //         }
-            //     }
-            //     push(vm, make_bool(true));
-            //     break;
-            // }
+            case OP_SHL: {
+                Value b = pop(vm);
+                Value a = pop(vm);
+                if (is_int(a) && is_int(b)) {
+                    push(vm, make_int(as_int(a) << as_int(b)));
+                    break;
+                }
+                if (is_int(b)) {
+                    push(vm, make_obj((Obj*)bi_shl((BigInteger*)as_obj(a), (size_t)as_int(b))));
+                    break;
+                }
+                push(vm, make_int(0));
+                break;
+            }
+            case OP_SHR: {
+                Value b = pop(vm);
+                Value a = pop(vm);
+                if (is_int(a) && is_int(b)) {
+                    push(vm, make_int(as_int(a) >> as_int(b)));
+                    break;
+                }
+                if (is_int(b)) {
+                    push(vm, make_obj((Obj*)bi_shr((BigInteger*)as_obj(a), (size_t)as_int(b))));
+                    break;
+                }
+                push(vm, make_int(0));
+                break;
+            }
+            case OP_BAND: {
+                Value b = pop(vm);
+                Value a = pop(vm);
+                if (is_int(a) && is_int(b)) {
+                    push(vm, make_int(as_int(a) & as_int(b)));
+                    break;
+                }
+                push(vm, make_int(0));
+                break;
+            }
+            case OP_BOR: {
+                Value b = pop(vm);
+                Value a = pop(vm);
+                if (is_int(a) && is_int(b)) {
+                    push(vm, make_int(as_int(a) | as_int(b)));
+                    break;
+                }
+                push(vm, make_int(0));
+                break;
+            }
+            case OP_BXOR: {
+                Value b = pop(vm);
+                Value a = pop(vm);
+                if (is_int(a) && is_int(b)) {
+                    push(vm, make_int(as_int(a) ^ as_int(b)));
+                    break;
+                }
+                push(vm, make_int(0));
+                break;
+            }
+            case OP_BNOT: {
+                Value a = pop(vm);
+                if (is_int(a)) {
+                    push(vm, make_int(~as_int(a)));
+                    break;
+                }
+                push(vm, make_int(0));
+                break;
+            }
+            case OP_NOT: {
+                Value a = pop(vm);
+                if (is_bool(a)) {
+                    push(vm, make_bool(!as_bool(a)));
+                    break;
+                }
+                // is_falsy に従って反転フォールバック
+                push(vm, make_bool(is_falsy(a)));
+                break;
+            }
             default: 
                 error_runtime(ERR_UNKNOWN_OPCODE, op);
                 return INTERPRET_RUNTIME_ERROR;
@@ -847,6 +811,16 @@ static void print_stack(VM* vm) {
                         ObjInstance* inst = (ObjInstance*)obj;
                         fprintf(stderr, "<inst %s>", (inst->klass && inst->klass->name) 
                                             ? inst->klass->name->chars : "Anon");
+                        break;
+                    }
+                    case OBJ_BIGINTEGER: {
+                        BigInteger* bi = (BigInteger*)obj;
+                        fprintf(stderr, "%s", bi_to_string(bi)->chars);
+                        break;
+                    }
+                    case OBJ_DECIMAL: {
+                        ObjDecimal* dec = (ObjDecimal*)obj;
+                        fprintf(stderr, "%s", dec_toString(dec)->chars);
                         break;
                     }
                     case OBJ_STRING: {
@@ -978,7 +952,12 @@ static void print_instruction(CallFrame* frame, uint32_t instruction, uint32_t c
         case OP_NGREAT_INT:
         case OP_SHL:
         case OP_SHR:
-            fprintf(stderr, "\n"); // オペランド不要な命令
+        case OP_BAND:
+        case OP_BOR:
+        case OP_BXOR:
+        case OP_BNOT:
+        case OP_NOT:
+            fprintf(stderr, "\n");
             break;
         default:
             fprintf(stderr, "(operand: %u)\n", operand);

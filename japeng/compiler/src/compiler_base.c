@@ -48,6 +48,17 @@ static TypeInfo* check_compound_type(Compiler* c, ASTNode* node, ObjString* msg,
         return new_type_info(sym_Error, 0);
     }
 
+    bool is_bit_compound = (msg == sym_band_eq || msg == sym_bor_eq ||
+                            msg == sym_bxor_eq || msg == sym_shl_eq || msg == sym_shr_eq);
+    if (is_bit_compound) {
+        if (!is_integer_type(lhs->name) || !is_integer_type(rhs->name)) {
+            error_compile(node, ERR_TYPE_MISMATCH, sym_Integer->chars,
+                          !is_integer_type(lhs->name) ? lhs->name->chars : rhs->name->chars);
+            return new_type_info(sym_Error, 0);
+        }
+        return lhs;
+    }
+
     // 2. 数値型チェック
     bool lhs_num = is_integer_type(lhs->name) || is_float_type(lhs->name) || is_decimal_type(lhs->name);
     bool rhs_num = is_integer_type(rhs->name) || is_float_type(rhs->name) || is_decimal_type(rhs->name);
@@ -85,6 +96,11 @@ static Opcode resolve_actual_op(ObjString* msg, TypeInfo* lhs)
         if (msg == sym_minus_eq) return OP_SUB_INT;
         if (msg == sym_multi_eq) return OP_MUL_INT;
         if (msg == sym_div_eq)   return OP_DIV_INT;
+        if (msg == sym_band_eq)  return OP_BAND;
+        if (msg == sym_bor_eq)   return OP_BOR;
+        if (msg == sym_bxor_eq)  return OP_BXOR;
+        if (msg == sym_shl_eq)   return OP_SHL;
+        if (msg == sym_shr_eq)   return OP_SHR;
         return (Opcode)-1;
     }
 
