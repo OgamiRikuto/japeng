@@ -151,6 +151,61 @@ static ASTNode* find_class_ast(ObjString* name)
     return NULL;
 }
 
+// 委譲メソッドの呼び出しを内部インスタンスへ転送する極小のラッパー関数を自動合成
+static ObjFunction* create_forwarding_wrapper(Compiler* c, ObjClass* klass, ObjClass* from_class, 
+                                              ObjString* member_name, TypeInfo* method_type, ASTNode* node)
+{
+    ObjString* hidden_name = get_delegate_field_name(from_class);
+    int del_field_idx = find_field_index(klass, hidden_name);
+    if (del_field_idx == -1) {
+        error_compile(node, ERR_DELEGATE_CLASS_NOT_FOUND,
+                      from_class->name ? from_class->name->chars : "null",
+                      member_name->chars);
+        return NULL;
+    }
+
+    // 引数の個数 (arity) を特定
+    uint8_t arity = 0;
+    if (method_type != NULL) {
+        arity = (uint8_t)method_type->param_count;
+    } else {
+        Value val;
+        if (find_method(from_class, member_name, &val) && is_obj_type(val, OBJ_FUNCTION)) {
+            arity = ((ObjFunction*)as_obj(val))->arity;
+        }
+    }
+
+    Chunk* chunk = (Chunk*)malloc(sizeof(Chunk));
+    init_chunk(chunk);
+
+    // 1. self (スロット 0) をロード
+    write_chunk(chunk, make_inst(OP_GET_LOCAL, 0));
+
+    // 2. 隠しフィールドから内部インスタンスを取り出す
+    write_chunk(chunk, make_inst(OP_GET_FIELD, (uint32_t)del_field_idx));
+
+    // 3. 引数 (スロット 1 〜 arity) を順番に積む
+    for (uint8_t i = 1; i <= arity; i++) {
+        write_chunk(chunk, make_inst(OP_GET_LOCAL, (uint32_t)i));
+    }
+
+    // 4. 内部インスタンスに対してメッセージを送信 (OP_SEND)
+    uint32_t msg_const = add_constant(chunk, make_obj((Obj*)member_name));
+    write_chunk(chunk, make_send_inst(arity, (uint16_t)msg_const));
+
+    // 5. 内部インスタンスからの戻り値をそのまま返却
+    int ret_count = 1;
+    if (method_type != NULL && method_type->type_arg_count > method_type->param_count) {
+        ret_count = method_type->type_arg_count - method_type->param_count;
+    }
+    write_chunk(chunk, make_inst(OP_RETURN, (uint32_t)ret_count));
+
+    ObjFunction* wrapper = new_function(chunk, arity);
+    wrapper->upvalue_count = 0;
+    wrapper->upvalues = NULL;
+    return wrapper;
+}
+
 static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
 {
     if (node == NULL) return;
@@ -169,7 +224,8 @@ static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
 
         if (member_type != NULL && member_type->name == sym_Function &&
             node->field_decl.type->kind != AST_FUNC_TYPE &&
-            node->field_decl.default_data == NULL) {
+            node->field_decl.default_data == NULL &&
+            from_node == NULL) {
             
             error_compile(node, ERR_FUNCTION_REQUIRES_SIGNATURE, member_name->chars);
         }
@@ -218,10 +274,19 @@ static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
             if (from_class != NULL) {
                 Value method_val;
                 if (find_method(from_class, member_name, &method_val)) {
-                    add_method(klass, member_name, method_val);
-                    add_method_from(klass, member_name, from_class);
+                    // ★★★ 実体を直入れする代わりに、ラッパー関数を合成して登録 ★★★
+                    TypeInfo* m_type = find_method_type(from_class, member_name);
+                    ObjFunction* wrapper = create_forwarding_wrapper(c, klass, from_class, member_name, m_type, node);
+                    if (wrapper != NULL) {
+                        add_method(klass, member_name, make_obj((Obj*)wrapper));
+                        if (m_type != NULL) {
+                            add_method_type(klass, member_name, m_type);
+                        }
+                        add_method_from(klass, member_name, from_class);
+                    }
                     return;
-                } else {
+                    // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+                }else {
                     error_compile(node, ERR_DELEGATE_METHOD_NOT_FOUND, 
                             member_name->chars, from_class->name->chars);
                 }
@@ -519,6 +584,35 @@ void compile_class_body(Compiler* c, ASTNode* node)
     if (klass->superclass != NULL) {
         for (int i = 0; i < klass->superclass->field_count; i++) {
             add_field(klass, klass->superclass->field_infos[i], klass->superclass->default_values[i]);
+        }
+    }
+
+    // 追加: 委譲元クラス（delegates）用の隠しフィールドを自動追加
+    for (int i = 0; i < klass->delegate_count; i++) {
+        ObjClass* del_klass = klass->delegates[i];
+        if (del_klass == NULL) continue;
+
+        // 委譲元クラスが未コンパイルなら先にコンパイル
+        if (del_klass->state != CLASS_STATE_COMPILED) {
+            ASTNode* del_ast = find_class_ast(del_klass->name);
+            if (del_ast != NULL) {
+                compile_class_body(c, del_ast);
+            }
+        }
+
+        ObjString* hidden_name = get_delegate_field_name(del_klass);
+        if (find_field_index(klass, hidden_name) == -1) {
+            TypeInfo* del_type = (klass->delegate_types && klass->delegate_types[i]) 
+                                 ? klass->delegate_types[i] 
+                                 : new_type_info(del_klass->name, 0);
+            FieldInfo f_info = {
+                .name = hidden_name,
+                .type = del_type,
+                .from_class = del_klass,
+                .is_static = false,
+                .is_delegate_instance = true // ★ 委譲インスタンスフラグ
+            };
+            add_field(klass, f_info, make_nil());
         }
     }
 

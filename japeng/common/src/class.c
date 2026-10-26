@@ -364,6 +364,12 @@ ObjInstance* new_instance(ObjClass* klass)
                 instance->fields[index] = make_nil();
             }
         }
+        for (int index = 0; index < klass->field_count; index++) {
+            if (klass->field_infos[index].is_delegate_instance && klass->field_infos[index].from_class != NULL) {
+                ObjInstance* del_inst = new_instance(klass->field_infos[index].from_class);
+                instance->fields[index] = make_obj((Obj*)del_inst);
+            }
+        }
     } else {
         instance->fields = NULL;
     }
@@ -404,4 +410,12 @@ TypeInfo* find_method_type(ObjClass* klass, ObjString* name)
         if (t != NULL) return t;
     }
     return NULL;
+}
+
+ObjString* get_delegate_field_name(ObjClass* delegate_class)
+{
+    char buf[256];
+    snprintf(buf, sizeof(buf), "__delegate_%s", 
+             (delegate_class && delegate_class->name) ? delegate_class->name->chars : "anon");
+    return intern_cstr(buf);
 }

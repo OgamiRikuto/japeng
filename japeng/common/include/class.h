@@ -24,6 +24,7 @@ typedef struct fieldInfo {
     TypeInfo* type;
     struct objClass* from_class;
     bool is_static;
+    bool is_delegate_instance;
 } FieldInfo;
 
 typedef enum {
@@ -101,6 +102,8 @@ int find_field_index(ObjClass* klass, ObjString* name);
 
 void add_method_type(ObjClass* klass, ObjString* name, TypeInfo* type);
 TypeInfo* find_method_type(ObjClass* klass, ObjString* name);
+
+ObjString* get_delegate_field_name(ObjClass* delegate_class);
 
 
 #endif
