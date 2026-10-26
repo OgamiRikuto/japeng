@@ -13,6 +13,7 @@ typedef struct YYLTYPE {
 extern YYLTYPE yylloc;
 extern int yylineno;
 extern const char* current_filename;
+extern Location current_ast_loc;
 
 static ASTNode* alloc_node(ASTNodeType kind)
 {
@@ -23,9 +24,7 @@ static ASTNode* alloc_node(ASTNodeType kind)
     }
 
     node->kind = kind;
-    node->loc.line = yylineno;
-    node->loc.column = yylloc.first_column;
-    node->loc.col_end = yylloc.last_column;
+    node->loc = current_ast_loc;
     node->loc.filename = current_filename ? current_filename : "unknown.je";
 
     return node;

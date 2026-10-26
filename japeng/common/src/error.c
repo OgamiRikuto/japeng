@@ -198,7 +198,7 @@ static const ErrorMessage error_table[ERR_COUNT] = {
     },
     [ERR_UNDEFINED_MESSAGE] = {
         .en = "Undefined message '%1$s' for '%2$s'.",
-        .ja = "型 '%1$s' に未定義のメッセージ (メソッド) '%2$s' が送信されました。"
+        .ja = "型 '%2$s' に未定義のメッセージ (メソッド) '%1$s' が送信されました。"
     },
     [ERR_INDEX_OUT_OF_BOUNDS] = {
         .en = "Index out of bounds (index: %1$d, size: %2$d).",

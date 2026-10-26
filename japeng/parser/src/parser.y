@@ -9,6 +9,24 @@
 extern int yylex();
 const char* current_filename = "";
 int syntax_error_count = 0;
+
+Location current_ast_loc = {0};
+
+#define YYLLOC_DEFAULT(Current, Rhs, N) \
+    do { \
+        if (N) { \
+            (Current).first_line   = YYRHSLOC (Rhs, 1).first_line; \
+            (Current).first_column = YYRHSLOC (Rhs, 1).first_column; \
+            (Current).last_line    = YYRHSLOC (Rhs, N).last_line; \
+            (Current).last_column  = YYRHSLOC (Rhs, N).last_column; \
+        } else { \
+            (Current).first_line   = (Current).last_line   = YYRHSLOC (Rhs, 0).last_line; \
+            (Current).first_column = (Current).last_column = YYRHSLOC (Rhs, 0).last_column; \
+        } \
+        current_ast_loc.line    = (Current).first_line; \
+        current_ast_loc.column  = (Current).first_column; \
+        current_ast_loc.col_end = (Current).last_column; \
+    } while (0)
 %}
 %locations
 %error-verbose
@@ -383,11 +401,7 @@ expression :
     ;
 
 primary : 
-    IDENTIFIER  
-    { 
-        $$ = create_identifier_node($1); 
-        $$->loc.column = @1.first_column;
-    }
+    IDENTIFIER  { $$ = create_identifier_node($1); }
     | SELF      { $$ = create_identifier_node($1); }
     | INTEGER   { $$ = create_literal_node(TOKEN_INTEGER, $1); }
     | FLOAT     { $$ = create_literal_node(TOKEN_FLOAT, $1); }
