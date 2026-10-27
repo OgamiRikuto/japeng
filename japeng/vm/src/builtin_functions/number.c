@@ -98,12 +98,15 @@ void setup_number(VM* vm, TypeInfo* o_info)
 {
     // Integer クラス
     vm->class_integer = new_class(sym_Integer, new_type_info(sym_Integer, 0), vm->class_object, o_info, 0);
+    init_class_vtable_from_super(vm->class_integer);
     define_native(vm->class_integer, "pow", native_int_pow);
     define_native(vm->class_integer, "gcd", native_int_gcd); // ★ 追加！
 
     // Float クラス
     vm->class_float = new_class(sym_Float, new_type_info(sym_Float, 0), vm->class_object, o_info, 0);
+    init_class_vtable_from_super(vm->class_float);
 
     // Decimal クラス (★ 第3引数はスーパークラスなので vm->class_object を指定！)
     vm->class_decimal = new_class(sym_Decimal, new_type_info(sym_Decimal, 0), vm->class_object, o_info, 0);
+    init_class_vtable_from_super(vm->class_decimal);
 }

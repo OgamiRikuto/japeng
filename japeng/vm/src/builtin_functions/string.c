@@ -156,6 +156,8 @@ void setup_string(VM* vm, TypeInfo* o_info)
 {
     TypeInfo* s_info = new_type_info(sym_String, 1);
     vm->class_string = new_class(sym_String, s_info, vm->class_object, o_info, 0);
+    
+    init_class_vtable_from_super(vm->class_string);
 
     define_native(vm->class_string, "init",   native_string_init);
     define_native(vm->class_string, "get",    native_string_get);

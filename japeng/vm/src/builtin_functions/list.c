@@ -165,6 +165,8 @@ void setup_list(VM* vm, TypeInfo* o_info)
     TypeInfo* l_info = new_type_info(sym_List, 1);
     vm->class_list = new_class(sym_List, l_info, vm->class_object, o_info, 0);
 
+    init_class_vtable_from_super(vm->class_list);
+
     define_native(vm->class_list, "init",   native_list_init);
     define_native(vm->class_list, "push",   native_list_push);
     define_native(vm->class_list, "get",    native_list_get);

@@ -54,6 +54,7 @@ static const BuiltinDef builtin_table[] = {
     { "pow",          "累乗",         BUILTIN_METHOD },
     { "gcd",          "最小公倍数",    BUILTIN_METHOD },
     { "init",         "初期化",       BUILTIN_METHOD },
+    { "destroy",      "破棄",         BUILTIN_METHOD }, 
     { "get",          "取得",         BUILTIN_METHOD },
     { "length",       "長さ",         BUILTIN_METHOD },
     { "split",        "区切る",       BUILTIN_METHOD },

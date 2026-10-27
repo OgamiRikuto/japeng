@@ -54,7 +54,14 @@ typedef struct objClass {
     // メソッド
     Table* methods;
     Table* method_from;
-    Table* method_types;;
+    Table* method_types;
+
+    // vtable（仮想関数テーブル)
+    int vtable_count;
+    int vtable_capacity;
+    Value* vtable;               // メソッド実体 (ObjFunction* / ObjNative*) の配列
+    ObjString** vtable_names;    // 各スロットのメソッド名配列 (デバッグ・継承用)
+    Table* vtable_indexes;       // メソッド名 -> スロット番号 (int) の逆引きマップ
     
     // フィールド情報
     int field_count; 
@@ -104,6 +111,11 @@ void add_method_type(ObjClass* klass, ObjString* name, TypeInfo* type);
 TypeInfo* find_method_type(ObjClass* klass, ObjString* name);
 
 ObjString* get_delegate_field_name(ObjClass* delegate_class);
+
+int add_or_override_vtable_slot(ObjClass* klass, ObjString* name, Value method);
+void build_class_vtable(ObjClass* klass);
+void init_class_vtable_from_super(ObjClass* klass);
+int get_vtable_index(ObjClass* klass, ObjString* name);
 
 
 #endif

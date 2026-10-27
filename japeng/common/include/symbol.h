@@ -14,6 +14,7 @@ typedef struct objString ObjString;
     X(else,         "else") \
     X(repeat,       "repeat") \
     X(init,         "init") \
+    X(destroy,      "destroy") \
     X(new,          "new") \
     X(call,         "call") \
     X(Auto,         "Auto") \

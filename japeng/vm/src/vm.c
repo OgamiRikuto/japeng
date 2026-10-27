@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DEBUG_TRACE_EXECUTION 1
+#define DEBUG_TRACE_EXECUTION 0
 
 #if DEBUG_TRACE_EXECUTION 
 static void print_stack(VM* vm);

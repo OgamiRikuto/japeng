@@ -134,6 +134,12 @@ void print_class(ObjClass* klass)
     if (!has_methods) {
         fprintf(stderr, "  (none)\n");
     }
+
+    // 4. vtable レイアウト表示
+    fprintf(stderr, "vtable (%d slots):\n", klass->vtable_count);
+    for (int i = 0; i < klass->vtable_count; i++) {
+        fprintf(stderr, "  [%d] %s\n", i, klass->vtable_names[i] ? klass->vtable_names[i]->chars : "(anon)");
+    }
 }
 
 void print_instance(ObjInstance* inst)
@@ -237,6 +243,12 @@ ObjClass* new_class(ObjString* name, TypeInfo* type,
     klass->method_from = new_table(8);
     klass->method_types = new_table(8);
 
+    klass->vtable_count = 0;
+    klass->vtable_capacity = 0;
+    klass->vtable = NULL;
+    klass->vtable_names = NULL;
+    klass->vtable_indexes = new_table(8);
+
     klass->field_count = 0;
     klass->field_capacity = 0;
     klass->field_infos = NULL;
@@ -275,6 +287,14 @@ void free_class(ObjClass* klass)
     }
     if (klass->method_types != NULL) {
         table_free(klass->method_types);
+    }
+
+    if (klass->vtable != NULL) {
+        free(klass->vtable);
+        free(klass->vtable_names);
+    }
+    if (klass->vtable_indexes != NULL) {
+        table_free(klass->vtable_indexes);
     }
 
     free(klass);
@@ -418,4 +438,103 @@ ObjString* get_delegate_field_name(ObjClass* delegate_class)
     snprintf(buf, sizeof(buf), "__delegate_%s", 
              (delegate_class && delegate_class->name) ? delegate_class->name->chars : "anon");
     return intern_cstr(buf);
+}
+
+int add_or_override_vtable_slot(ObjClass* klass, ObjString* name, Value method)
+{
+    Value existing_slot_val;
+    // 1. 親クラスから引き継いだ既存スロットがある場合（オーバーライド）
+    if (table_get(klass->vtable_indexes, name, &existing_slot_val)) {
+        int slot = as_int(existing_slot_val);
+        // 実体がある場合（body != NULL やネイティブ）のみ中身を上書き
+        if (!is_nil(method)) {
+            klass->vtable[slot] = method;
+        }
+        return slot;
+    }
+
+    // 2. 新規スロットの追加（容量拡張）
+    if (klass->vtable_count >= klass->vtable_capacity) {
+        klass->vtable_capacity = klass->vtable_capacity < 8 ? 8 : klass->vtable_capacity * 2;
+        klass->vtable = (Value*)realloc(klass->vtable, sizeof(Value) * klass->vtable_capacity);
+        klass->vtable_names = (ObjString**)realloc(klass->vtable_names, sizeof(ObjString*) * klass->vtable_capacity);
+    }
+
+    int slot = klass->vtable_count++;
+    klass->vtable[slot] = method; // 実体がなければ make_nil() で枠だけ確保
+    klass->vtable_names[slot] = name;
+    table_set(klass->vtable_indexes, name, make_int(slot));
+    return slot;
+}
+
+// クラスのコンパイル完了時に呼び出し、確定した vtable を組み立てる
+void build_class_vtable(ObjClass* klass)
+{
+    if (klass == NULL) return;
+
+    // A. 親クラスがある場合、親の vtable を丸ごとコピーして引き継ぐ
+    if (klass->superclass != NULL) {
+        ObjClass* super = klass->superclass;
+        if (super->vtable_count > 0) {
+            klass->vtable_capacity = super->vtable_count < 8 ? 8 : super->vtable_count;
+            klass->vtable = (Value*)malloc(sizeof(Value) * klass->vtable_capacity);
+            klass->vtable_names = (ObjString**)malloc(sizeof(ObjString*) * klass->vtable_capacity);
+            klass->vtable_count = super->vtable_count;
+
+            for (int i = 0; i < super->vtable_count; i++) {
+                klass->vtable[i] = super->vtable[i];
+                klass->vtable_names[i] = super->vtable_names[i];
+                table_set(klass->vtable_indexes, super->vtable_names[i], make_int(i));
+            }
+        }
+    }
+
+    // B. 固定スロット 0 (init) と 1 (destroy) を確実に登録/上書き
+    Value init_val, destroy_val;
+    if (find_method(klass, sym_init, &init_val)) {
+        add_or_override_vtable_slot(klass, sym_init, init_val);
+    }
+    if (find_method(klass, sym_destroy, &destroy_val)) {
+        add_or_override_vtable_slot(klass, sym_destroy, destroy_val);
+    }
+}
+
+void init_class_vtable_from_super(ObjClass* klass)
+{
+    if (klass == NULL) return;
+
+    // 親クラスの vtable をそのままコピー
+    if (klass->superclass != NULL) {
+        ObjClass* super = klass->superclass;
+        if (super->vtable_count > 0) {
+            klass->vtable_capacity = super->vtable_count < 8 ? 8 : super->vtable_count;
+            klass->vtable = (Value*)malloc(sizeof(Value) * klass->vtable_capacity);
+            klass->vtable_names = (ObjString**)malloc(sizeof(ObjString*) * klass->vtable_capacity);
+            klass->vtable_count = super->vtable_count;
+
+            for (int i = 0; i < super->vtable_count; i++) {
+                klass->vtable[i] = super->vtable[i];
+                klass->vtable_names[i] = super->vtable_names[i];
+                table_set(klass->vtable_indexes, super->vtable_names[i], make_int(i));
+            }
+        }
+    }
+
+    // スロット 0 (init) と 1 (destroy) を予約確保（なければ枠だけ作成）
+    if (get_vtable_index(klass, sym_init) == -1) {
+        add_or_override_vtable_slot(klass, sym_init, make_nil());
+    }
+    if (get_vtable_index(klass, sym_destroy) == -1) {
+        add_or_override_vtable_slot(klass, sym_destroy, make_nil());
+    }
+}
+
+int get_vtable_index(ObjClass* klass, ObjString* name)
+{
+    if (klass == NULL || klass->vtable_indexes == NULL) return -1;
+    Value slot_val;
+    if (table_get(klass->vtable_indexes, name, &slot_val)) {
+        return as_int(slot_val);
+    }
+    return -1;
 }

@@ -205,6 +205,62 @@ static ObjFunction* create_forwarding_wrapper(Compiler* c, ObjClass* klass, ObjC
     wrapper->upvalues = NULL;
     return wrapper;
 }
+// デフォルトの init メソッド（引数なし、super.init 呼び出し）を自動合成
+static ObjFunction* create_default_init_function(Compiler* c, ObjClass* klass)
+{
+    Chunk* chunk = (Chunk*)malloc(sizeof(Chunk));
+    init_chunk(chunk);
+
+    if (klass->superclass != NULL) {
+        Value super_init_val;
+        // 親クラスに init があれば super 経由で呼び出す
+        if (find_method(klass->superclass, sym_init, &super_init_val)) {
+            // 1. self を積む
+            write_chunk(chunk, make_inst(OP_GET_LOCAL, 0));
+            // 2. 親の init を直接スーパーコール (引数 0)
+            uint32_t fn_const = add_constant(chunk, super_init_val);
+            write_chunk(chunk, make_super_call_inst(0, (uint16_t)fn_const));
+            // 戻り値を捨てる
+            write_chunk(chunk, make_inst(OP_POP, 0));
+        }
+    }
+
+    // 3. self を積んでリターン (Smalltalk / JapEng の初期化流儀)
+    write_chunk(chunk, make_inst(OP_GET_LOCAL, 0));
+    write_chunk(chunk, make_inst(OP_RETURN, 1));
+
+    ObjFunction* fn = new_function(chunk, 0); // arity: 0
+    fn->upvalue_count = 0;
+    fn->upvalues = NULL;
+    return fn;
+}
+
+// デフォルトの destroy メソッド（引数なし、super.destroy 呼び出し）を自動合成
+static ObjFunction* create_default_destroy_function(Compiler* c, ObjClass* klass)
+{
+    Chunk* chunk = (Chunk*)malloc(sizeof(Chunk));
+    init_chunk(chunk);
+
+    if (klass->superclass != NULL) {
+        Value super_destroy_val;
+        if (find_method(klass->superclass, sym_destroy, &super_destroy_val)) {
+            // 1. self を積む
+            write_chunk(chunk, make_inst(OP_GET_LOCAL, 0));
+            // 2. 親の destroy をスーパーコール (引数 0)
+            uint32_t fn_const = add_constant(chunk, super_destroy_val);
+            write_chunk(chunk, make_super_call_inst(0, (uint16_t)fn_const));
+            write_chunk(chunk, make_inst(OP_POP, 0));
+        }
+    }
+
+    // destroy の戻り値は Void（0 個）
+    write_chunk(chunk, make_inst(OP_RETURN, 0));
+
+    ObjFunction* fn = new_function(chunk, 0); // arity: 0
+    fn->upvalue_count = 0;
+    fn->upvalues = NULL;
+    return fn;
+}
 
 static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
 {
@@ -267,6 +323,7 @@ static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
                     if (from_class != NULL) {
                         add_method_from(klass, member_name, from_class);
                     }
+                    add_or_override_vtable_slot(klass, member_name, make_obj((Obj*)method_fn));
                     return;
                 }
             }
@@ -283,6 +340,7 @@ static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
                             add_method_type(klass, member_name, m_type);
                         }
                         add_method_from(klass, member_name, from_class);
+                        add_or_override_vtable_slot(klass, member_name, make_obj((Obj*)wrapper));
                     }
                     return;
                     // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
@@ -369,16 +427,26 @@ static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
         }
 
         if (args && args->kind == AST_BLOCK) {
+            // 1. 型シグネチャを登録
             add_method_type(klass, target_name, build_function_type_from_block(c, args));
+
             if (args->block.body != NULL) {
+                // 通常の JapEng 実装メソッド
                 c->current_class = klass;
                 ObjFunction* method_fn = compile_block(c, args);
                 c->current_class = NULL;
+                
+                // methods テーブルに登録
                 add_method(klass, target_name, make_obj((Obj*)method_fn));
-            
                 if (from_class != NULL) {
                     add_method_from(klass, target_name, from_class);
                 }
+                // 宣言順に vtable スロットへ実体を登録！
+                add_or_override_vtable_slot(klass, target_name, make_obj((Obj*)method_fn));
+            } else {
+                // body == NULL の場合、実体は登録しない（VMネイティブと競合させない！）
+                // しかし、vtable のスロット枠（インデックス）だけは宣言順に確実に確保する！
+                add_or_override_vtable_slot(klass, target_name, make_nil());
             }
             return;
         }
@@ -587,6 +655,8 @@ void compile_class_body(Compiler* c, ASTNode* node)
         }
     }
 
+    init_class_vtable_from_super(klass);
+
     // 追加: 委譲元クラス（delegates）用の隠しフィールドを自動追加
     for (int i = 0; i < klass->delegate_count; i++) {
         ObjClass* del_klass = klass->delegates[i];
@@ -625,6 +695,32 @@ void compile_class_body(Compiler* c, ASTNode* node)
 
     // ★★★ 2. その後、各メソッドの本体をコンパイル ★★★
     compile_class_members(c, klass, node->class_def.members);
+
+    // 追加: init / destroy が未定義ならデフォルトを自動合成
+    if (!is_builtin(klass->name)) {
+        Value dummy;
+        // 1. init の自動補完
+        if (!find_method(klass, sym_init, &dummy)) {
+            ObjFunction* def_init = create_default_init_function(c, klass);
+            add_method(klass, sym_init, make_obj((Obj*)def_init));
+            // シグネチャ: Function(; 自クラス型)
+            TypeInfo* rets[1] = { klass->type ? klass->type : new_type_info(klass->name, 0) };
+            TypeInfo* init_type = new_func_type_info(0, NULL, 1, rets);
+            add_method_type(klass, sym_init, init_type);
+            add_or_override_vtable_slot(klass, sym_init, make_obj((Obj*)def_init));
+        }
+    
+        // 2. destroy の自動補完
+        if (!find_method(klass, sym_destroy, &dummy)) {
+            ObjFunction* def_destroy = create_default_destroy_function(c, klass);
+            add_method(klass, sym_destroy, make_obj((Obj*)def_destroy));
+            // シグネチャ: Function(; Void)
+            TypeInfo* destroy_type = new_func_type_info(0, NULL, 0, NULL);
+            add_method_type(klass, sym_destroy, destroy_type);
+            add_or_override_vtable_slot(klass, sym_init, make_obj((Obj*)def_destroy));
+        }
+    }
+
 
     c->current_class = enclosing_class;
 
