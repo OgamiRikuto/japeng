@@ -189,9 +189,10 @@ static ObjFunction* create_forwarding_wrapper(Compiler* c, ObjClass* klass, ObjC
         write_chunk(chunk, make_inst(OP_GET_LOCAL, (uint32_t)i));
     }
 
-    // 4. 内部インスタンスに対してメッセージを送信 (OP_SEND)
-    uint32_t msg_const = add_constant(chunk, make_obj((Obj*)member_name));
-    write_chunk(chunk, make_send_inst(arity, (uint16_t)msg_const));
+    // 4. 内部インスタンスに対してメッセージを送信
+    int vtable_idx = get_vtable_index(from_class, member_name);
+    write_chunk(chunk, make_virtual_call_inst(arity, (uint16_t)vtable_idx));
+
 
     // 5. 内部インスタンスからの戻り値をそのまま返却
     int ret_count = 1;
@@ -260,6 +261,48 @@ static ObjFunction* create_default_destroy_function(Compiler* c, ObjClass* klass
     fn->upvalue_count = 0;
     fn->upvalues = NULL;
     return fn;
+}
+
+static void reserve_class_vtable_slots(ObjClass* klass, ASTNode* node)
+{
+    if (node == NULL) return;
+    if (node->kind == AST_STMT) {
+        reserve_class_vtable_slots(klass, node->stmt.left);
+        reserve_class_vtable_slots(klass, node->stmt.right);
+        return;
+    }
+
+    // パターン A: send 形式 (name: Function is [...];)
+    if (node->kind == AST_SEND) {
+        ASTNode* receiver = node->send.receiver;
+        ASTNode* args = node->send.args;
+        ObjString* target_name = NULL;
+        if (receiver->kind == AST_IDENTIFIER) target_name = receiver->identifier.name;
+        else if (receiver->kind == AST_FIELD_DECL || receiver->kind == AST_VAR_DECL) {
+            target_name = receiver->var_decl.identifier->identifier.name;
+        }
+
+        if (target_name && args && args->kind == AST_BLOCK) {
+            add_or_override_vtable_slot(klass, target_name, make_nil());
+        }
+        return;
+    }
+
+    // パターン B: field_decl 形式 (name: Function is [...]; または name: Function from X;)
+    if (node->kind == AST_FIELD_DECL) {
+        ObjString* member_name = node->field_decl.identifier->identifier.name;
+        TypeInfo*  member_type = build_type_info(node->field_decl.type);
+        if (member_type && member_type->name == sym_Function) {
+            if (node->field_decl.default_data && node->field_decl.default_data->kind == AST_SEND) {
+                ASTNode* send_node = node->field_decl.default_data;
+                if (send_node->send.args && send_node->send.args->kind == AST_BLOCK) {
+                    add_or_override_vtable_slot(klass, member_name, make_nil());
+                }
+            } else if (node->field_decl.from_class != NULL) {
+                add_or_override_vtable_slot(klass, member_name, make_nil());
+            }
+        }
+    }
 }
 
 static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
@@ -656,12 +699,12 @@ void compile_class_body(Compiler* c, ASTNode* node)
     }
 
     init_class_vtable_from_super(klass);
-
+    
     // 追加: 委譲元クラス（delegates）用の隠しフィールドを自動追加
     for (int i = 0; i < klass->delegate_count; i++) {
         ObjClass* del_klass = klass->delegates[i];
         if (del_klass == NULL) continue;
-
+        
         // 委譲元クラスが未コンパイルなら先にコンパイル
         if (del_klass->state != CLASS_STATE_COMPILED) {
             ASTNode* del_ast = find_class_ast(del_klass->name);
@@ -669,12 +712,12 @@ void compile_class_body(Compiler* c, ASTNode* node)
                 compile_class_body(c, del_ast);
             }
         }
-
+        
         ObjString* hidden_name = get_delegate_field_name(del_klass);
         if (find_field_index(klass, hidden_name) == -1) {
             TypeInfo* del_type = (klass->delegate_types && klass->delegate_types[i]) 
-                                 ? klass->delegate_types[i] 
-                                 : new_type_info(del_klass->name, 0);
+            ? klass->delegate_types[i] 
+            : new_type_info(del_klass->name, 0);
             FieldInfo f_info = {
                 .name = hidden_name,
                 .type = del_type,
@@ -685,7 +728,8 @@ void compile_class_body(Compiler* c, ASTNode* node)
             add_field(klass, f_info, make_nil());
         }
     }
-
+    reserve_class_vtable_slots(klass, node->class_def.members);
+    
     ObjClass* enclosing_class = c->current_class;
     c->current_class = klass;
 
@@ -717,7 +761,7 @@ void compile_class_body(Compiler* c, ASTNode* node)
             // シグネチャ: Function(; Void)
             TypeInfo* destroy_type = new_func_type_info(0, NULL, 0, NULL);
             add_method_type(klass, sym_destroy, destroy_type);
-            add_or_override_vtable_slot(klass, sym_init, make_obj((Obj*)def_destroy));
+            add_or_override_vtable_slot(klass, sym_destroy, make_obj((Obj*)def_destroy));
         }
     }
 

@@ -15,6 +15,7 @@ typedef enum {
     OP_JUMP_IF_FALSE,
     OP_LOOP,
     OP_SEND,
+    OP_INVOKE_VIRTUAL,
     OP_SUPER_CALL,
     OP_CALL,
     OP_POP,
@@ -67,6 +68,10 @@ static inline uint32_t make_inst(Opcode op, uint32_t operand) {
 
 static inline uint32_t make_send_inst(uint8_t arg_count, uint16_t msg_index) {
     return ((uint32_t)OP_SEND << 24) | ((uint32_t)arg_count << 16) | (msg_index & 0xFFFF);
+}
+
+static inline uint32_t make_virtual_call_inst(uint8_t arg_count, uint16_t vtable_index) {
+    return ((uint32_t)OP_INVOKE_VIRTUAL << 24) | ((uint32_t)arg_count << 16) | (vtable_index & 0xFFFF);
 }
 
 static inline uint32_t make_super_call_inst(uint8_t arg_count, uint16_t fn_index) {

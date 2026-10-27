@@ -215,6 +215,18 @@ static const ErrorMessage error_table[ERR_COUNT] = {
     [ERR_NULL_REFERENCE] = {
         .en = "Null reference error: Attempted to access '%s' on null.",
         .ja = "Null参照エラー: null に対する '%s' のアクセスまたは呼び出しです。"
+    },
+    [ERR_INVALID_VTABLE_ACCESS] = {
+        .en = "Invalid virtual method table access (index: %d).",
+        .ja = "仮想関数テーブルへの不正なアクセスです (インデックス: %d)。"
+    },
+    [ERR_UNIMPLEMENTED_VIRTUAL_METHOD] = {
+        .en = "Attempted to call an unimplemented virtual method (index: %d).",
+        .ja = "未実装の仮想メソッドが呼び出されました (インデックス: %d)。"
+    },
+    [ERR_NOT_CALLABLE] = {
+        .en = "Target object is not callable.",
+        .ja = "呼び出し可能なオブジェクトではありません。"
     }
 };
 

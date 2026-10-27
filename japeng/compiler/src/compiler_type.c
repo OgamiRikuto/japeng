@@ -477,8 +477,13 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
     }
 
     // ★ 7. 最大引数数 (max_argc) で OP_SEND 発行！
-    uint32_t sym_const = add_constant(c->chunk, make_obj((Obj*)msg));
-    write_chunk(c->chunk, make_send_inst((uint16_t)max_argc, (uint16_t)sym_const));
+    int vtable_idx = get_vtable_index(klass, msg);
+    if (vtable_idx != -1) {
+        write_chunk(c->chunk, make_virtual_call_inst((uint8_t)max_argc, (uint16_t)vtable_idx));
+    } else {
+        error_compile(send_node, ERR_UNDEFINED_MESSAGE, msg->chars, rec_type->name->chars);
+        return new_type_info(sym_Error, 0);
+    }
 
     // 8. 戻り値型を返す（param_count 以降が戻り値型）
     int ret_count = concrete_fn_type->type_arg_count - concrete_fn_type->param_count;
@@ -667,10 +672,7 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
 
                     int call_argc = (fn_type && fn_type->name == sym_Function && fn_type->param_count > actual_argc)
                                     ? fn_type->param_count : actual_argc;
-
-                    // #call メッセージを送信！
-                    uint32_t call_sym = add_constant(c->chunk, make_obj(((Obj*)sym_call)));
-                    write_chunk(c->chunk, make_send_inst((uint16_t)call_argc, (uint16_t)call_sym));
+                    emit_inst(c, OP_CALL, (uint32_t)call_argc);
 
                     // 関数の戻り値型を返す（Function型の末尾が戻り値型）
                     if (fn_type != NULL && fn_type->type_arg_count > 0) {

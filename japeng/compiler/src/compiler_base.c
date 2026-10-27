@@ -465,7 +465,8 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                                           ? declared_type->type_args[0] 
                                           : NULL;
 
-                uint32_t push_sym = add_constant(c->chunk, make_obj((Obj*)intern_cstr("push")));
+                ObjClass* list_klass = resolve_class(c, sym_List);
+                int push_slot = list_klass ? get_vtable_index(list_klass, intern_cstr("push")) : 5;
 
                 // 各要素を評価・型チェック・push
                 for (int i = 0; i < elem_count; i++) {
@@ -479,7 +480,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                                       actual_elem ? actual_elem->name->chars : "nil");
                     }
 
-                    write_chunk(c->chunk, make_send_inst(1, (uint16_t)push_sym));
+                    write_chunk(c->chunk, make_virtual_call_inst(1, (uint16_t)push_slot));
                     emit_inst(c, OP_POP, 0);
                 }
 
@@ -534,8 +535,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
         if (node->send.args != NULL) {
             emit_inst(c, OP_DUP, 0);
             int argc = compile_args(c, node->send.args);
-            uint32_t init_sym = add_constant(c->chunk, make_obj((Obj*)sym_init));
-            write_chunk(c->chunk, make_send_inst((uint16_t)argc, (uint16_t)init_sym));
+            write_chunk(c->chunk, make_virtual_call_inst((uint8_t)argc, 0));
             emit_inst(c, OP_POP, 0); // init の戻り値を POP
         }
 

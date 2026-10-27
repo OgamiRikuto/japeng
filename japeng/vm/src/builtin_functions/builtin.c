@@ -50,11 +50,11 @@ void init_builtin_classes(VM* vm)
     // String クラス
     setup_string(vm, o_info);
 
-    print_class(vm->class_object);
-    print_class(vm->class_integer);
-    print_class(vm->class_float);
-    print_class(vm->class_decimal);
-    print_class(vm->class_boolean);
-    print_class(vm->class_list);
-    print_class(vm->class_string);
+    // print_class(vm->class_object);
+    // print_class(vm->class_integer);
+    // print_class(vm->class_float);
+    // print_class(vm->class_decimal);
+    // print_class(vm->class_boolean);
+    // print_class(vm->class_list);
+    // print_class(vm->class_string);
 }

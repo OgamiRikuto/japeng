@@ -22,6 +22,7 @@ const char* op_kind[OP_MAX] = {
     [OP_GET_FIELD]     = "OP_GET_FIELD",
     [OP_SET_FIELD]    = "OP_SET_FIELD",
     [OP_SEND]          = "OP_SEND",
+    [OP_INVOKE_VIRTUAL]= "OP_INVOKE_VIRTUAL",
     [OP_SUPER_CALL]    = "OP_SUPER_CALL",
     [OP_CALL]          = "OP_CALL",
     [OP_POP]           = "OP_POP",
@@ -145,6 +146,19 @@ static inline bool is_falsy(Value value) {
     if ((is_bool(value) && !as_bool(value))) return true;
     if (is_int(value) && as_int(value) == 0) return true;
     return false;
+}
+
+static inline CallFrame* setup_call_frame(VM* vm, ObjFunction* func, ObjClosure* closure, uint8_t argc) {
+    if (vm->frame_count >= FRAME_MAX) {
+        error_runtime(ERR_STACK_OVERFLOW);
+        return NULL;
+    }
+    CallFrame* next_frame = &vm->frames[vm->frame_count++];
+    next_frame->closure = closure;
+    next_frame->chunk   = func->chunk;
+    next_frame->ip      = func->chunk->code;
+    next_frame->slots   = vm->stack_top - (argc + 1);
+    return next_frame;
 }
 
 static InterpretResult run(VM* vm, int stop_frame_count)
@@ -303,16 +317,113 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 frame->ip -= offset;
                 break;
             }
-            case OP_SEND: {
-                uint8_t arg_count = get_send_args(instruction);
-                uint16_t msg_index = get_send_index(instruction);
+            // case OP_SEND: {
+            //     uint8_t arg_count = get_send_args(instruction);
+            //     uint16_t msg_index = get_send_index(instruction);
 
-                if (!dispatch_send(vm, arg_count, msg_index)) {
+            //     if (!dispatch_send(vm, arg_count, msg_index)) {
+            //         return INTERPRET_RUNTIME_ERROR;
+            //     }
+            //     frame = &vm->frames[vm->frame_count - 1];
+            //     break;
+            // }
+            case OP_CALL: {
+                uint8_t argc = (uint8_t)get_operand(instruction);
+                Value callee = peek(vm, argc);
+
+                if (is_nil(callee)) {
+                    error_runtime(ERR_NULL_REFERENCE, "function");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                frame = &vm->frames[vm->frame_count - 1];
+
+                if (!is_obj(callee)) {
+                    error_runtime(ERR_NOT_CALLABLE);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                
+                Obj* obj = as_obj(callee);
+                ObjFunction* func = NULL;
+                ObjClosure* closure = NULL;
+                
+                if (obj->type == OBJ_FUNCTION) {
+                    func = (ObjFunction*)obj;
+                } else if (obj->type == OBJ_CLOSURE) {
+                    closure = (ObjClosure*)obj;
+                    func = closure->function;
+                } else {
+                    error_runtime(ERR_NOT_CALLABLE);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                
+                if (argc != func->arity) {
+                    error_runtime(ERR_WRONG_ARG_COUNT, func->arity, argc);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                
+                frame = setup_call_frame(vm, func, closure, argc);
+                if (frame == NULL) return INTERPRET_RUNTIME_ERROR;
                 break;
             }
+            case OP_INVOKE_VIRTUAL: {
+            uint8_t argc = get_send_args(instruction);
+            uint16_t vtable_index = get_send_index(instruction);
+
+            // 1. スタックからレシーバを取得 (vm.h の peek を使用)
+            Value receiver = peek(vm, argc);
+
+            if (is_nil(receiver)) {
+                error_runtime(ERR_NULL_REFERENCE, "vtable");
+                return INTERPRET_RUNTIME_ERROR;
+            }
+
+            // 2. 実在する get_class_for_value でクラスを特定
+            ObjClass* klass = get_class_for_value(vm, receiver);
+
+            if (klass == NULL || vtable_index >= (uint16_t)klass->vtable_count) {
+                error_runtime(ERR_INVALID_VTABLE_ACCESS, vtable_index);
+                return INTERPRET_RUNTIME_ERROR;
+            }
+
+            // 3. vtable からスロットを直接参照
+            Value method = klass->vtable[vtable_index];
+
+            if (is_nil(method)) {
+                error_runtime(ERR_UNIMPLEMENTED_VIRTUAL_METHOD, vtable_index);
+                return INTERPRET_RUNTIME_ERROR;
+            }
+
+            // 4-A. ネイティブ関数の呼び出し
+            if (is_obj_type(method, OBJ_NATIVE)) {
+                ObjNative* native = (ObjNative*)as_obj(method);
+                if (!native->function(vm, argc)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
+
+            // 4-B. JapEng 関数 (ObjFunction) の呼び出し
+            if (is_obj_type(method, OBJ_FUNCTION)) {
+                ObjFunction* func = (ObjFunction*)as_obj(method);
+
+                if (argc != func->arity) {
+                    error_runtime(ERR_WRONG_ARG_COUNT, func->arity, argc);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                if (vm->frame_count >= FRAME_MAX) {
+                    error_runtime(ERR_STACK_OVERFLOW);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                // ★ 実行中フレームポインタを最新に更新
+                frame = setup_call_frame(vm, func, NULL, argc);
+                if (frame == NULL) return INTERPRET_RUNTIME_ERROR;
+                break;
+            }
+
+            error_runtime(ERR_NOT_CALLABLE);
+            return INTERPRET_RUNTIME_ERROR;
+        }
             case OP_SUPER_CALL: {
                 uint8_t arg_count = get_send_args(instruction);
                 uint16_t fn_index = get_send_index(instruction);
@@ -337,13 +448,8 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                     return INTERPRET_RUNTIME_ERROR;
                 }
 
-                CallFrame* next_frame = &vm->frames[vm->frame_count++];
-                next_frame->closure = NULL;
-                next_frame->chunk = func->chunk;
-                next_frame->ip = func->chunk->code;
-                next_frame->slots = vm->stack_top - (arg_count + 1);
-
-                frame = &vm->frames[vm->frame_count - 1];
+                frame = setup_call_frame(vm, func, NULL, arg_count);
+                if (frame == NULL) return INTERPRET_RUNTIME_ERROR;
                 break;
             }
             case OP_POP:
@@ -738,11 +844,6 @@ bool vm_call_function(VM* vm, Value func_val, uint8_t arg_count, Value* args, Va
         return false;
     }
 
-    if (vm->frame_count >= FRAME_MAX) {
-        error_runtime(ERR_STACK_OVERFLOW);
-        return false;
-    }
-
     // 1. レシーバ (クロージャ/関数) を push
     push(vm, func_val);
 
@@ -753,12 +854,9 @@ bool vm_call_function(VM* vm, Value func_val, uint8_t arg_count, Value* args, Va
 
     int stop_frame_count = vm->frame_count;
 
-    CallFrame* next_frame = &vm->frames[vm->frame_count++];
-    next_frame->closure = closure;
-    next_frame->chunk = func->chunk;
-    next_frame->ip = func->chunk->code;
-    // slots[0] がレシーバ、その後ろに引数が並ぶ
-    next_frame->slots = vm->stack_top - (arg_count + 1);
+    if (setup_call_frame(vm, func, closure, arg_count) == NULL) {
+        return false;
+    }
 
     InterpretResult res = run(vm, stop_frame_count);
     if (res != INTERPRET_OK) {
@@ -868,6 +966,12 @@ static void print_instruction(CallFrame* frame, uint32_t instruction, uint32_t c
             const char* msg = (is_obj(sym_val) && ((Obj*)as_obj(sym_val))->type == OBJ_STRING)
                               ? ((ObjString*)as_obj(sym_val))->chars : "?";
             fprintf(stderr, "argc: %u, msg: #%s (idx: %u)\n", argc, msg, sym_idx);
+            break;
+        }
+        case OP_INVOKE_VIRTUAL: {
+            uint8_t argc = get_send_args(instruction);
+            uint16_t vtable_idx = get_send_index(instruction);
+            fprintf(stderr, "argc: %u, vtable_idx: %u\n", argc, vtable_idx);
             break;
         }
         case OP_SUPER_CALL: {

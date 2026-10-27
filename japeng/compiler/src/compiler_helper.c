@@ -91,6 +91,7 @@ void emit_inst(Compiler* c, Opcode op, uint32_t operand) {
 
         // --- 動的: 引数個数に応じて消費 ---
         case OP_SEND:
+        case OP_INVOKE_VIRTUAL:
         case OP_SUPER_CALL:
             // レシーバ(1) + 引数(argc) を消費して結果(1) を残す
             c->stack_depth -= get_send_args(operand);
