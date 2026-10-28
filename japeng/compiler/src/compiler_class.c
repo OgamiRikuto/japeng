@@ -1,9 +1,11 @@
 #include "compiler_internal.h"
+#include "parse.h"
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 
-static ObjString* get_class_name_from_node(ASTNode* node)
+static Symbol* get_class_name_from_node(ASTNode* node)
 {
     if (node == NULL) return NULL;
     if (node->kind == AST_IDENTIFIER) return node->identifier.name;
@@ -11,17 +13,130 @@ static ObjString* get_class_name_from_node(ASTNode* node)
     return NULL;
 }
 
-ObjClass* resolve_class(Compiler* c, ObjString* name)
+static ASTNode* find_class_in_node(ASTNode* node, Symbol* name)
+{
+    if (node == NULL) return NULL;
+    if (node->kind == AST_STMT) {
+        ASTNode* found = find_class_in_node(node->stmt.left, name);
+        if (found != NULL) return found;
+        return find_class_in_node(node->stmt.right, name);
+    }
+    if (node->kind == AST_CLASS_DEF) {
+        ASTNode* class_node = node->class_def.class;
+        Symbol* class_name = class_node->class.classname->identifier.name;
+        if (class_name == name) return node;
+    }
+    return NULL;
+}
+
+static ASTNode* find_class_ast(Symbol* name)
 {
     if (name == NULL) return NULL;
+    for (int index = 0; index < parsed_cd_count; index++) {
+        ASTNode* found = find_class_in_node(parsed_cd[index], name);
+        if (found != NULL) return found;
+    }
+    return NULL;
+}
+
+ClassDef* resolve_class(Compiler* c, Symbol* name)
+{
+    if (name == NULL) return NULL;
+
+    // 1. メモリ上のテーブル確認（登録済みなら即座に返す）
     for (Compiler* comp = c; comp != NULL; comp = comp->enclosing) {
         if (comp->defined_class != NULL) {
             Value val;
             if (table_get(comp->defined_class, name, &val)) {
-                return (ObjClass*)as_obj(val);
+                return (ClassDef*)as_obj(val);
             }
         }
     }
+
+    // ★ 修正 1: すでにパース済みの AST にある場合
+    ASTNode* existing_ast = find_class_ast(name);
+    if (existing_ast != NULL) {
+        // ★★★ 先に骨格を登録！これで再帰時に 1 の table_get で即座に脱出できる！ ★★★
+        declare_class_skeleton(c, existing_ast);
+        resolve_class_skeleton_relations(c, existing_ast);
+        declare_class_signatures(c, existing_ast);
+        compile_class_body(c, existing_ast);
+
+        // defined_class から取り出して返却
+        for (Compiler* comp = c; comp != NULL; comp = comp->enclosing) {
+            if (comp->defined_class != NULL) {
+                Value val;
+                if (table_get(comp->defined_class, name, &val)) return (ClassDef*)as_obj(val);
+            }
+        }
+    }
+
+    const char* base_dir = c->output_dir ? c->output_dir : ".";
+    char bcd_path[1024];
+    get_cache_filepath(base_dir, name->chars, "bcd", bcd_path, sizeof(bcd_path));
+
+    // 2. キャッシュの存在 ＆ 鮮度チェック
+    if (is_cache_fresh(bcd_path, base_dir)) {
+        ClassDef* loaded = load_class_type_from_bcd(c, bcd_path);
+        if (loaded) return loaded;
+    }
+
+    // B: ★ システム／組み込みライブラリのキャッシュ (lib/.je_cache/<Name>.bcd)
+    const char* stdlib_dir = get_japeng_lib_dir();
+    char builtin_bcd[1024];
+
+    // インストール済みなら /usr/local/lib/japeng/<Name>.bcd を直接見に行く
+    // 開発中なら ./lib/.je_cache/<Name>.bcd を見に行く
+    struct stat st_lib;
+    if (strstr(stdlib_dir, "usr") != NULL) {
+        // インストール先 (/usr/local/lib/japeng/Object.bcd)
+        encode_cache_name(name->chars, builtin_bcd, sizeof(builtin_bcd));
+        char full_builtin[1024];
+        snprintf(full_builtin, sizeof(full_builtin), "%s/%s.bcd", stdlib_dir, builtin_bcd);
+        if (stat(full_builtin, &st_lib) == 0) {
+            ClassDef* loaded = load_class_type_from_bcd(c, full_builtin);
+            if (loaded) return loaded;
+        }
+    } else {
+        // 開発環境 (./lib/.je_cache/Object.bcd)
+        get_cache_filepath(stdlib_dir, name->chars, "bcd", builtin_bcd, sizeof(builtin_bcd));
+        if (is_cache_fresh(builtin_bcd, stdlib_dir)) {
+            ClassDef* loaded = load_class_type_from_bcd(c, builtin_bcd);
+            if (loaded) return loaded;
+        }
+    }
+
+    // 3. ディスク探索
+    char cd_path[1024];
+    bool found_source = false;
+
+    snprintf(cd_path, sizeof(cd_path), "%s/%s.cd", base_dir, name->chars);
+    struct stat st;
+    if (stat(cd_path, &st) == 0) {
+        found_source = true;
+    } else {
+        snprintf(cd_path, sizeof(cd_path), "%s/%s.jcd", base_dir, name->chars);
+        if (stat(cd_path, &st) == 0) {
+            found_source = true;
+        }
+    }
+
+    if (found_source && parse_file(cd_path)) {
+        ASTNode* ast = find_class_ast(name);
+        if (ast) {
+            declare_class_skeleton(c, ast);
+            resolve_class_skeleton_relations(c, ast);
+            declare_class_signatures(c, ast);
+            compile_class_body(c, ast);
+
+            const char* filename_only = strrchr(cd_path, '/');
+            filename_only = filename_only ? filename_only + 1 : cd_path;
+            write_class_bcd(base_dir, resolve_class(c, name), filename_only);
+
+            return resolve_class(c, name);
+        }
+    }
+
     return NULL;
 }
 
@@ -34,7 +149,7 @@ static int count_classes(ASTNode* node)
     return 1;
 }
 
-static void collect_delegate_classes(Compiler* c, ASTNode* node, ObjClass** list, int* idx)
+static void collect_delegate_classes(Compiler* c, ASTNode* node, ClassDef** list, int* idx)
 {
     if (node == NULL) return;
     if (node->kind == AST_STMT) {
@@ -42,8 +157,8 @@ static void collect_delegate_classes(Compiler* c, ASTNode* node, ObjClass** list
         collect_delegate_classes(c, node->stmt.right, list, idx);
         return;
     }
-    ObjString* name = get_class_name_from_node(node);
-    ObjClass* klass = resolve_class(c, name);
+    Symbol* name = get_class_name_from_node(node);
+    ClassDef* klass = resolve_class(c, name);
     if (klass != NULL) {
         list[(*idx)++] = klass;
     }
@@ -86,7 +201,7 @@ TypeInfo* build_type_info(ASTNode* node)
     if (node == NULL) return NULL;
 
     if (node->kind == AST_CLASS) {
-        ObjString* name = node->class.classname->identifier.name;
+        Symbol* name = node->class.classname->identifier.name;
         int arg_count = count_type_args(node->class.types);
 
         TypeInfo* t_info = new_type_info(name, arg_count);
@@ -113,7 +228,7 @@ TypeInfo* build_type_info(ASTNode* node)
     return NULL;
 }
 
-static Value get_implicit_default_value(ObjString* type_name)
+static Value get_implicit_default_value(Symbol* type_name)
 {
     if (is_integer_type(type_name)) return make_int(0);
     if (is_float_type(type_name)) return make_float(0.0);
@@ -122,40 +237,11 @@ static Value get_implicit_default_value(ObjString* type_name)
     return make_nil();
 }
 
-extern ASTNode* parsed_cd[];
-extern int      parsed_cd_count;
-
-static ASTNode* find_class_in_node(ASTNode* node, ObjString* name)
-{
-    if (node == NULL) return NULL;
-    if (node->kind == AST_STMT) {
-        ASTNode* found = find_class_in_node(node->stmt.left, name);
-        if (found != NULL) return found;
-        return find_class_in_node(node->stmt.right, name);
-    }
-    if (node->kind == AST_CLASS_DEF) {
-        ASTNode* class_node = node->class_def.class;
-        ObjString* class_name = class_node->class.classname->identifier.name;
-        if (class_name == name) return node;
-    }
-    return NULL;
-}
-
-static ASTNode* find_class_ast(ObjString* name)
-{
-    if (name == NULL) return NULL;
-    for (int index = 0; index < parsed_cd_count; index++) {
-        ASTNode* found = find_class_in_node(parsed_cd[index], name);
-        if (found != NULL) return found;
-    }
-    return NULL;
-}
-
 // 委譲メソッドの呼び出しを内部インスタンスへ転送する極小のラッパー関数を自動合成
-static ObjFunction* create_forwarding_wrapper(Compiler* c, ObjClass* klass, ObjClass* from_class, 
-                                              ObjString* member_name, TypeInfo* method_type, ASTNode* node)
+static ObjFunction* create_forwarding_wrapper(Compiler* c, ClassDef* klass, ClassDef* from_class, 
+                                              Symbol* member_name, TypeInfo* method_type, ASTNode* node)
 {
-    ObjString* hidden_name = get_delegate_field_name(from_class);
+    Symbol* hidden_name = get_delegate_field_name(from_class);
     int del_field_idx = find_field_index(klass, hidden_name);
     if (del_field_idx == -1) {
         error_compile(node, ERR_DELEGATE_CLASS_NOT_FOUND,
@@ -207,7 +293,7 @@ static ObjFunction* create_forwarding_wrapper(Compiler* c, ObjClass* klass, ObjC
     return wrapper;
 }
 // デフォルトの init メソッド（引数なし、super.init 呼び出し）を自動合成
-static ObjFunction* create_default_init_function(Compiler* c, ObjClass* klass)
+static ObjFunction* create_default_init_function(Compiler* c, ClassDef* klass)
 {
     Chunk* chunk = (Chunk*)malloc(sizeof(Chunk));
     init_chunk(chunk);
@@ -237,7 +323,7 @@ static ObjFunction* create_default_init_function(Compiler* c, ObjClass* klass)
 }
 
 // デフォルトの destroy メソッド（引数なし、super.destroy 呼び出し）を自動合成
-static ObjFunction* create_default_destroy_function(Compiler* c, ObjClass* klass)
+static ObjFunction* create_default_destroy_function(Compiler* c, ClassDef* klass)
 {
     Chunk* chunk = (Chunk*)malloc(sizeof(Chunk));
     init_chunk(chunk);
@@ -263,7 +349,7 @@ static ObjFunction* create_default_destroy_function(Compiler* c, ObjClass* klass
     return fn;
 }
 
-static void reserve_class_vtable_slots(ObjClass* klass, ASTNode* node)
+static void reserve_class_vtable_slots(ClassDef* klass, ASTNode* node)
 {
     if (node == NULL) return;
     if (node->kind == AST_STMT) {
@@ -276,7 +362,7 @@ static void reserve_class_vtable_slots(ObjClass* klass, ASTNode* node)
     if (node->kind == AST_SEND) {
         ASTNode* receiver = node->send.receiver;
         ASTNode* args = node->send.args;
-        ObjString* target_name = NULL;
+        Symbol* target_name = NULL;
         if (receiver->kind == AST_IDENTIFIER) target_name = receiver->identifier.name;
         else if (receiver->kind == AST_FIELD_DECL || receiver->kind == AST_VAR_DECL) {
             target_name = receiver->var_decl.identifier->identifier.name;
@@ -290,7 +376,7 @@ static void reserve_class_vtable_slots(ObjClass* klass, ASTNode* node)
 
     // パターン B: field_decl 形式 (name: Function is [...]; または name: Function from X;)
     if (node->kind == AST_FIELD_DECL) {
-        ObjString* member_name = node->field_decl.identifier->identifier.name;
+        Symbol* member_name = node->field_decl.identifier->identifier.name;
         TypeInfo*  member_type = build_type_info(node->field_decl.type);
         if (member_type && member_type->name == sym_Function) {
             if (node->field_decl.default_data && node->field_decl.default_data->kind == AST_SEND) {
@@ -305,7 +391,7 @@ static void reserve_class_vtable_slots(ObjClass* klass, ASTNode* node)
     }
 }
 
-static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
+static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
 {
     if (node == NULL) return;
 
@@ -316,7 +402,7 @@ static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
     }
 
     if (node->kind == AST_FIELD_DECL) {
-        ObjString* member_name = node->field_decl.identifier->identifier.name;
+        Symbol* member_name = node->field_decl.identifier->identifier.name;
         TypeInfo*  member_type = build_type_info(node->field_decl.type);
         ASTNode*   from_node   = node->field_decl.from_class;
         bool       is_static   = node->field_decl.is_static;
@@ -329,9 +415,9 @@ static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
             error_compile(node, ERR_FUNCTION_REQUIRES_SIGNATURE, member_name->chars);
         }
 
-        ObjClass* from_class = NULL;
+        ClassDef* from_class = NULL;
         if (from_node != NULL) {
-            ObjString* from_name = get_class_name_from_node(from_node);
+            Symbol* from_name = get_class_name_from_node(from_node);
             from_class  = resolve_class(c, from_name);
             if (from_class == NULL) {
                 error_compile(node, ERR_DELEGATE_CLASS_NOT_FOUND,
@@ -425,13 +511,13 @@ static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
     }
 
     if (node->kind == AST_SEND) {
-        ObjString* msg_sym = node->send.message->identifier.name;
+        Symbol* msg_sym = node->send.message->identifier.name;
         if (msg_sym != sym_is && msg_sym != sym_are) return;
 
         ASTNode* receiver = node->send.receiver;
         ASTNode* args = node->send.args;
     
-        ObjString* target_name = NULL;
+        Symbol* target_name = NULL;
         ASTNode*   type_node   = NULL;
         ASTNode*   from_node   = NULL;
         bool       is_static   = false;
@@ -451,9 +537,9 @@ static void compile_class_members(Compiler* c, ObjClass* klass, ASTNode* node)
         
         if (target_name == NULL) return;
         
-        ObjClass* from_class = NULL;
+        ClassDef* from_class = NULL;
         if (from_node != NULL) {
-            ObjString* from_name = get_class_name_from_node(from_node);
+            Symbol* from_name = get_class_name_from_node(from_node);
             from_class  = resolve_class(c, from_name);
             if (from_class == NULL) {
                 error_compile(node, ERR_DELEGATE_CLASS_NOT_FOUND,
@@ -535,10 +621,10 @@ void declare_class_skeleton(Compiler* c, ASTNode* node)
     if (node->kind != AST_CLASS_DEF) return;
 
     ASTNode* class_node = node->class_def.class;
-    ObjString* class_name = class_node->class.classname->identifier.name;
+    Symbol* class_name = class_node->class.classname->identifier.name;
     TypeInfo* class_type = build_type_info(class_node);
 
-    ObjClass* klass = new_class(class_name, class_type, NULL, NULL, 0);
+    ClassDef* klass = new_class(class_name, class_type, NULL, NULL, 0);
     
     if (c->defined_class == NULL) {
         c->defined_class = new_table(16);
@@ -559,12 +645,12 @@ void resolve_class_skeleton_relations(Compiler* c, ASTNode* node)
     if (node->kind != AST_CLASS_DEF) return;
 
     ASTNode* class_node = node->class_def.class;
-    ObjString* class_name = class_node->class.classname->identifier.name;
-    ObjClass* klass = resolve_class(c, class_name);
+    Symbol* class_name = class_node->class.classname->identifier.name;
+    ClassDef* klass = resolve_class(c, class_name);
     if (klass == NULL) return;
 
     // 1. スーパークラス (based) の接続
-    ObjString* super_name = NULL;
+    Symbol* super_name = NULL;
     if (node->class_def.super_class != NULL) {
         super_name = get_class_name_from_node(node->class_def.super_class);
     }
@@ -580,7 +666,7 @@ void resolve_class_skeleton_relations(Compiler* c, ASTNode* node)
     // 2. ★ 委譲元 (from) の接続（ここに追加！）
     int delegate_count = count_classes(node->class_def.from_classes);
     if (delegate_count > 0) {
-        klass->delegates = (ObjClass**)malloc(sizeof(ObjClass*) * delegate_count);
+        klass->delegates = (ClassDef**)malloc(sizeof(ClassDef*) * delegate_count);
         klass->delegate_types = (TypeInfo**)malloc(sizeof(TypeInfo*) * delegate_count);
 
         int idx = 0;
@@ -593,7 +679,7 @@ void resolve_class_skeleton_relations(Compiler* c, ASTNode* node)
 }
 
 // シグネチャとフィールドの先行登録
-static void declare_class_member_signatures(Compiler* c, ObjClass* klass, ASTNode* node)
+static void declare_class_member_signatures(Compiler* c, ClassDef* klass, ASTNode* node)
 {
     if (node == NULL) return;
     if (node->kind == AST_STMT) {
@@ -606,7 +692,7 @@ static void declare_class_member_signatures(Compiler* c, ObjClass* klass, ASTNod
     if (node->kind == AST_SEND) {
         ASTNode* receiver = node->send.receiver;
         ASTNode* args = node->send.args;
-        ObjString* target_name = NULL;
+        Symbol* target_name = NULL;
         if (receiver->kind == AST_IDENTIFIER) target_name = receiver->identifier.name;
         else if (receiver->kind == AST_FIELD_DECL || receiver->kind == AST_VAR_DECL) {
             target_name = receiver->var_decl.identifier->identifier.name;
@@ -621,7 +707,7 @@ static void declare_class_member_signatures(Compiler* c, ObjClass* klass, ASTNod
 
     // 2. field_decl 形式 (name: Function is [...];)
     if (node->kind == AST_FIELD_DECL) {
-        ObjString* member_name = node->field_decl.identifier->identifier.name;
+        Symbol* member_name = node->field_decl.identifier->identifier.name;
         TypeInfo*  member_type = build_type_info(node->field_decl.type);
         if (member_type && member_type->name == sym_Function) {
             if (node->field_decl.default_data && node->field_decl.default_data->kind == AST_SEND) {
@@ -647,8 +733,8 @@ void declare_class_signatures(Compiler* c, ASTNode* node)
     if (node->kind != AST_CLASS_DEF) return;
 
     ASTNode* class_node = node->class_def.class;
-    ObjString* class_name = class_node->class.classname->identifier.name;
-    ObjClass* klass = resolve_class(c, class_name);
+    Symbol* class_name = class_node->class.classname->identifier.name;
+    ClassDef* klass = resolve_class(c, class_name);
     if (klass == NULL) return;
 
     // このクラスの全メソッドシグネチャを先行登録！
@@ -667,9 +753,9 @@ void compile_class_body(Compiler* c, ASTNode* node)
 
     if (node->kind != AST_CLASS_DEF) return;
     ASTNode* class_node = node->class_def.class;
-    ObjString* class_name = class_node->class.classname->identifier.name;
+    Symbol* class_name = class_node->class.classname->identifier.name;
 
-    ObjClass* klass = resolve_class(c, class_name);
+    ClassDef* klass = resolve_class(c, class_name);
     if (klass == NULL) {
         error_compile(node, ERR_CLASS_NOT_REGISTERED, class_name->chars);
         return;
@@ -702,7 +788,7 @@ void compile_class_body(Compiler* c, ASTNode* node)
     
     // 追加: 委譲元クラス（delegates）用の隠しフィールドを自動追加
     for (int i = 0; i < klass->delegate_count; i++) {
-        ObjClass* del_klass = klass->delegates[i];
+        ClassDef* del_klass = klass->delegates[i];
         if (del_klass == NULL) continue;
         
         // 委譲元クラスが未コンパイルなら先にコンパイル
@@ -713,7 +799,7 @@ void compile_class_body(Compiler* c, ASTNode* node)
             }
         }
         
-        ObjString* hidden_name = get_delegate_field_name(del_klass);
+        Symbol* hidden_name = get_delegate_field_name(del_klass);
         if (find_field_index(klass, hidden_name) == -1) {
             TypeInfo* del_type = (klass->delegate_types && klass->delegate_types[i]) 
             ? klass->delegate_types[i] 
@@ -730,7 +816,7 @@ void compile_class_body(Compiler* c, ASTNode* node)
     }
     reserve_class_vtable_slots(klass, node->class_def.members);
     
-    ObjClass* enclosing_class = c->current_class;
+    ClassDef* enclosing_class = c->current_class;
     c->current_class = klass;
 
     // ★★★ 1. 先にクラス内の全メソッドシグネチャを先行登録！ ★★★
@@ -782,18 +868,55 @@ void compile_class_body(Compiler* c, ASTNode* node)
         emit_inst(c, OP_CONSTANT, class_const_idx);
         emit_inst(c, OP_SET_GLOBAL, name_sym_idx);
         emit_inst(c, OP_POP, 0);
+
     } 
+    const char* out_dir = c->output_dir ? c->output_dir : ".";
+    bool is_building_lib = (strstr(out_dir, "lib") != NULL);
+
+    if (!is_builtin(class_name) || is_building_lib) {
+        const char* src_file = node->loc.filename;
+        const char* fn_only = src_file ? strrchr(src_file, '/') : NULL;
+        fn_only = fn_only ? fn_only + 1 : (src_file ? src_file : "unknown.cd");
+
+        write_class_bcd(out_dir, klass, fn_only);
+    }
 }
 
 void compile_class_def(Compiler* c, ASTNode* node) 
 {
-    if (node == NULL || node->kind != AST_CLASS_DEF) return;
+    if (node == NULL) return;
+
+    if (node->kind == AST_STMT) {
+        compile_class_def(c, node->stmt.left);
+        compile_class_def(c, node->stmt.right);
+        return;
+    }
+
+    if (node->kind != AST_CLASS_DEF) return;
 
     ASTNode* class_node = node->class_def.class;
-    ObjString* class_name = class_node->class.classname->identifier.name;
+    Symbol* class_name = class_node->class.classname->identifier.name;
 
-    if (resolve_class(c, class_name) == NULL) {
+    // すでにコンパイル済みならスキップ
+    ClassDef* existing = NULL;
+    for (Compiler* comp = c; comp != NULL; comp = comp->enclosing) {
+        if (comp->defined_class != NULL) {
+            Value val;
+            if (table_get(comp->defined_class, class_name, &val)) {
+                existing = (ClassDef*)as_obj(val);
+                break;
+            }
+        }
+    }
+
+    if (existing != NULL && existing->state == CLASS_STATE_COMPILED) {
+        return;
+    }
+
+    if (existing == NULL) {
         declare_class_skeleton(c, node);
+        resolve_class_skeleton_relations(c, node);
+        declare_class_signatures(c, node);
     }
 
     compile_class_body(c, node);

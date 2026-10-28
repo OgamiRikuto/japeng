@@ -45,7 +45,7 @@ static void resize(Table* self, int new_capacity)
     free(old_entries);
 }
 
-bool table_set(Table* self, ObjString* key, Value value)
+bool table_set(Table* self, Symbol* key, Value value)
 {
     if ((double)(self->count + 1) / self->capacity > TABLE_MAX_LOAD) {
         resize(self, self->capacity * 2);
@@ -78,7 +78,7 @@ bool table_set(Table* self, ObjString* key, Value value)
     }
 }
 
-bool table_get(Table* self, ObjString* key, Value* out_value)
+bool table_get(Table* self, Symbol* key, Value* out_value)
 {
     if (self->count == 0) return false;
 
@@ -101,7 +101,7 @@ bool table_get(Table* self, ObjString* key, Value* out_value)
     }
 }
 
-bool table_delete(Table* self, ObjString* key)
+bool table_delete(Table* self, Symbol* key)
 {
     if (self->count == 0) return false;
 

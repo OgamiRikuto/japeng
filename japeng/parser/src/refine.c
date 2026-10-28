@@ -6,7 +6,7 @@
 // -----------------------------------------------------------------------------
 // 1. 演算子シンボルから優先順位（数値が高いほど優先）を取得
 // -----------------------------------------------------------------------------
-static int get_binary_precedence(const ObjString* op) {
+static int get_binary_precedence(const Symbol* op) {
     if (!op) return 0;
 
     // 乗除・剰余
@@ -67,7 +67,7 @@ static bool is_binary_op_send(const ASTNode* node) {
     if (node->send.message->kind != AST_IDENTIFIER) return false;
 
     // ★ 優先度が 0 より大きい（登録された演算子である）こと！
-    ObjString* op = node->send.message->identifier.name;
+    Symbol* op = node->send.message->identifier.name;
     return get_binary_precedence(op) > 0;
 }
 
@@ -83,8 +83,8 @@ static ASTNode* rotate_binary_op(ASTNode* node) {
     // 構造: (A op_left B) op_root C
     ASTNode* left = node->send.receiver;
     if (is_binary_op_send(left)) {
-        ObjString* op_root = node->send.message->identifier.name;
-        ObjString* op_left = left->send.message->identifier.name;
+        Symbol* op_root = node->send.message->identifier.name;
+        Symbol* op_left = left->send.message->identifier.name;
 
         int prec_root = get_binary_precedence(op_root);
         int prec_left = get_binary_precedence(op_left);
@@ -184,7 +184,7 @@ ASTNode* fix_precedence(ASTNode* node)
     return node;
 }
 
-Value parse_ast_literal(ASTNode* node, TypeInfo** out_type);
+Value parse_ast_literal(ASTNode* node);
 
 // 左右が両方とも整数リテラルの場合、コンパイル時に計算して 1 つのリテラルノードに潰す
 static ASTNode* try_fold_int_binary(ASTNode* node) {
@@ -196,15 +196,15 @@ static ASTNode* try_fold_int_binary(ASTNode* node) {
 
     if (node->send.message->kind != AST_IDENTIFIER) return node;
 
-    ObjString* op  = node->send.message->identifier.name;
+    Symbol* op  = node->send.message->identifier.name;
 
     // 両辺が TOKEN_INTEGER かチェック
     if (left->kind != AST_LITERAL || left->literal.kind != TOKEN_INTEGER) return node;
     if (right->kind != AST_LITERAL || right->literal.kind != TOKEN_INTEGER) return node;
 
     // 左右の値をパース
-    Value v1 = parse_ast_literal(left, NULL);
-    Value v2 = parse_ast_literal(right, NULL);
+    Value v1 = parse_ast_literal(left);
+    Value v2 = parse_ast_literal(right);
 
     // 左右が SmallInteger 同士の場合
     if (is_int(v1) && is_int(v2)) {

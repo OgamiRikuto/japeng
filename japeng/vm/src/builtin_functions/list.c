@@ -4,29 +4,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static int grow(ObjList* list)
-{
-    int old_capacity = list->capacity;
-    if (old_capacity < list->size + 1) {
-        int new_capacity = old_capacity * 2;
-        list->elements = (Value*)realloc(list->elements, sizeof(Value) * new_capacity);
-        list->capacity = new_capacity;
-    }
-    return list->capacity;
-}
-
 static bool native_list_init(VM* vm, uint8_t arg_count)
 {
     Value* args_start = vm->stack_top - arg_count;
     ObjList* list = (ObjList*)as_obj(*(args_start - 1));
 
     for (int i = 0; i < arg_count; i++) {
-        grow(list);
+        gc_list_grow(&vm->heap, list);
         list->elements[list->size++] = args_start[i];
     }
 
     vm->stack_top = args_start;
-
     return true;
 }
 
@@ -38,13 +26,13 @@ static bool native_list_push(VM* vm, uint8_t arg_count)
     Value receiver = pop(vm);
 
     ObjList* list = (ObjList*)as_obj(receiver);
-    grow(list);
+    gc_list_grow(&vm->heap, list);
     list->elements[list->size++] = val;
 
+    gc_write_barrier(&vm->heap, list, val); // ★ ライトバリア発動
     push(vm, val);
     return true;
 }
-
 
 static bool native_list_get(VM* vm, uint8_t arg_count)
 {
@@ -56,7 +44,7 @@ static bool native_list_get(VM* vm, uint8_t arg_count)
     ObjList* list = (ObjList*)as_obj(receiver);
     int index = (int)as_int(idx_val);
 
-    if (index < 0 || index >= list->size) {
+    if (index < 0 || (uint32_t)index >= list->size) {
         error_runtime(ERR_INDEX_OUT_OF_BOUNDS, index, list->size);
         return false;
     }
@@ -76,12 +64,13 @@ static bool native_list_set(VM* vm, uint8_t arg_count)
     ObjList* list = (ObjList*)as_obj(receiver);
     int index = (int)as_int(idx_val);
 
-    if (index < 0 || index >= list->size) {
+    if (index < 0 || (uint32_t)index >= list->size) {
         error_runtime(ERR_INDEX_OUT_OF_BOUNDS, index, list->size);
         return false;
     }
 
     list->elements[index] = val;
+    gc_write_barrier(&vm->heap, list, val); // ★ ライトバリア発動
     push(vm, val);
     return true;
 }
@@ -115,7 +104,7 @@ static bool native_list_swap(VM* vm, uint8_t arg_count)
     int n2 = as_int(arg2);
     ObjList* list = (ObjList*)as_obj(receiver);
 
-    if ((n1 < 0 || n1 >= list->size) || (n2 < 0 || n2 >= list->size)) {
+    if ((n1 < 0 || (uint32_t)n1 >= list->size) || (n2 < 0 || (uint32_t)n2 >= list->size)) {
         error_runtime(ERR_INDEX_OUT_OF_BOUNDS);
         return false;
     }
@@ -139,20 +128,18 @@ static bool native_list_map(VM* vm, uint8_t arg_count)
     Value receiver = pop(vm);
 
     ObjList* src_list = (ObjList*)as_obj(receiver);
-    ObjList* dest_list = new_list();
+    ObjList* dest_list = gc_new_list(&vm->heap, src_list->size);
 
-    // 元リストの各要素をコールバックに渡して変換
-    for (int i = 0; i < src_list->size; i++) {
+    for (uint32_t i = 0; i < src_list->size; i++) {
         Value elem = src_list->elements[i];
         Value mapped_val;
 
-        // ★ C言語から JapEng のブロックを実行！
         Value args[1] = { elem };
         if (!vm_call_function(vm, fn_val, 1, args, &mapped_val)) {
-            return false; // ゼロ除算等の実行時エラーがあれば即中断
+            return false;
         }
 
-        grow(dest_list);
+        gc_list_grow(&vm->heap, dest_list);
         dest_list->elements[dest_list->size++] = mapped_val;
     }
 
@@ -160,26 +147,24 @@ static bool native_list_map(VM* vm, uint8_t arg_count)
     return true;
 }
 
-void setup_list(VM* vm, TypeInfo* o_info)
+void setup_list(VM* vm)
 {
-    TypeInfo* l_info = new_type_info(sym_List, 1);
-    vm->class_list = new_class(sym_List, l_info, vm->class_object, o_info, 0);
+    vm->class_list = vm_new_class(sym_List, vm->class_object);
 
-    init_class_vtable_from_super(vm->class_list);
-
-    define_native(vm->class_list, "init",   native_list_init);
-    define_native(vm->class_list, "push",   native_list_push);
-    define_native(vm->class_list, "get",    native_list_get);
-    define_native(vm->class_list, "set",    native_list_set);
-    define_native(vm->class_list, "length", native_list_length);
-    define_native(vm->class_list, "swap",   native_list_swap);
-    define_native(vm->class_list, "map",    native_list_map);
+    vm_define_native(vm->class_list, "init",   native_list_init);
+    vm_define_native(vm->class_list, "push",   native_list_push);
+    vm_define_native(vm->class_list, "get",    native_list_get);
+    vm_define_native(vm->class_list, "set",    native_list_set);
+    vm_define_native(vm->class_list, "length", native_list_length);
+    vm_define_native(vm->class_list, "swap",   native_list_swap);
+    vm_define_native(vm->class_list, "map",    native_list_map);
 
     table_set(vm->globals, sym_List, make_obj((Obj*)vm->class_list));
 }
 
-void list_append(ObjList* list, Value val)
+void list_append(VM* vm, ObjList* list, Value val)
 {
-    grow(list);
+    gc_list_grow(&vm->heap, list);
     list->elements[list->size++] = val;
+    gc_write_barrier(&vm->heap, list, val);
 }

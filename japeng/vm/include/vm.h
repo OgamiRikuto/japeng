@@ -1,14 +1,14 @@
 #ifndef VM_H
 #define VM_H
 
+#include "gc.h"
+#include "vm_class.h"
 #include <stdbool.h>
 #include <stdint.h>
 
 typedef struct chunk Chunk;
 typedef uint64_t Value;
 typedef struct table Table;
-typedef struct objClass ObjClass;
-typedef struct objClosure ObjClosure;
 
 #define FRAME_MAX 64
 #define STACK_MAX (FRAME_MAX * 256)
@@ -27,6 +27,9 @@ typedef struct vm{
     Value stack[STACK_MAX];
     Value* stack_top;
     Table* globals;
+
+    GCHeap    heap;
+    const char* project_dir;
 
     // 組み込み関数
     ObjClass* class_object;

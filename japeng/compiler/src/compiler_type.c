@@ -15,7 +15,7 @@ void collect_args(ASTNode* node, ASTNode** list, int* count, int max)
 }
 
 // 外側のスコープを遡って変数の型を特定する
-TypeInfo* resolve_upvalue_type(Compiler* c, ObjString* name)
+TypeInfo* resolve_upvalue_type(Compiler* c, Symbol* name)
 {
     if (c->enclosing == NULL) return new_type_info(sym_Error, 0);
 
@@ -26,21 +26,21 @@ TypeInfo* resolve_upvalue_type(Compiler* c, ObjString* name)
     return resolve_upvalue_type(c->enclosing, name); // さらに外側へ
 }
 
-static bool is_compare_operator(ObjString* op)
+static bool is_compare_operator(Symbol* op)
 {
     return  op == sym_equal || op == sym_nequal ||
             op == sym_gt || op == sym_ngt ||
             op == sym_less || op == sym_nless;
 }
 
-static bool is_calc_operator(ObjString* op)
+static bool is_calc_operator(Symbol* op)
 {
     return  op == sym_plus || op == sym_minus ||
             op == sym_multi || op == sym_div ||
             op == sym_rem;
 }
 
-bool is_compound_operator(ObjString* op)
+bool is_compound_operator(Symbol* op)
 {
     return  op == sym_plus_eq || op == sym_minus_eq ||
             op == sym_multi_eq || op == sym_div_eq  ||
@@ -48,7 +48,7 @@ bool is_compound_operator(ObjString* op)
             op == sym_bxor_eq  || op == sym_shl_eq  || op == sym_shr_eq;
 }
 
-static bool is_bitwise_operator(ObjString* op)
+static bool is_bitwise_operator(Symbol* op)
 {
     return op == sym_shl || op == sym_shr ||
            op == sym_band  || op == sym_bor   ||
@@ -184,7 +184,7 @@ bool is_assignable(Compiler* c, TypeInfo* target, TypeInfo* source) {
     }
 
     // 5. 継承関係チェック
-    ObjClass* src_class = resolve_class(c, source->name);
+    ClassDef* src_class = resolve_class(c, source->name);
     while (src_class != NULL && src_class->superclass != NULL) {
         if (src_class->superclass->name == target->name) return true;
         src_class = src_class->superclass;
@@ -208,7 +208,7 @@ static void collect_block_arg_info(Compiler* c, ASTNode* node,
 
         TypeInfo* t = build_type_info(node->var_decl.type);
         if (t != NULL && t->name == sym_Function && node->var_decl.type->kind != AST_FUNC_TYPE) {
-            ObjString* arg_name = node->var_decl.identifier ? node->var_decl.identifier->identifier.name : sym_Function;
+            Symbol* arg_name = node->var_decl.identifier ? node->var_decl.identifier->identifier.name : sym_Function;
             error_compile(node, ERR_FUNCTION_REQUIRES_SIGNATURE, arg_name->chars);
         }
 
@@ -216,7 +216,7 @@ static void collect_block_arg_info(Compiler* c, ASTNode* node,
         if (node->var_decl.default_val != NULL) {
             // ★ リテラル限定チェック（式やオブジェクト生成をここで弾く！）
             if (node->var_decl.default_val->kind != AST_LITERAL) {
-                ObjString* name = node->var_decl.identifier ? node->var_decl.identifier->identifier.name : sym_Function;
+                Symbol* name = node->var_decl.identifier ? node->var_decl.identifier->identifier.name : sym_Function;
                 error_compile(node->var_decl.default_val, ERR_ARG_INIT_MUST_BE_LITERAL, name->chars);
                 default_vals[idx] = make_nil();
             } else {
@@ -254,7 +254,7 @@ static void collect_block_arg_info(Compiler* c, ASTNode* node,
 // }
 
 // 型情報の中の target_sym (sym_Auto) を replacement (具象型) に再帰置換する汎用関数
-static TypeInfo* replace_type_param(TypeInfo* type, ObjString* target_sym, TypeInfo* replacement)
+static TypeInfo* replace_type_param(TypeInfo* type, Symbol* target_sym, TypeInfo* replacement)
 {
     if (type == NULL || replacement == NULL) return type;
 
@@ -402,10 +402,10 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
         return new_type_info(sym_Error, 0);
     }
 
-    ObjString* msg = send_node->send.message->identifier.name;
+    Symbol* msg = send_node->send.message->identifier.name;
 
     // 1. クラスの取得
-    ObjClass* klass = resolve_class(c, rec_type->name);
+    ClassDef* klass = resolve_class(c, rec_type->name);
     if (klass == NULL) {
         error_compile(send_node, ERR_CLASS_NOT_REGISTERED, rec_type->name->chars);
         return new_type_info(sym_Error, 0);
@@ -577,7 +577,7 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                     return c->current_class->field_infos[field_idx].type;
                 }
             }
-            ObjClass* klass = resolve_class(c, node->identifier.name);
+            ClassDef* klass = resolve_class(c, node->identifier.name);
             if (klass != NULL) {
                 // クラスオブジェクトそのものをスタックに積む
                 uint32_t const_idx = add_constant(c->chunk, make_obj((Obj*)klass));
@@ -599,7 +599,7 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
         }
 
         case AST_SEND: {
-            ObjString* msg = node->send.message->identifier.name;
+            Symbol* msg = node->send.message->identifier.name;
 
             bool is_self = (node->send.receiver->kind == AST_IDENTIFIER &&
                             node->send.receiver->identifier.name == sym_self);

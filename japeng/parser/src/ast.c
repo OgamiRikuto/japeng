@@ -54,7 +54,7 @@ ASTNode* create_func_type_node(ASTNode* params, ASTNode* rets)
     return node;
 }
 
-ASTNode* create_literal_node(LiteralKind kind, ObjString* raw)
+ASTNode* create_literal_node(LiteralKind kind, Symbol* raw)
 {
     ASTNode* node = alloc_node(AST_LITERAL);
     node->literal.kind = kind;
@@ -62,7 +62,7 @@ ASTNode* create_literal_node(LiteralKind kind, ObjString* raw)
     return node;
 }
 
-ASTNode* create_identifier_node(ObjString* name)
+ASTNode* create_identifier_node(Symbol* name)
 {
     ASTNode* node = alloc_node(AST_IDENTIFIER);
     // if (strncmp(name->chars, "__id_", 5) == 0 || strncmp(name->chars, "CLASSTYPE_", 10) == 0) {

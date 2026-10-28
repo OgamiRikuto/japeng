@@ -235,9 +235,9 @@ int dec_compare(ObjDecimal* a, ObjDecimal* b) {
     return res;
 }
 
-ObjString* dec_toString(ObjDecimal* dec)
+Symbol* dec_toString(ObjDecimal* dec)
 {
-    ObjString* raw = bi_to_string(dec->mantissa);
+    Symbol* raw = bi_to_string(dec->mantissa);
     if (dec->scale <= 0) {
         // 小数部がない（またはスケール0）ならそのまま
         return raw;

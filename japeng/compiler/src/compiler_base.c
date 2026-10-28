@@ -30,7 +30,7 @@ void collect_identifiers(ASTNode* node, ASTNode** list, int* count)
 }
 
 // 複合代入の型チェックおよび演算結果型の決定
-static TypeInfo* check_compound_type(Compiler* c, ASTNode* node, ObjString* msg, TypeInfo* lhs, TypeInfo* rhs) 
+static TypeInfo* check_compound_type(Compiler* c, ASTNode* node, Symbol* msg, TypeInfo* lhs, TypeInfo* rhs) 
 {
     if (lhs == NULL || rhs == NULL) return new_type_info(sym_Error, 0);
     if (lhs->name == sym_Error || rhs->name == sym_Error) return new_type_info(sym_Error, 0);
@@ -82,7 +82,7 @@ static TypeInfo* check_compound_type(Compiler* c, ASTNode* node, ObjString* msg,
 }
 
 // 最適化オペコードの決定 (整数同士なら INT 専用命令)
-static Opcode resolve_actual_op(ObjString* msg, TypeInfo* lhs) 
+static Opcode resolve_actual_op(Symbol* msg, TypeInfo* lhs) 
 {
     // 文字列結合 (+=)
     if (is_string_type(lhs->name)) {
@@ -128,7 +128,7 @@ static Opcode resolve_actual_op(ObjString* msg, TypeInfo* lhs)
 // 複合代入のコード生成 (ローカル変数 or selfのフィールド)
 bool compile_compound_assignment(Compiler* c, ASTNode* node) 
 {
-    ObjString* msg = node->send.message->identifier.name;
+    Symbol* msg = node->send.message->identifier.name;
 
     // ★ 判定関数を呼び出す
     if (!is_compound_operator(msg)) {
@@ -136,13 +136,13 @@ bool compile_compound_assignment(Compiler* c, ASTNode* node)
     }
 
     ASTNode* target = node->send.receiver;
-    ObjString* name = NULL;
+    Symbol* name = NULL;
     bool is_explicit_self = false;
 
     if (target->kind == AST_IDENTIFIER) {
         name = target->identifier.name;
     } else if (target->kind == AST_SEND && target->send.receiver->kind == AST_IDENTIFIER) {
-        ObjString* rec_name = target->send.receiver->identifier.name;
+        Symbol* rec_name = target->send.receiver->identifier.name;
         if (rec_name == sym_self) {
             name = target->send.message->identifier.name;
             is_explicit_self = true;
@@ -215,14 +215,14 @@ bool compile_compound_assignment(Compiler* c, ASTNode* node)
 void compile_var_decl(Compiler* c, ASTNode* node)
 {
     TypeInfo* t_info     = build_type_info(node->var_decl.type);
-    ObjString* type_name = t_info ? t_info->name : get_type_name(node->var_decl.type);
+    Symbol* type_name = t_info ? t_info->name : get_type_name(node->var_decl.type);
 
     ASTNode* vars[MAX_ARGS];
     int var_count = 0;
     collect_identifiers(node->var_decl.identifier, vars, &var_count);
 
     for (int i = 0; i < var_count; i++) {
-        ObjString* var_name = vars[i]->identifier.name;
+        Symbol* var_name = vars[i]->identifier.name;
         int slot = add_local(c, var_name, t_info);
 
         if (is_integer_type(type_name)) {
@@ -232,8 +232,8 @@ void compile_var_decl(Compiler* c, ASTNode* node)
         } else if (is_decimal_type(type_name)) {
             ObjDecimal* zero_dec = new_decimal_from_i64(0);
             emit_constant(c, make_obj((Obj*)zero_dec));
-        } else if (is_list_type(type_name)) {
-            emit_constant(c, make_obj((Obj*)new_list()));
+        // } else if (is_list_type(type_name)) {
+        //     emit_constant(c, make_obj((Obj*)new_list()));
         } else if (is_string_type(type_name)) {
             emit_constant(c, make_obj((Obj*)new_string("", 0)));
         } else if (is_boolean_type(type_name)) {
@@ -426,8 +426,8 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
     // =========================================================
     if (node->send.receiver->kind == AST_VAR_DECL) {
         ASTNode* decl = node->send.receiver;
-        ObjString* var_name  = decl->var_decl.identifier->identifier.name;
-        ObjString* type_name = get_type_name(decl->var_decl.type);
+        Symbol* var_name  = decl->var_decl.identifier->identifier.name;
+        Symbol* type_name = get_type_name(decl->var_decl.type);
         TypeInfo* declared_type = build_type_info(decl->var_decl.type);
 
         bool is_null_literal = (node->send.args != NULL && 
@@ -443,7 +443,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
             is_null_literal ||
             (node->send.args != NULL && node->send.args->kind == AST_BLOCK)) {
 
-            ObjString* msg = node->send.message->identifier.name;
+            // Symbol* msg = node->send.message->identifier.name;
 
             // =====================================================
             // ★ List の複数初期化 (例: arr: List Integer are 0, 1;)
@@ -465,7 +465,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                                           ? declared_type->type_args[0] 
                                           : NULL;
 
-                ObjClass* list_klass = resolve_class(c, sym_List);
+                ClassDef* list_klass = resolve_class(c, sym_List);
                 int push_slot = list_klass ? get_vtable_index(list_klass, intern_cstr("push")) : 5;
 
                 // 各要素を評価・型チェック・push
@@ -550,9 +550,9 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
     if (node->send.receiver->kind == AST_SEND) {
         ASTNode* lhs_send = node->send.receiver;
         if (lhs_send->send.receiver->kind == AST_IDENTIFIER) {
-            ObjString* rec_name = lhs_send->send.receiver->identifier.name;
+            Symbol* rec_name = lhs_send->send.receiver->identifier.name;
             if (rec_name == sym_self) {
-                ObjString* field_name = lhs_send->send.message->identifier.name;
+                Symbol* field_name = lhs_send->send.message->identifier.name;
                 if (c->current_class != NULL) {
                     int field_idx = find_field_index(c->current_class, field_name);
                     if (field_idx != -1) {
@@ -581,7 +581,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
     // ケース 3: 既存変数への再代入 (例: a is 20;)
     // =========================================================
     if (node->send.receiver->kind == AST_IDENTIFIER) {
-        ObjString* target_name = node->send.receiver->identifier.name;
+        Symbol* target_name = node->send.receiver->identifier.name;
 
         // 3-A. ローカル変数の場合
         int slot = resolve_local(c, target_name);
@@ -627,7 +627,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
     return new_type_info(sym_Error, 0);
 }
 
-void compile_mesage_send(Compiler* c, ASTNode* node, ObjString* msg)
+void compile_mesage_send(Compiler* c, ASTNode* node, Symbol* msg)
 {
     bool is_super = (node->send.receiver->kind == AST_IDENTIFIER &&
                     (node->send.receiver->identifier.name == sym_super));
@@ -638,7 +638,7 @@ void compile_mesage_send(Compiler* c, ASTNode* node, ObjString* msg)
             return;
         }
 
-        ObjClass* superclass = c->current_class->superclass;
+        ClassDef* superclass = c->current_class->superclass;
         Value method_val;
 
         // ★ 2. コンパイル時に親クラスからメソッドを特定！

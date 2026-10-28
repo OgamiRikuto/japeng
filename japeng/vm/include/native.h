@@ -12,9 +12,9 @@ typedef bool (*NativeFn)(VM* vm, uint8_t arg_count);
 typedef struct objNative {
     Obj header;
     NativeFn function;
-    ObjString* name;
+    Symbol* name;
 } ObjNative;
 
-ObjNative* new_native(NativeFn function, ObjString* name);
+ObjNative* new_native(NativeFn function, Symbol* name);
 
 #endif

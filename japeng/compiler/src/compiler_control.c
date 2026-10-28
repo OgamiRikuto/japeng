@@ -74,7 +74,7 @@ void compile_if_chain(Compiler* c, ASTNode* node)
             continue;
         }
 
-        ObjString* msg = clause->send.message->identifier.name;
+        Symbol* msg = clause->send.message->identifier.name;
 
         if (msg == sym_if || msg == sym_elif) {
             ASTNode* cond_node  = clause->send.args->stmt.left;
@@ -272,7 +272,7 @@ static void compile_block_args(Compiler* c, ASTNode* args_node, int* arity)
         return;
     }
     if (args_node->kind == AST_VAR_DECL) {
-        ObjString* arg_name = args_node->var_decl.identifier->identifier.name;
+        Symbol* arg_name = args_node->var_decl.identifier->identifier.name;
         TypeInfo* t_info = build_type_info(args_node->var_decl.type);
         add_local(c, arg_name, t_info);
         (*arity)++;

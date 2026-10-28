@@ -6,6 +6,8 @@
 #include "literal.h"
 
 typedef struct chunk Chunk;
+typedef struct symbol Symbol;
+// typedef struct symbol ObjString;
 
 // オブジェクトの種類タグ
 typedef enum {
@@ -23,24 +25,28 @@ typedef enum {
 
 // オブジェクトの共通ヘッダー
 typedef struct obj {
-    ObjType type;
+    uint8_t  type;       // ObjType (1バイトで読み出すため、隣のflagsと合体しない！)
+    uint8_t  flags;      // GCフラグ (0x80 など)
+    uint16_t unused;     // アライメント用予約
+    uint32_t slot_idx;   // スロット番号
 } Obj;
 
-// 文字列オブジェクト(シンボル)
-typedef struct objString {
-    Obj header;
-    uint32_t hash;
-    int length;
-    char chars[];
-} ObjString;
+#include "symbol.h"
+// // 文字列オブジェクト(シンボル)
+// typedef struct objString {
+//     Obj header;
+//     uint32_t hash;
+//     int length;
+//     char chars[];
+// } ObjString;
 
-// リストオブジェクト
-typedef struct objList {
-    Obj header;
-    Value* elements;
-    int size;
-    int capacity;
-} ObjList;
+// // リストオブジェクト
+// typedef struct objList {
+//     Obj header;
+//     Value* elements;
+//     int size;
+//     int capacity;
+// } ObjList;
 
 typedef struct upvalueInfo {
     uint8_t index;
@@ -56,15 +62,15 @@ typedef struct objFunc {
     UpvalueInfo* upvalues;
 } ObjFunction;
 
-typedef struct objClosure {
-    Obj header;
-    ObjFunction* function;
-    int capture_count;
-    Value captures[];
-} ObjClosure;
+// typedef struct objClosure {
+//     Obj header;
+//     ObjFunction* function;
+//     int capture_count;
+//     Value captures[];
+// } ObjClosure;
 
 static inline ObjType obj_type(Value value) {
-    return ((Obj*)as_obj(value))->type;
+    return (ObjType)(((Obj*)as_obj(value))->type);
 }
 
 static inline bool is_obj_type(Value value, ObjType type) {
@@ -80,8 +86,8 @@ static inline bool is_closure(Value value) {
 }
 
 ObjFunction* new_function(Chunk* chunk, uint8_t arity);
-ObjClosure* new_closure(ObjFunction* function);
-ObjString* new_string(const char* chars, int length);
-ObjList* new_list();
+// ObjClosure* new_closure(ObjFunction* function);
+Symbol* new_string(const char* chars, int length);
+// ObjList* new_list();
 
 #endif

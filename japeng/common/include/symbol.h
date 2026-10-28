@@ -1,7 +1,17 @@
 #ifndef SYMBOL_H_
 #define SYMBOL_H_
+#include "object.h"
 
-typedef struct objString ObjString;
+typedef struct symbol {
+    Obj      header; // 移行期間中は make_obj 互換のため残す (type: OBJ_STRING)
+    uint32_t hash;
+    int      length;
+    char     chars[];
+} Symbol;
+
+// typedef Symbol ObjString;
+
+// typedef struct objString ObjString;
 
 #define CORE_SYMBOLS(X) \
     X(is,           "is") \
@@ -62,14 +72,14 @@ typedef struct objString ObjString;
     X(Void,         "Void") \
     X(Error,        "Error")
 
-#define DECLARE_SYM(name, str) extern ObjString* sym_##name;
+#define DECLARE_SYM(name, str) extern Symbol* sym_##name;
 CORE_SYMBOLS(DECLARE_SYM)
 #undef DECLARE_SYM
 
 void init_symbols(void);
-ObjString* intern_string(const char* chars, int length);
+Symbol* intern_string(const char* chars, int length);
 
-ObjString* intern_cstr(const char* str);
+Symbol* intern_cstr(const char* str);
 
 void free_symbol_pool(void);
 

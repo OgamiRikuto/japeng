@@ -12,7 +12,7 @@ typedef enum {
 } EntryStatus;
 
 typedef struct {
-    ObjString* key;
+    Symbol* key;
     Value value;
     EntryStatus status;
 } HashEntry;
@@ -25,8 +25,8 @@ typedef struct table {
 
 Table* new_table(int init_capacity);
 void table_free(Table* self);
-bool table_set(Table* self, ObjString* key, Value value);
-bool table_get(Table* self, ObjString* key, Value* out_value);
-bool table_delete(Table* self, ObjString* key);
+bool table_set(Table* self, Symbol* key, Value value);
+bool table_get(Table* self, Symbol* key, Value* out_value);
+bool table_delete(Table* self, Symbol* key);
 
 #endif

@@ -2,9 +2,8 @@
 #include "vm.h"
 #include "builtins.h"
 
-void setup_boolean(VM* vm, TypeInfo* o_info)
+void setup_boolean(VM* vm)
 {
-    TypeInfo* b_info = new_type_info(sym_Boolean, 0);
-    vm->class_boolean = new_class(sym_Boolean, b_info, vm->class_object, o_info, 0);
-    init_class_vtable_from_super(vm->class_boolean);
+    vm->class_boolean = vm_new_class(sym_Boolean, vm->class_object);
+    table_set(vm->globals, sym_Boolean, make_obj((Obj*)vm->class_boolean));
 }

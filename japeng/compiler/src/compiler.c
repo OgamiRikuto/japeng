@@ -5,7 +5,7 @@
 #include "compiler_internal.h"
 #include "object.h"
 
-static bool is_clause_msg(ASTNode* node, ObjString* sym)
+static bool is_clause_msg(ASTNode* node, Symbol* sym)
 {
     return (node != NULL && node->kind == AST_SEND &&
             node->send.message != NULL &&
@@ -63,7 +63,7 @@ void compile_statement_node(Compiler* c, ASTNode* node)
         if (node->send.receiver != NULL && node->send.receiver->kind == AST_STMT)
             return;
 
-        ObjString* msg = node->send.message->identifier.name;
+        Symbol* msg = node->send.message->identifier.name;
         // if や repeat は内部でスタックを自前制御するので除外
         if (msg != sym_if && msg != sym_repeat) emit_inst(c, OP_POP, 0);
     }
@@ -105,7 +105,7 @@ void compile(Compiler* c, ASTNode* node)
                 compile_if_chain(c, node);
                 return;
             }
-            ObjString* msg_sym = node->send.message->identifier.name;
+            Symbol* msg_sym = node->send.message->identifier.name;
             bool is_self = (node->send.receiver->kind == AST_IDENTIFIER &&
                             node->send.receiver->identifier.name == sym_self);
 

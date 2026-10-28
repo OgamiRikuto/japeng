@@ -20,7 +20,7 @@ extern int syntax_error_count;
 int main(int, char**);
 int yylex(void);
 void comment(void);
-ObjString* unquote_and_intern(const char*, int);
+Symbol* unquote_and_intern(const char*, int);
 int yyparse(void);
 void yyerror(const char*);
 
@@ -30,6 +30,7 @@ void yyerror(const char*);
 extern ASTNode* current_parsed_ast;
 extern ASTNode* parsed_cd[MAX_FILES];
 extern int      parsed_cd_count;
-extern ASTNode* parsed_je;
+extern ASTNode* parsed_je[MAX_FILES];
+extern int parsed_je_count;
 
 #endif

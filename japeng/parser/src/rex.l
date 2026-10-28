@@ -11,7 +11,7 @@ int linecounter = 1;
 extern const char* current_filename;
 int yycolumn = 1;
 
-static ObjString* resolve_and_intern(const char* text) {
+static Symbol* resolve_and_intern(const char* text) {
     const char* orig = lookup_original_symbol(text);
     return intern_cstr(orig ? orig : text);
 }
@@ -118,7 +118,7 @@ void comment(void) {
 	}
 }
 
-ObjString* unquote_and_intern(const char* text, int len) {
+Symbol* unquote_and_intern(const char* text, int len) {
     char buf[1024];
     int content_len = len - 2;
     if (content_len >= (int)sizeof(buf)) {

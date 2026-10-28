@@ -1,7 +1,7 @@
 #include "native.h"
 #include <stdlib.h>
 
-ObjNative* new_native(NativeFn function, ObjString* name) 
+ObjNative* new_native(NativeFn function, Symbol* name) 
 {
     ObjNative* native = (ObjNative*)malloc(sizeof(ObjNative));
     native->header.type = OBJ_NATIVE;

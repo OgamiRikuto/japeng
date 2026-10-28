@@ -8,6 +8,7 @@ void init_compiler(Compiler* compiler, Chunk* chunk)
 {
     compiler->enclosing = NULL;
     compiler->chunk = chunk;
+    compiler->output_dir = ".";
     compiler->is_method = false;
     compiler->stack_depth = 0;
     memset(compiler->expected_ret_types, 0, sizeof(compiler->expected_ret_types));
@@ -142,7 +143,7 @@ void emit_loop(Compiler* c, int loop_start_index)
     emit_inst(c, OP_LOOP, (uint32_t)offset);
 }
 
-int resolve_local(Compiler* c, ObjString* name)
+int resolve_local(Compiler* c, Symbol* name)
 {
     for (int index = c->local_count - 1; index >= 0; index--) {
         if (c->locals[index].name == name) return index;
@@ -150,7 +151,7 @@ int resolve_local(Compiler* c, ObjString* name)
     return -1;
 }
 
-int add_local(Compiler* c, ObjString* name, TypeInfo* type)
+int add_local(Compiler* c, Symbol* name, TypeInfo* type)
 {
     if (c->local_count >= MAX_LOCALS) {
         Location no_loc = {0};
@@ -196,7 +197,7 @@ int add_upvalue(Compiler* compiler, uint8_t index, bool is_local)
     return compiler->upvalue_count++;
 }
 
-int resolve_upvalue(Compiler* compiler, ObjString* name) 
+int resolve_upvalue(Compiler* compiler, Symbol* name) 
 {
     if (compiler->enclosing == NULL) return -1; 
 
@@ -225,7 +226,7 @@ void emit_load_self(Compiler* c)
     }
 }
 
-ObjString* get_type_name(ASTNode* type_node) {
+Symbol* get_type_name(ASTNode* type_node) {
     if (type_node == NULL) return NULL;
     if (type_node->kind == AST_IDENTIFIER) {
         return type_node->identifier.name;
@@ -236,7 +237,7 @@ ObjString* get_type_name(ASTNode* type_node) {
     return NULL;
 }
 
-bool is_integer_type(ObjString* name) 
+bool is_integer_type(Symbol* name) 
 {
     if (name == NULL) return false;
     return (name == sym_Integer|| 
@@ -244,37 +245,37 @@ bool is_integer_type(ObjString* name)
             name == sym_BigInteger);
 }
 
-bool is_float_type(ObjString* name) 
+bool is_float_type(Symbol* name) 
 {
     if (name == NULL) return false;
     return (name == sym_Float);
 }
 
-bool is_decimal_type(ObjString* name)
+bool is_decimal_type(Symbol* name)
 {
     if (name == NULL) return false;
     return (name == sym_Decimal);
 }
 
-bool is_list_type(ObjString* name)
+bool is_list_type(Symbol* name)
 {
     if (name == NULL) return false;
     return (name == sym_List);
 }
 
-bool is_string_type(ObjString* name) 
+bool is_string_type(Symbol* name) 
 {
     if (name == NULL) return false;
     return (name == sym_String);
 }
 
-bool is_boolean_type(ObjString* name) 
+bool is_boolean_type(Symbol* name) 
 {
     if (name == NULL) return false;
     return (name == sym_Boolean);
 }
 
-bool is_builtin(ObjString* name)
+bool is_builtin(Symbol* name)
 {
     if (name == NULL) return false;
     return  name == sym_Object ||
@@ -294,7 +295,7 @@ bool is_builtin(ObjString* name)
 Value parse_ast_literal_with_expected(ASTNode* node, TypeInfo* expected_type, TypeInfo** out_type)
 {
     LiteralKind kind = node->literal.kind;
-    ObjString* raw   = node->literal.raw;
+    Symbol* raw   = node->literal.raw;
     const char* str  = raw->chars;
     int len          = raw->length;
 

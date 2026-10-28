@@ -7,12 +7,12 @@
 #define POOL_MAX_LOAD 0.75
 
 typedef struct {
-    ObjString** entries;
+    Symbol** entries;
     int count;
     int capacity;
 } SymbolPool;
 
-#define DEFINE_SYM(name, str) ObjString* sym_##name = NULL;
+#define DEFINE_SYM(name, str) Symbol* sym_##name = NULL;
 CORE_SYMBOLS(DEFINE_SYM)
 #undef DEFINE_SYM
 
@@ -36,7 +36,7 @@ static uint32_t hash_string(const char* key, int length)
     return hash;
 }
 
-static ObjString* find_interned(const char* chars, int length, uint32_t hash)
+static Symbol* find_interned(const char* chars, int length, uint32_t hash)
 {
     if (global_pool.capacity == 0) return NULL;
 
@@ -44,7 +44,7 @@ static ObjString* find_interned(const char* chars, int length, uint32_t hash)
     uint32_t index = hash & mask;
 
     for (;;) {
-        ObjString* item = global_pool.entries[index];
+        Symbol* item = global_pool.entries[index];
         if (item == NULL) {
             return NULL;
         }
@@ -60,11 +60,11 @@ static ObjString* find_interned(const char* chars, int length, uint32_t hash)
 
 static void resize_pool(int new_capacity)
 {
-    ObjString** new_entries = (ObjString**)calloc(new_capacity, sizeof(ObjString*));
+    Symbol** new_entries = (Symbol**)calloc(new_capacity, sizeof(Symbol*));
     uint32_t mask = new_capacity - 1;
 
     for (int i = 0; i < global_pool.capacity; i++) {
-        ObjString* item = global_pool.entries[i];
+        Symbol* item = global_pool.entries[i];
         if (item == NULL) continue;
 
         uint32_t index = item->hash & mask;
@@ -79,10 +79,10 @@ static void resize_pool(int new_capacity)
     global_pool.capacity = new_capacity;
 }
 
-ObjString* intern_string(const char* chars, int length)
+Symbol* intern_string(const char* chars, int length)
 {
     uint32_t hash = hash_string(chars, length);
-    ObjString* interned = find_interned(chars, length, hash);
+    Symbol* interned = find_interned(chars, length, hash);
     if (interned != NULL) {
         return interned;
     }
@@ -92,7 +92,7 @@ ObjString* intern_string(const char* chars, int length)
         resize_pool(capacity);
     }
     
-    ObjString* string = (ObjString*)malloc(sizeof(ObjString) + length + 1);
+    Symbol* string = (Symbol*)malloc(sizeof(Symbol) + length + 1);
     string->header.type = OBJ_STRING;
     string->hash = hash;
     string->length = length;
@@ -111,7 +111,7 @@ ObjString* intern_string(const char* chars, int length)
     return string;
 }
 
-ObjString* intern_cstr(const char* str)
+Symbol* intern_cstr(const char* str)
 {
     return intern_string(str, (int)strlen(str));
 }

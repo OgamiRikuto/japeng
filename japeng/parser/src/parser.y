@@ -31,8 +31,8 @@ Location current_ast_loc = {0};
 %locations
 %error-verbose
 %union {
-    ObjString* literal;
-    ObjString* symbol;
+    Symbol* literal;
+    Symbol* symbol;
     ASTNode* node;
 }
 %token CLASS        "class"
@@ -422,7 +422,7 @@ primary :
                 
                 char buf[1024];
                 snprintf(buf, sizeof(buf), "-%s", $2->literal.raw->chars);
-                ObjString* neg_raw = new_string(buf, (int)strlen(buf));
+                Symbol* neg_raw = new_string(buf, (int)strlen(buf));
                 
                 $$ = create_literal_node($2->literal.kind, neg_raw);
             } 

@@ -28,14 +28,14 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
-    printf("\n=== AST PRINT (%d files) ===\n", parsed_cd_count + 1);
+    printf("\n=== AST PRINT (%d files) ===\n", parsed_cd_count + parsed_je_count);
     for (int i = 0; i < parsed_cd_count; i++) {
         printf("\n--- %s ---\n", parsed_cd[i]->loc.filename);
         print_ast(parsed_cd[i], 0);
     }
-    if (parsed_je != NULL) {
-        printf("\n--- %s ---\n", parsed_je->loc.filename);
-        print_ast(parsed_je, 0);
+    for (int i = 0; i < parsed_je_count; i++) {
+        printf("\n--- %s ---\n", parsed_je[i]->loc.filename);
+        print_ast(parsed_je[i], 0);
     }
     
     return EXIT_SUCCESS;

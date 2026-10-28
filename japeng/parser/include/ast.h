@@ -58,11 +58,11 @@ struct ASTNode {
 
         struct {
             LiteralKind kind;
-            ObjString* raw;
+            Symbol* raw;
         } literal;
 
         struct {
-            ObjString* name;
+            Symbol* name;
         } identifier;
 
         struct {
@@ -109,8 +109,8 @@ struct ASTNode {
 ASTNode* create_stmt_node(ASTNode*, ASTNode*);
 ASTNode* create_class_node(ASTNode*, ASTNode*);
 ASTNode* create_func_type_node(ASTNode*, ASTNode*);
-ASTNode* create_literal_node(LiteralKind, ObjString*);
-ASTNode* create_identifier_node(ObjString*);
+ASTNode* create_literal_node(LiteralKind, Symbol*);
+ASTNode* create_identifier_node(Symbol*);
 ASTNode* create_send_node(ASTNode*, ASTNode*, ASTNode*);
 ASTNode* create_block_node(ASTNode*, ASTNode*, ASTNode*);
 ASTNode* create_vardecl_node(ASTNode*, ASTNode*);

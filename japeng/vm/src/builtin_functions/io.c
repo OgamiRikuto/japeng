@@ -30,9 +30,11 @@ static void print_value(Value value)
             case OBJ_DECIMAL:
                 printf("%s", dec_toString((ObjDecimal*)obj)->chars);
                 break;
-            case OBJ_STRING:
-                printf("%s", ((ObjString*)obj)->chars);
+            case OBJ_STRING: {
+                ObjString* str = (ObjString*)obj;
+                printf("%s", string_chars(str)); // ★ string_chars を使用
                 break;
+            }
             case OBJ_LIST: {
                 ObjList* list = (ObjList*)obj;
                 printf("list: [ ");
@@ -48,7 +50,8 @@ static void print_value(Value value)
                 break;
             case OBJ_INSTANCE: {
                 ObjInstance* inst = (ObjInstance*)obj;
-                printf("<instance %s>", (inst->klass && inst->klass->name) ? inst->klass->name->chars : "Anon");
+                ObjClass* klass = (ObjClass*)inst->klass;
+                printf("<instance %s>", (klass && klass->name) ? klass->name->chars : "Anon");
                 break;
             }
             case OBJ_FUNCTION:
@@ -101,19 +104,20 @@ static bool native_print(VM* vm, uint8_t arg_count)
 
 static bool native_input(VM* vm, uint8_t arg_count)
 {
-    // 引数が1つ渡されていたら、それをプロンプトとして画面表示
     if (arg_count == 1) {
         Value prompt_val = pop(vm);
-        if (is_obj(prompt_val) && ((Obj*)as_obj(prompt_val))->type == OBJ_STRING) {
+        if (is_obj_type(prompt_val, OBJ_STRING)) {
             ObjString* prompt = (ObjString*)as_obj(prompt_val);
-            printf("%s", prompt->chars);
-            fflush(stdout); // 即座に出力フラッシュ
+            printf("%s", string_chars(prompt));
+            fflush(stdout);
         }
     }
 
     char input[1024];
     if (fgets(input, sizeof(input), stdin) == NULL) {
-        push(vm, make_obj((Obj*)new_string("", 0)));
+        // ★ new_string ではなく gc_new_string を使用
+        ObjString* empty = gc_new_string(&vm->heap, "", 0);
+        push(vm, make_obj((Obj*)empty));
         return true;
     }
 
@@ -122,14 +126,14 @@ static bool native_input(VM* vm, uint8_t arg_count)
         input[--len] = '\0';
     }
 
-    ObjString* string = new_string(input, (int)len);
+    ObjString* string = gc_new_string(&vm->heap, input, (int)len);
     push(vm, make_obj((Obj*)string));
     return true;
 }
 
 void setup_print(VM* vm, ObjClass* klass)
 {
-    define_native(klass, "print", native_print);
-    define_native(klass, "println", native_println);
-    define_native(klass, "input", native_input);
+    vm_define_native(klass, "print",   native_print);
+    vm_define_native(klass, "println", native_println);
+    vm_define_native(klass, "input",   native_input);
 }

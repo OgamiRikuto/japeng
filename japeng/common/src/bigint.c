@@ -513,7 +513,7 @@ static void mul_add_chunk(BigInteger* bi, uint32_t base_mul, uint32_t chunk)
     }
 }
 
-BigInteger* new_bi_from_string(ObjString* string) 
+BigInteger* new_bi_from_string(Symbol* string) 
 {
     int start = 0;
     bool sign = true;
@@ -568,7 +568,7 @@ static size_t estimate_max_decimal_digits(size_t length) {
     return length * 10 + 2; 
 }
 
-ObjString* bi_to_string(const BigInteger* bi) 
+Symbol* bi_to_string(const BigInteger* bi) 
 {
     // 1. 特殊ケース: 0 の場合
     if (bi->length == 1 && bi->nums[0] == 0) {
@@ -628,8 +628,8 @@ ObjString* bi_to_string(const BigInteger* bi)
     buf[out_idx] = '\0';
     free(chunks);
 
-    // 言語の ObjString として wrap
-    ObjString* result_str = new_string(buf, (int)out_idx);
+    // 言語の Symbol として wrap
+    Symbol* result_str = new_string(buf, (int)out_idx);
     free(buf);
 
     return result_str;

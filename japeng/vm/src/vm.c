@@ -1,5 +1,6 @@
 #include "vm.h"
 #include "vm_calc.h"
+#include "bcd_class_reader.h"
 #include "common.h"
 #include "native.h"
 #include "builtins.h"
@@ -87,6 +88,8 @@ static void reset_stack(VM* vm)
 void init_vm(VM* vm)
 {
     reset_stack(vm);
+    vm->frame_count = 0;
+    gc_heap_init(&vm->heap, 10000);
     vm->globals = new_table(8);
     init_builtin_classes(vm);
 }
@@ -94,7 +97,7 @@ void init_vm(VM* vm)
 void free_vm(VM* vm)
 {
     table_free(vm->globals);
-    (void)vm;
+    gc_heap_destroy(&vm->heap);
 }
 
 void push(VM* vm, Value value)
@@ -197,25 +200,60 @@ static InterpretResult run(VM* vm, int stop_frame_count)
             }
             case OP_GET_GLOBAL: {
                 uint32_t name_idx = get_operand(instruction);
-                ObjString* name = (ObjString*)as_obj(frame->chunk->constants[name_idx]);
+                Value name_val = frame->chunk->constants[name_idx];
+                Symbol* name = NULL;
+
+                if (is_obj(name_val)) {
+                    Obj* obj = as_obj(name_val);
+                    if (is_in_dynamic_heap(&vm->heap, obj)) {
+                        // ObjString (新GCスロット) の場合
+                        ObjString* str = (ObjString*)obj;
+                        name = intern_string(string_chars(str), str->length);
+                    } else {
+                        // Symbol* (静的シンボル) の場合
+                        name = (Symbol*)obj;
+                    }
+                }
+
+                if (name == NULL) {
+                    error_runtime(ERR_UNDEFINED_GLOBAL, "");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
                 Value value;
                 if (!table_get(vm->globals, name, &value)) {
-                    error_runtime(ERR_UNDEFINED_GLOBAL, name->chars);
-                    return INTERPRET_RUNTIME_ERROR;
+                    // ★★★ 遅延ロード発動！ディスクから .bcd を探索・復元 ★★★
+                    ObjClass* loaded_class = vm_resolve_class(vm, name);
+                    if (loaded_class != NULL) {
+                        value = make_obj((Obj*)loaded_class);
+                    } else {
+                        error_runtime(ERR_UNDEFINED_GLOBAL, name->chars);
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
                 }
                 push(vm, value);
                 break;
             }
             case OP_SET_GLOBAL: {
                 uint32_t name_idx = get_operand(instruction);
-                ObjString* name = (ObjString*)as_obj(frame->chunk->constants[name_idx]);
-                Value val = peek(vm, 0);
+                Value name_val = frame->chunk->constants[name_idx];
+                Symbol* name = NULL;
 
+                if (is_obj(name_val)) {
+                    Obj* obj = as_obj(name_val);
+                    if (is_in_dynamic_heap(&vm->heap, obj)) {
+                        ObjString* str = (ObjString*)obj;
+                        name = intern_string(string_chars(str), str->length);
+                    } else {
+                        name = (Symbol*)obj;
+                    }
+                }
+
+                Value val = peek(vm, 0);
                 if (is_obj(val) && ((Obj*)as_obj(val))->type == OBJ_CLASS) {
                     ObjClass* klass = (ObjClass*)as_obj(val);
                     if (klass != vm->class_object && klass->superclass == NULL) {
                         klass->superclass = vm->class_object;
-                        klass->superclass_type = new_type_info(sym_Object, 0);
                     }
                 }
                 table_set(vm->globals, name, peek(vm, 0));
@@ -243,14 +281,15 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 uint32_t field_idx = get_operand(instruction);
                 Value value = pop(vm);
                 Value receiver = pop(vm);
-
+            
                 if (is_nil(receiver)) {
                     error_runtime(ERR_NULL_REFERENCE, "field");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-
+            
                 ObjInstance* instance = (ObjInstance*)as_obj(receiver);
                 instance->fields[field_idx] = value;
+                gc_write_barrier(&vm->heap, instance, value); // ★ ライトバリア発動
                 push(vm, value);
                 break;
             }
@@ -260,24 +299,23 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                     error_runtime(ERR_CANNOT_INSTANTIATE);
                     return INTERPRET_RUNTIME_ERROR;
                 }
-
+            
                 ObjClass* klass = (ObjClass*)as_obj(class_val);
                 if (klass != NULL && klass != vm->class_object && klass->superclass == NULL) {
                     klass->superclass = vm->class_object;
-                    klass->superclass_type = new_type_info(sym_Object, 0);
                 }
                 if (klass == vm->class_list) {
-                    push(vm, make_obj((Obj*)new_list()));
+                    push(vm, make_obj((Obj*)gc_new_list(&vm->heap, 8))); // ★ gc_new_list に更新
                 } else {
-                    push(vm, make_obj((Obj*)new_instance(klass)));
+                    push(vm, make_obj((Obj*)gc_new_instance(&vm->heap, klass))); // ★ gc_new_instance に更新
                 }
                 break;
             }
             case OP_CLOSURE: {
                 uint32_t fn_idx = get_operand(instruction);
                 ObjFunction* fn = (ObjFunction*)as_obj(frame->chunk->constants[fn_idx]);
-                ObjClosure* closure = new_closure(fn);
-
+                ObjClosure* closure = gc_new_closure(&vm->heap, fn, fn->upvalue_count); // ★ gc_new_closure に更新
+            
                 for (int i = 0; i < fn->upvalue_count; i++) {
                     uint8_t index = fn->upvalues[i].index;
                     if (fn->upvalues[i].is_local) {
@@ -285,6 +323,7 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                     } else {
                         closure->captures[i] = frame->closure->captures[index];
                     }
+                    gc_write_barrier(&vm->heap, closure, closure->captures[i]); // ★ ライトバリア発動
                 }
                 push(vm, make_obj((Obj*)closure));
                 break;
@@ -679,7 +718,7 @@ static InterpretResult run(VM* vm, int stop_frame_count)
             case OP_CONCAT: {
                 Value b = pop(vm);
                 Value a = pop(vm);
-                push(vm, calc_concat(a, b));
+                push(vm, calc_concat(&vm->heap, a, b));
                 break;
             }
             case OP_EQUAL: {
@@ -805,7 +844,7 @@ static InterpretResult run(VM* vm, int stop_frame_count)
 InterpretResult interpret(VM* vm, Chunk* chunk)
 {
     reset_stack(vm);
-    ObjInstance* top_level_self = new_instance(vm->class_object);
+    ObjInstance* top_level_self = gc_new_instance(&vm->heap, vm->class_object);
     push(vm, make_obj((Obj*)top_level_self));
     
     CallFrame* frame = &vm->frames[vm->frame_count++];
@@ -1001,7 +1040,7 @@ static void print_instruction(CallFrame* frame, uint32_t instruction, uint32_t c
         case OP_SET_GLOBAL: {
             Value name_val = frame->chunk->constants[operand];
             const char* gname = (is_obj(name_val) && ((Obj*)as_obj(name_val))->type == OBJ_STRING)
-                                ? ((ObjString*)as_obj(name_val))->chars : "?";
+                                ? ((Symbol*)as_obj(name_val))->chars : "?";
             fprintf(stderr, "global: '%s' (idx: %u)\n", gname, operand);
             break;
         }

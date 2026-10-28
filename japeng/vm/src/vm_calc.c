@@ -2,6 +2,7 @@
 #include "bigint.h"
 #include "decimal.h"
 #include "object.h"
+#include "gc.h"
 #include "error.h"
 
 // -----------------------------------------------------------------------------
@@ -197,7 +198,11 @@ int calc_compare(Value a, Value b)
         ObjString* sa = as_string(a);
         ObjString* sb = as_string(b);
         int min_len = (sa->length < sb->length) ? sa->length : sb->length;
-        int cmp = memcmp(sa->chars, sb->chars, min_len);
+
+        const char* ca = string_chars(sa);
+        const char* cb = string_chars(sb);
+
+        int cmp = memcmp(ca, cb, min_len);
         if (cmp != 0) return (cmp > 0) ? 1 : -1;
         if (sa->length < sb->length) return -1;
         if (sa->length > sb->length) return 1;
@@ -208,14 +213,16 @@ int calc_compare(Value a, Value b)
 }
 
 // 文字列結合 (OP_CONCAT 用)
-Value calc_concat(Value a, Value b) 
+Value calc_concat(GCHeap* heap, Value a, Value b) 
 {
     ObjString* sa = as_string(a);
     ObjString* sb = as_string(b);
     int length = sa->length + sb->length;
     char* chars = (char*)malloc(length + 1);
-    memcpy(chars, sa->chars, sa->length);
-    memcpy(chars + sa->length, sb->chars, sb->length);
+    memcpy(chars, string_chars(sa), sa->length);
+    memcpy(chars + sa->length, string_chars(sb), sb->length);
     chars[length] = '\0';
-    return make_obj((Obj*)new_string(chars, length));
+    ObjString* res = gc_new_string(heap, chars, length);
+    free(chars);
+    return make_obj((Obj*)res);
 }

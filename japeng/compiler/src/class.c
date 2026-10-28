@@ -41,7 +41,7 @@ static void print_value_repr(Value value)
     }
 }
 
-void print_class(ObjClass* klass)
+void print_class(ClassDef* klass)
 {
     if (klass == NULL) {
         fprintf(stderr, "<class (null)>\n");
@@ -122,7 +122,7 @@ void print_class(ObjClass* klass)
                 fprintf(stderr, "  - %s", entry->key->chars);
 
                 // ★ 委譲元の明示
-                ObjClass* from_cls = get_method_from(klass, entry->key);
+                ClassDef* from_cls = get_method_from(klass, entry->key);
                 if (from_cls != NULL && from_cls->name != NULL) {
                     fprintf(stderr, " (from %s)", from_cls->name->chars);
                 }
@@ -142,32 +142,32 @@ void print_class(ObjClass* klass)
     }
 }
 
-void print_instance(ObjInstance* inst)
-{
-    if (inst == NULL) {
-        fprintf(stderr, "<instance (null)>\n");
-        return;
-    }
+// void print_instance(ObjInstance* inst)
+// {
+//     if (inst == NULL) {
+//         fprintf(stderr, "<instance (null)>\n");
+//         return;
+//     }
 
-    fprintf(stderr, "<instance of %s @%p>\n", 
-           inst->klass && inst->klass->name ? inst->klass->name->chars : "Unknown", 
-           (void*)inst);
-    fprintf(stderr, "instance fields:\n");
+//     fprintf(stderr, "<instance of %s @%p>\n", 
+//            inst->klass && inst->klass->name ? inst->klass->name->chars : "Unknown", 
+//            (void*)inst);
+//     fprintf(stderr, "instance fields:\n");
 
-    if (inst->klass == NULL || inst->klass->field_count == 0) {
-        fprintf(stderr, "  (none)\n");
-    } else {
-        for (int i = 0; i < inst->klass->field_count; i++) {
-            FieldInfo* f = &inst->klass->field_infos[i];
-            fprintf(stderr, "  - %s = ", f->name ? f->name->chars : "(unnamed)");
-            print_value_repr(inst->fields[i]);
-            fprintf(stderr, "\n");
-        }
-    }
-}
+//     if (inst->klass == NULL || inst->klass->field_count == 0) {
+//         fprintf(stderr, "  (none)\n");
+//     } else {
+//         for (int i = 0; i < inst->klass->field_count; i++) {
+//             FieldInfo* f = &inst->klass->field_infos[i];
+//             fprintf(stderr, "  - %s = ", f->name ? f->name->chars : "(unnamed)");
+//             print_value_repr(inst->fields[i]);
+//             fprintf(stderr, "\n");
+//         }
+//     }
+// }
 
 #endif
-TypeInfo* new_type_info(ObjString* name, int type_arg_count) {
+TypeInfo* new_type_info(Symbol* name, int type_arg_count) {
     TypeInfo* t = (TypeInfo*)malloc(sizeof(TypeInfo) + sizeof(TypeInfo*) * type_arg_count);
     t->name = name;
     t->type_arg_count = type_arg_count;
@@ -203,8 +203,8 @@ TypeInfo* new_func_type_info(int param_count, TypeInfo** params, int ret_count, 
     return t;
 }
 
-FieldInfo new_field_info(ObjString* name, TypeInfo* type,
-                          ObjClass* from_class, bool is_static)
+FieldInfo new_field_info(Symbol* name, TypeInfo* type,
+                          ClassDef* from_class, bool is_static)
 {
     FieldInfo f = {
         .name = name,
@@ -215,11 +215,11 @@ FieldInfo new_field_info(ObjString* name, TypeInfo* type,
     return f;
 }
 
-ObjClass* new_class(ObjString* name, TypeInfo* type, 
-                    ObjClass* superclass, TypeInfo* superclass_type,
+ClassDef* new_class(Symbol* name, TypeInfo* type, 
+                    ClassDef* superclass, TypeInfo* superclass_type,
                     int delegate_count)
 {
-    ObjClass* klass = (ObjClass*)malloc(sizeof(ObjClass));
+    ClassDef* klass = (ClassDef*)malloc(sizeof(ClassDef));
     klass->header.type = OBJ_CLASS;
     klass->name = name;
     klass-> type = type;
@@ -228,7 +228,7 @@ ObjClass* new_class(ObjString* name, TypeInfo* type,
 
     klass->delegate_count = delegate_count;
     if (delegate_count > 0) {
-        klass->delegates = (ObjClass**)malloc(sizeof(ObjClass*) * delegate_count);
+        klass->delegates = (ClassDef**)malloc(sizeof(ClassDef*) * delegate_count);
         klass->delegate_types = (TypeInfo**)malloc(sizeof(TypeInfo*) * delegate_count);
         for (int index = 0; index < delegate_count; index++) {
             klass->delegates[index] = NULL;
@@ -270,7 +270,7 @@ ObjClass* new_class(ObjString* name, TypeInfo* type,
     return klass;
 }
 
-void free_class(ObjClass* klass)
+void free_class(ClassDef* klass)
 {
     if (klass == NULL) return;
 
@@ -300,8 +300,8 @@ void free_class(ObjClass* klass)
     free(klass);
 }
 
-void set_delegate(ObjClass* klass, int index,
-                  ObjClass* delegate_class, TypeInfo* delegate_type)
+void set_delegate(ClassDef* klass, int index,
+                  ClassDef* delegate_class, TypeInfo* delegate_type)
 {
     if (index >= 0 && index < klass->delegate_count) {
         klass->delegates[index] = delegate_class;
@@ -309,7 +309,7 @@ void set_delegate(ObjClass* klass, int index,
     }
 }
 
-void add_field(ObjClass* klass, FieldInfo field_info, Value default_value)
+void add_field(ClassDef* klass, FieldInfo field_info, Value default_value)
 {
     if (klass->field_count + 1 > klass->field_capacity) {
         klass->field_capacity = klass->field_capacity < 8 ? 8 : klass->field_capacity * 2;
@@ -326,18 +326,18 @@ void add_field(ObjClass* klass, FieldInfo field_info, Value default_value)
     klass->default_values[idx] = default_value;
 }
 
-void add_method(ObjClass* klass, ObjString* name, Value method)
+void add_method(ClassDef* klass, Symbol* name, Value method)
 {
     table_set(klass->methods, name, method);
 }
 
-void add_method_from(ObjClass* klass, ObjString* name, ObjClass* from_class)
+void add_method_from(ClassDef* klass, Symbol* name, ClassDef* from_class)
 {
     if (klass->method_from == NULL) klass->method_from = new_table(8);
     table_set(klass->method_from, name, make_obj((Obj*)from_class));
 }
 
-bool find_method(ObjClass* klass, ObjString* name, Value* out_method)
+bool find_method(ClassDef* klass, Symbol* name, Value* out_method)
 {
     if (table_get(klass->methods, name, out_method)) {
         return true;
@@ -358,46 +358,46 @@ bool find_method(ObjClass* klass, ObjString* name, Value* out_method)
     return false;
 }
 
-ObjClass* get_method_from(ObjClass* klass, ObjString* name)
+ClassDef* get_method_from(ClassDef* klass, Symbol* name)
 {
     if (klass == NULL || klass->method_from == NULL) return NULL;
     Value val;
     if (table_get(klass->method_from, name, &val)) {
-        return (ObjClass*)as_obj(val);
+        return (ClassDef*)as_obj(val);
     }
     return NULL;
 }
 
-ObjInstance* new_instance(ObjClass* klass)
-{
-    ObjInstance* instance = (ObjInstance*)malloc(sizeof(ObjInstance));
-    instance->header.type = OBJ_INSTANCE;
-    instance->klass = klass;
+// ObjInstance* new_instance(ClassDef* klass)
+// {
+//     ObjInstance* instance = (ObjInstance*)malloc(sizeof(ObjInstance));
+//     instance->header.type = OBJ_INSTANCE;
+//     instance->klass = klass;
 
-    if (klass->field_count > 0) {
-        instance->fields = (Value*)malloc(sizeof(Value) * klass->field_count);
+//     if (klass->field_count > 0) {
+//         instance->fields = (Value*)malloc(sizeof(Value) * klass->field_count);
 
-        if (klass->default_values != NULL) {
-            memcpy(instance->fields, klass->default_values, sizeof(Value) * klass->field_count);
-        } else {
-            for (int index = 0; index < klass->field_count; index++) {
-                instance->fields[index] = make_nil();
-            }
-        }
-        for (int index = 0; index < klass->field_count; index++) {
-            if (klass->field_infos[index].is_delegate_instance && klass->field_infos[index].from_class != NULL) {
-                ObjInstance* del_inst = new_instance(klass->field_infos[index].from_class);
-                instance->fields[index] = make_obj((Obj*)del_inst);
-            }
-        }
-    } else {
-        instance->fields = NULL;
-    }
+//         if (klass->default_values != NULL) {
+//             memcpy(instance->fields, klass->default_values, sizeof(Value) * klass->field_count);
+//         } else {
+//             for (int index = 0; index < klass->field_count; index++) {
+//                 instance->fields[index] = make_nil();
+//             }
+//         }
+//         for (int index = 0; index < klass->field_count; index++) {
+//             if (klass->field_infos[index].is_delegate_instance && klass->field_infos[index].from_class != NULL) {
+//                 ObjInstance* del_inst = new_instance(klass->field_infos[index].from_class);
+//                 instance->fields[index] = make_obj((Obj*)del_inst);
+//             }
+//         }
+//     } else {
+//         instance->fields = NULL;
+//     }
 
-    return instance;
-}
+//     return instance;
+// }
 
-int find_field_index(ObjClass* klass, ObjString* name)
+int find_field_index(ClassDef* klass, Symbol* name)
 {
     for (int index = 0; index < klass->field_count; index++) {
         if (klass->field_infos[index].name == name) {
@@ -407,13 +407,13 @@ int find_field_index(ObjClass* klass, ObjString* name)
     return -1;
 }
 
-void add_method_type(ObjClass* klass, ObjString* name, TypeInfo* type) 
+void add_method_type(ClassDef* klass, Symbol* name, TypeInfo* type) 
 {
     if (klass->method_types == NULL) klass->method_types = new_table(8);
     table_set(klass->method_types, name, make_obj((Obj*)type));
 }
 
-TypeInfo* find_method_type(ObjClass* klass, ObjString* name) 
+TypeInfo* find_method_type(ClassDef* klass, Symbol* name) 
 {
     if (klass == NULL || klass->method_types == NULL) return NULL;
     Value val;
@@ -432,7 +432,7 @@ TypeInfo* find_method_type(ObjClass* klass, ObjString* name)
     return NULL;
 }
 
-ObjString* get_delegate_field_name(ObjClass* delegate_class)
+Symbol* get_delegate_field_name(ClassDef* delegate_class)
 {
     char buf[256];
     snprintf(buf, sizeof(buf), "__delegate_%s", 
@@ -440,7 +440,7 @@ ObjString* get_delegate_field_name(ObjClass* delegate_class)
     return intern_cstr(buf);
 }
 
-int add_or_override_vtable_slot(ObjClass* klass, ObjString* name, Value method)
+int add_or_override_vtable_slot(ClassDef* klass, Symbol* name, Value method)
 {
     Value existing_slot_val;
     // 1. 親クラスから引き継いだ既存スロットがある場合（オーバーライド）
@@ -457,7 +457,7 @@ int add_or_override_vtable_slot(ObjClass* klass, ObjString* name, Value method)
     if (klass->vtable_count >= klass->vtable_capacity) {
         klass->vtable_capacity = klass->vtable_capacity < 8 ? 8 : klass->vtable_capacity * 2;
         klass->vtable = (Value*)realloc(klass->vtable, sizeof(Value) * klass->vtable_capacity);
-        klass->vtable_names = (ObjString**)realloc(klass->vtable_names, sizeof(ObjString*) * klass->vtable_capacity);
+        klass->vtable_names = (Symbol**)realloc(klass->vtable_names, sizeof(Symbol*) * klass->vtable_capacity);
     }
 
     int slot = klass->vtable_count++;
@@ -468,17 +468,17 @@ int add_or_override_vtable_slot(ObjClass* klass, ObjString* name, Value method)
 }
 
 // クラスのコンパイル完了時に呼び出し、確定した vtable を組み立てる
-void build_class_vtable(ObjClass* klass)
+void build_class_vtable(ClassDef* klass)
 {
     if (klass == NULL) return;
 
     // A. 親クラスがある場合、親の vtable を丸ごとコピーして引き継ぐ
     if (klass->superclass != NULL) {
-        ObjClass* super = klass->superclass;
+        ClassDef* super = klass->superclass;
         if (super->vtable_count > 0) {
             klass->vtable_capacity = super->vtable_count < 8 ? 8 : super->vtable_count;
             klass->vtable = (Value*)malloc(sizeof(Value) * klass->vtable_capacity);
-            klass->vtable_names = (ObjString**)malloc(sizeof(ObjString*) * klass->vtable_capacity);
+            klass->vtable_names = (Symbol**)malloc(sizeof(Symbol*) * klass->vtable_capacity);
             klass->vtable_count = super->vtable_count;
 
             for (int i = 0; i < super->vtable_count; i++) {
@@ -499,17 +499,17 @@ void build_class_vtable(ObjClass* klass)
     }
 }
 
-void init_class_vtable_from_super(ObjClass* klass)
+void init_class_vtable_from_super(ClassDef* klass)
 {
     if (klass == NULL) return;
 
     // 親クラスの vtable をそのままコピー
     if (klass->superclass != NULL) {
-        ObjClass* super = klass->superclass;
+        ClassDef* super = klass->superclass;
         if (super->vtable_count > 0) {
             klass->vtable_capacity = super->vtable_count < 8 ? 8 : super->vtable_count;
             klass->vtable = (Value*)malloc(sizeof(Value) * klass->vtable_capacity);
-            klass->vtable_names = (ObjString**)malloc(sizeof(ObjString*) * klass->vtable_capacity);
+            klass->vtable_names = (Symbol**)malloc(sizeof(Symbol*) * klass->vtable_capacity);
             klass->vtable_count = super->vtable_count;
 
             for (int i = 0; i < super->vtable_count; i++) {
@@ -529,7 +529,7 @@ void init_class_vtable_from_super(ObjClass* klass)
     }
 }
 
-int get_vtable_index(ObjClass* klass, ObjString* name)
+int get_vtable_index(ClassDef* klass, Symbol* name)
 {
     if (klass == NULL || klass->vtable_indexes == NULL) return -1;
     Value slot_val;

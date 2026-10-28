@@ -26,7 +26,8 @@ ASTNode* current_parsed_ast = NULL;
 ASTNode* parsed_cd[MAX_FILES];
 int      parsed_cd_count = 0;
 
-ASTNode* parsed_je = NULL;
+ASTNode* parsed_je[MAX_FILES];
+int parsed_je_count = 0;;
 
 char* format_code(const char* src);
 
@@ -140,10 +141,10 @@ bool parse_file(const char* full_path)
                 fprintf(stderr, "Error: Too many .cd files.\n");
             }
         } else if (is_je_file(full_path) || is_jje_file(full_path)) {
-            if (parsed_je == NULL)  parsed_je = current_parsed_ast;
-            else {
-                fprintf(stderr, "Warning: Multiple .je files found. Overwriting.\n");
-                parsed_je = current_parsed_ast;
+            if (parsed_je_count < MAX_FILES) {
+                parsed_je[parsed_je_count++] = current_parsed_ast;
+            } else {
+                fprintf(stderr, "Error: Too many .je files.\n");
             }
         }
     }
@@ -337,7 +338,7 @@ void dump_ast(ASTNode* node, int depth)
             if (node->class_def.from_classes) dump_ast(node->class_def.from_classes, depth + 1);
             dump_ast(node->class_def.members, depth + 1);
             break;
-            
+
         case AST_FUNC_TYPE:
             printf("FUNC_TYPE\n");
             if (node->func_type.params) dump_ast(node->func_type.params, depth + 1);

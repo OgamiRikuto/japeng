@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "common.h"
+#include "gc.h"
 
 #define as_decimal(v) ((ObjDecimal*)as_obj(v))
 #define as_string(v)  ((ObjString*)as_obj(v))
@@ -24,6 +25,6 @@ int calc_compare_int_slow(Value a, Value b);
 
 // --- 比較演算用 (<=> 三値比較: a < b なら -1, a == b なら 0, a > b なら 1) ---
 int calc_compare(Value a, Value b);
-Value calc_concat(Value a, Value b);
+Value calc_concat(GCHeap* heap, Value a, Value b);
 
 #endif
