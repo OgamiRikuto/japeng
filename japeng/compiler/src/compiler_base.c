@@ -462,11 +462,16 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
     
                 // ★★★ List クラスから push の vtable インデックスを取得 ★★★
                 ClassDef* list_class = resolve_class(c, sym_List);
+                if (list_class == NULL) {
+                    error_compile(node, ERR_CLASS_NOT_REGISTERED, "List");
+                    return new_type_info(sym_Error, 0);
+                }
                 int push_slot = get_vtable_index(list_class, intern_cstr("push"));
                 if (push_slot == -1) {
-                    // 万一 vtable 未登録の場合のスロット 2 (init=0, destroy=1 の次) フォールバック
-                    push_slot = 2;
+                    error_compile(node, ERR_UNDEFINED_MESSAGE, "push", "List");
+                    return new_type_info(sym_Error, 0);
                 }
+                printf ("push_slot is %d\n", push_slot);
     
                 // パターン A: カンマで 2 個以上並んでいる場合 (例: arr: List Integer is 1, 2, 3;)
                 if (elem_count > 1) {

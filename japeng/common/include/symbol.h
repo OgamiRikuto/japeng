@@ -23,6 +23,9 @@ typedef struct symbol {
     X(elif,         "elif") \
     X(else,         "else") \
     X(repeat,       "repeat") \
+    X(switch,       "switch") \
+    X(case,         "case") \
+    X(default,      "default") \
     X(init,         "init") \
     X(destroy,      "destroy") \
     X(new,          "new") \

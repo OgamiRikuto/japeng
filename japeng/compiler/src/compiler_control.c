@@ -350,3 +350,107 @@ ObjFunction* compile_block(Compiler* parent, ASTNode* block_node)
 
     return fn;
 }
+
+void compile_switch(Compiler* c, ASTNode* node)
+{
+    ASTNode* target_expr = node->send.args->stmt.left;
+    ASTNode* body_block  = node->send.args->stmt.right;
+
+    // 1. switch (target) の対象式を評価し、匿名ローカルスロットに格納
+    compile(c, target_expr);
+    int target_slot = add_anonymous_local(c);
+    emit_inst(c, OP_SET_LOCAL, (uint32_t)target_slot);
+    emit_inst(c, OP_POP, 0); // スタックをクリーンにする
+
+    // 2. 本体のブロック内にある case / default 文をフラットに収集
+    ASTNode* clauses[64];
+    int clause_count = 0;
+    collect_clauses(body_block->block.body, clauses, &clause_count, 64);
+
+    int exit_jumps[64];
+    int exit_count = 0;
+
+    for (int i = 0; i < clause_count; i++) {
+        ASTNode* clause = clauses[i];
+        if (clause == NULL || clause->kind != AST_SEND || clause->send.message == NULL) {
+            continue;
+        }
+
+        Symbol* msg = clause->send.message->identifier.name;
+
+        // --- パターン A: case (cond1, cond2, ...) [ ... ]; ---
+        if (msg == sym_case) {
+            ASTNode* cond_expr = clause->send.args->stmt.left;
+            ASTNode* case_block = clause->send.args->stmt.right;
+
+            ASTNode* conds[32];
+            int cond_count = 0;
+            collect_clauses(cond_expr, conds, &cond_count, 32);
+
+            int match_jumps[32];
+            int match_count = 0;
+
+            for (int j = 0; j < cond_count; j++) {
+                bool is_last = (j == cond_count - 1);
+
+                // target_val == conds[j] を比較 (スタック: +1)
+                emit_inst(c, OP_GET_LOCAL, (uint32_t)target_slot);
+                compile(c, conds[j]);
+                emit_inst(c, OP_EQUAL, 0);
+
+                if (!is_last) {
+                    // 一致しなかったら次の条件式へジャンプ
+                    int not_match_jump = emit_jump(c, OP_JUMP_IF_FALSE);
+
+                    // 一致した！（真のパス）
+                    emit_inst(c, OP_POP, 0); // 真の値を pop (スタック: 0)
+                    match_jumps[match_count++] = emit_jump(c, OP_JUMP); // 本体へジャンプ
+
+                    // 不一致パスの着地点 (ジャンプ元からはスタックに 1 つ乗って飛んでくる)
+                    patch_jump(c, not_match_jump);
+                    c->stack_depth++;        // ★★★ スタック高さを世界線に合わせて補正！
+                    emit_inst(c, OP_POP, 0); // 偽の値を pop (スタック: 0)
+
+                } else {
+                    // 最後の条件：一致しなかったら次の case へジャンプ
+                    int next_case_jump = emit_jump(c, OP_JUMP_IF_FALSE);
+
+                    // 一致した！（真のパス）
+                    emit_inst(c, OP_POP, 0); // 真の値を pop (スタック: 0)
+
+                    // 途中の条件からマッチして飛んできたジャンプを合流
+                    for (int m = 0; m < match_count; m++) {
+                        patch_jump(c, match_jumps[m]);
+                    }
+
+                    // 本体ブロック実行
+                    compile_statement_node(c, case_block->block.body);
+
+                    // switch 全体の末尾へ自動脱出
+                    exit_jumps[exit_count++] = emit_jump(c, OP_JUMP);
+
+                    // 最後の条件も不一致だったときの着地点 (次の case の直前)
+                    patch_jump(c, next_case_jump);
+                    c->stack_depth++;        // ★★★ スタック高さを世界線に合わせて補正！
+                    emit_inst(c, OP_POP, 0); // 偽の値を pop (スタック: 0)
+                }
+            }
+
+        // --- パターン B: default () [ ... ]; ---
+        } else if (msg == sym_default) {
+            ASTNode* def_block = (clause->send.args->kind == AST_BLOCK)
+                                 ? clause->send.args
+                                 : clause->send.args->stmt.right;
+
+            compile_statement_node(c, def_block->block.body);
+
+            // switch 出口へ脱出
+            exit_jumps[exit_count++] = emit_jump(c, OP_JUMP);
+        }
+    }
+
+    // 3. 各節の脱出ジャンプを switch 全体の末尾へパッチ
+    for (int i = 0; i < exit_count; i++) {
+        patch_jump(c, exit_jumps[i]);
+    }
+}

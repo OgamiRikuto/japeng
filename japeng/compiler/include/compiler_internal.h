@@ -6,7 +6,7 @@
 #include "common.h"
 
 #define DEBUG_CHUNK_WRITE 0
-#define DEBUG_CLASS_WRITE 0
+#define DEBUG_CLASS_WRITE 1
 #define DEBUG_COMPILE_KIND 0
 #define DEBUG_LOOP_WRITE 0
 
@@ -69,6 +69,7 @@ void compile_repeat(Compiler* c, ASTNode* node);
 void compile_break(Compiler* c, ASTNode* node);
 void compile_continue(Compiler* c, ASTNode* node);
 ObjFunction* compile_block(Compiler* parent, ASTNode* block_node);
+void compile_switch(Compiler* c, ASTNode* node);
 
 // クラスコンパイル関数
 TypeInfo* build_type_info(ASTNode* node);
