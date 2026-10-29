@@ -170,6 +170,11 @@ ASTNode* fix_precedence(ASTNode* node)
         case AST_RETURN:
             node->ret.expr = fix_precedence(node->ret.expr);
             break;
+            
+        case AST_INDEX_ACCESS:
+            node->index_access.target = fix_precedence(node->index_access.target);
+            node->index_access.index  = fix_precedence(node->index_access.index);
+            break;
 
         // 葉ノード（リテラル、識別子、break/continue など）は何もしない
         case AST_LITERAL:
@@ -276,6 +281,11 @@ ASTNode* fold_constants(ASTNode* node)
 
         case AST_RETURN:
             node->ret.expr = fold_constants(node->ret.expr);
+            break;
+        
+        case AST_INDEX_ACCESS:
+            node->index_access.target = fold_constants(node->index_access.target);
+            node->index_access.index  = fold_constants(node->index_access.index);
             break;
 
         default:

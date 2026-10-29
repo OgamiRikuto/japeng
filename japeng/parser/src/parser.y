@@ -76,12 +76,14 @@ Location current_ast_loc = {0};
 %type <node> identifier_decl statement_list_opt
 %type <node> expression primary block args arg_decl_list arg_decl rets expression_list_opt expression_list
 %type <node> control_chain control_clause_list control_clause
-%type <node> multi_identifier type_list_comma type_list_comma_opt
+%type <node> multi_identifier type_item type_list_comma type_list_comma_opt
 
 %nonassoc PREC_EXPR
 %left IDENTIFIER SP_IDENTIFIER
 %left COMMA
 %left DOT
+%right PREC_UNARY
+%left L_BLACKET
 %%
 program : 
     statement_list
@@ -213,19 +215,7 @@ control_chain :
             $$ = first_clause;
         }
     }
-    | IDENTIFIER block control_clause_list
-    {
-        ASTNode* self_node = create_identifier_node(intern_cstr("self"));
-        ASTNode* msg = create_identifier_node($1);
-        ASTNode* first_clause = create_send_node(self_node, msg, $2);
-        if ($3 != NULL) {
-            $$ = create_stmt_node(first_clause, $3);
-        } else {
-            $$ = first_clause;
-        }
-    }
-    ;
-
+    
 control_clause_list :
     /* empty */
     { $$ = NULL;}
@@ -281,20 +271,27 @@ class :
     {
         $$ = create_func_type_node($3, $5);
     }
-    ;
+    | L_PAR class R_PAR
+    { $$ = $2; }
     ;
 
-type_list : 
+type_item : 
     CLASS_NAME 
     {
         ASTNode* name = create_identifier_node($1); 
         $$ = create_class_node(name, NULL);
     }
-    | type_list CLASS_NAME
+    | L_PAR class R_PAR
+    { $$ = $2; }
+
+type_list : 
+    type_item 
     {
-        ASTNode* name = create_identifier_node($2);
-        ASTNode* type = create_class_node(name, NULL); 
-        $$ = create_stmt_node($1, type);
+        $$ = $1;
+    }
+    | type_list type_item
+    {
+        $$ = create_stmt_node($1, $2);
     }
     ;
 
@@ -414,6 +411,8 @@ primary :
     | STRING    { $$ = create_literal_node(TOKEN_STRING, $1); }
     | block     { $$ = $1; }
     | L_PAR expression R_PAR { $$ = $2; }
+    | primary L_BLACKET expression R_BLACKET %prec PREC_UNARY
+    { $$ = create_index_access_node($1, $3); }
     | SP_IDENTIFIER primary
     {
         if ($1 == sym_minus) {

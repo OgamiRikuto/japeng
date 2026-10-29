@@ -314,6 +314,15 @@ void print_ast(ASTNode* node, int depth)
             printf("[CONTINUE]\n");
             break;
             
+        case AST_INDEX_ACCESS:
+            printf("[INDEX_ACCESS]\n");
+            for (int i = 0; i <= depth; i++) printf("  | ");
+            printf(" [TARGET]\n");
+            print_ast(node->index_access.target, depth + 2);
+            for (int i = 0; i <= depth; i++) printf("  | ");
+            printf(" [INDEX]\n");
+            print_ast(node->index_access.index, depth + 2);
+            break;
         default:
             printf("[UNKNOWN NODE KIND: %d]\n", node->kind);
             break;

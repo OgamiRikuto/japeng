@@ -451,40 +451,85 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
             ASTNode* elems[MAX_ELEMENTS];
             int elem_count = 0;
             collect_args(node->send.args, elems, &elem_count, MAX_ELEMENTS);
-
-            if (is_list_type(type_name) && elem_count > 1) {
+            // =====================================================
+            // ★ List の初期化 (単数・複数・is/are 完全自動対応)
+            // =====================================================
+            if (is_list_type(type_name)) {
                 int slot = add_local(c, var_name, declared_type);
-
-                // 空の List インスタンスを生成してスタックに積む
-                uint32_t list_sym = add_constant(c->chunk, make_obj((Obj*)sym_List));
-                emit_inst(c, OP_GET_GLOBAL, list_sym);
-                emit_inst(c, OP_NEW_INSTANCE, 0); // スタック: [ <List> ]
-
-                // 期待される要素型を取得 (List String なら String)
                 TypeInfo* expected_elem = (declared_type->type_arg_count > 0) 
                                           ? declared_type->type_args[0] 
                                           : NULL;
-
-                ClassDef* list_klass = resolve_class(c, sym_List);
-                int push_slot = list_klass ? get_vtable_index(list_klass, intern_cstr("push")) : 5;
-
-                // 各要素を評価・型チェック・push
-                for (int i = 0; i < elem_count; i++) {
-                    emit_inst(c, OP_DUP, 0);
-
-                    TypeInfo* actual_elem = compile_expression(c, elems[i]);
-
-                    if (expected_elem != NULL && !is_assignable(c, expected_elem, actual_elem)) {
-                        error_compile(elems[i], ERR_TYPE_MISMATCH,
-                                      expected_elem->name->chars,
-                                      actual_elem ? actual_elem->name->chars : "nil");
-                    }
-
-                    write_chunk(c->chunk, make_virtual_call_inst(1, (uint16_t)push_slot));
-                    emit_inst(c, OP_POP, 0);
+    
+                // ★★★ List クラスから push の vtable インデックスを取得 ★★★
+                ClassDef* list_class = resolve_class(c, sym_List);
+                int push_slot = get_vtable_index(list_class, intern_cstr("push"));
+                if (push_slot == -1) {
+                    // 万一 vtable 未登録の場合のスロット 2 (init=0, destroy=1 の次) フォールバック
+                    push_slot = 2;
                 }
-
-                emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
+    
+                // パターン A: カンマで 2 個以上並んでいる場合 (例: arr: List Integer is 1, 2, 3;)
+                if (elem_count > 1) {
+                    uint32_t list_sym = add_constant(c->chunk, make_obj((Obj*)sym_List));
+                    emit_inst(c, OP_GET_GLOBAL, list_sym);
+                    emit_inst(c, OP_NEW_INSTANCE, 0); // [ <List> ]
+    
+                    for (int i = 0; i < elem_count; i++) {
+                        emit_inst(c, OP_DUP, 0);
+                        TypeInfo* actual_elem = compile_expression(c, elems[i]);
+    
+                        if (expected_elem != NULL && !is_assignable(c, expected_elem, actual_elem)) {
+                            error_compile(elems[i], ERR_TYPE_MISMATCH,
+                                          type_to_string(expected_elem),
+                                          actual_elem ? type_to_string(actual_elem) : "nil");
+                        }
+    
+                        // ★ OP_SEND ではなく OP_INVOKE_VIRTUAL を発行！
+                        write_chunk(c->chunk, make_virtual_call_inst(1, (uint16_t)push_slot));
+                        emit_inst(c, OP_POP, 0);
+                    }
+                    emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
+                    return declared_type;
+                }
+    
+                // パターン B: 右辺の式が 1 つだけの場合 (elem_count == 1)
+                TypeInfo* actual_type = compile_expression(c, elems[0]);
+    
+                // B-1: 右辺がすでに List 型の場合 (例: list: List String is input().split(",");)
+                if (is_assignable(c, declared_type, actual_type)) {
+                    emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
+                    return declared_type;
+                }
+    
+                // B-2: ★ 右辺が要素型の場合 (例: arr: List Integer is 0;)
+                if (expected_elem != NULL && is_assignable(c, expected_elem, actual_type)) {
+                    // 1. スタックトップの要素 (0) を一旦スロットに退避してスタックから除去
+                    emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
+                    emit_inst(c, OP_POP, 0);
+    
+                    // 2. 空リストを生成
+                    uint32_t list_sym = add_constant(c->chunk, make_obj((Obj*)sym_List));
+                    emit_inst(c, OP_GET_GLOBAL, list_sym);
+                    emit_inst(c, OP_NEW_INSTANCE, 0); // [ <List> ]
+    
+                    // 3. リストを DUP して退避した要素を取り出し push
+                    emit_inst(c, OP_DUP, 0);
+                    emit_inst(c, OP_GET_LOCAL, (uint32_t)slot); // [ <List>, <List>, elem ]
+    
+                    // ★ OP_SEND ではなく OP_INVOKE_VIRTUAL を発行！
+                    write_chunk(c->chunk, make_virtual_call_inst(1, (uint16_t)push_slot));
+                    emit_inst(c, OP_POP, 0); // [ <List> ]
+    
+                    // 4. 完成した 1 要素リストを変数スロットに格納！
+                    emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
+                    return declared_type;
+                }
+    
+                // B-3: 型が合わない場合はエラー
+                error_compile(elems[0], ERR_ASSIGN_TYPE_MISMATCH,
+                              type_to_string(actual_type),
+                              var_name->chars,
+                              type_to_string(declared_type));
                 return declared_type;
             }
 
@@ -623,6 +668,41 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
 
         error_compile(node, ERR_ASSIGN_UNDEFINED_VAR, target_name->chars);
         return new_type_info(sym_Error, 0);
+    }
+
+    // =========================================================
+    // ケース 4: 添字代入 (例: arr[i] is 10;)
+    // =========================================================
+    if (node->send.receiver->kind == AST_INDEX_ACCESS) {
+        ASTNode* target_node = node->send.receiver->index_access.target;
+        ASTNode* index_node  = node->send.receiver->index_access.index;
+        ASTNode* val_node    = node->send.args;
+
+        // 1. target と index をスタックに積む
+        TypeInfo* target_type = compile_expression(c, target_node);
+        TypeInfo* index_type  = compile_expression(c, index_node);
+
+        if (!is_integer_type(index_type->name)) {
+            error_compile(index_node, ERR_TYPE_MISMATCH,
+                          sym_Integer->chars, index_type->name->chars);
+        }
+
+        // 2. 右辺の値をスタックに積む
+        TypeInfo* val_type = compile_expression(c, val_node);
+
+        // List<T> の型チェック
+        if (is_list_type(target_type->name) && target_type->type_arg_count > 0) {
+            TypeInfo* elem_type = target_type->type_args[0];
+            if (!is_assignable(c, elem_type, val_type)) {
+                error_compile(val_node, ERR_ASSIGN_TYPE_MISMATCH,
+                              val_type->name->chars, "要素", elem_type->name->chars);
+            }
+        }
+
+        // 3. 代入命令の発行
+        emit_inst(c, OP_INDEX_SET, 0);
+        // emit_inst(c, OP_POP, 0); // 代入文として完了するため戻り値を破棄
+        return val_type;
     }
     return new_type_info(sym_Error, 0);
 }

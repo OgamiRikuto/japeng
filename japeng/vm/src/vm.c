@@ -76,7 +76,9 @@ const char* op_kind[OP_MAX] = {
     [OP_NOT]           = "OP_NOT",
     [OP_CLOSURE]      = "OP_CLOSURE",
     [OP_GET_UPVALUE]  = "OP_GET_UPVALUE",
-    [OP_NEW_INSTANCE] = "OP_NEW_INSTANCE"
+    [OP_NEW_INSTANCE] = "OP_NEW_INSTANCE",
+    [OP_INDEX_GET]     = "OP_INDEX_GET",
+    [OP_INDEX_SET]     = "OP_INDEX_SET",
 };
 #endif
 
@@ -833,6 +835,86 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 // is_falsy に従って反転フォールバック
                 push(vm, make_bool(is_falsy(a)));
                 break;
+            }
+            case OP_INDEX_GET: {
+                Value index_val  = pop(vm);
+                Value target_val = pop(vm);
+
+                if (is_nil(target_val)) {
+                    error_runtime(ERR_NULL_REFERENCE, "[]");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                if (!is_int(index_val)) {
+                    error_runtime(ERR_TYPE_MISMATCH, "Integer", "Non-Integer");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                int32_t idx = as_int(index_val);
+
+                if (is_obj(target_val)) {
+                    Obj* obj = as_obj(target_val);
+                    // 1. List の添字アクセス (O(1) C配列アクセス)
+                    if (obj->type == OBJ_LIST) {
+                        ObjList* list = (ObjList*)obj;
+                        if (idx < 0 || (uint32_t)idx >= list->size) {
+                            error_runtime(ERR_INDEX_OUT_OF_BOUNDS, idx, list->size);
+                            return INTERPRET_RUNTIME_ERROR;
+                        }
+                        push(vm, list->elements[idx]);
+                        break;
+                    }
+                    // 2. String の添字アクセス (1文字抽出)
+                    else if (obj->type == OBJ_STRING) {
+                        ObjString* string = (ObjString*)obj;
+                        if (idx < 0 || (uint32_t)idx >= string->length) {
+                            error_runtime(ERR_INDEX_OUT_OF_BOUNDS, idx, string->length);
+                            return INTERPRET_RUNTIME_ERROR;
+                        }
+                        const char* s = string_chars(string);
+                        char ch[2] = { s[idx], '\0' };
+                        ObjString* c = gc_new_string(&vm->heap, ch, 1);
+                        push(vm, make_obj((Obj*)c));
+                        break;
+                    }
+                }
+
+                error_runtime(ERR_NOT_CALLABLE);
+                return INTERPRET_RUNTIME_ERROR;
+            }
+
+            case OP_INDEX_SET: {
+                Value val        = pop(vm);
+                Value index_val  = pop(vm);
+                Value target_val = pop(vm);
+
+                if (is_nil(target_val)) {
+                    error_runtime(ERR_NULL_REFERENCE, "[]=");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                if (!is_int(index_val)) {
+                    error_runtime(ERR_TYPE_MISMATCH, "Integer", "Non-Integer");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                int32_t idx = as_int(index_val);
+
+                if (is_obj(target_val)) {
+                    Obj* obj = as_obj(target_val);
+                    if (obj->type == OBJ_LIST) {
+                        ObjList* list = (ObjList*)obj;
+                        if (idx < 0 || (uint32_t)idx >= list->size) {
+                            error_runtime(ERR_INDEX_OUT_OF_BOUNDS, idx, list->size);
+                            return INTERPRET_RUNTIME_ERROR;
+                        }
+                        list->elements[idx] = val;
+                        gc_write_barrier(&vm->heap, list, val); // ★ 世代別GCライトバリア
+                        push(vm, val); // 式の評価値として残す
+                        break;
+                    }
+                }
+
+                error_runtime(ERR_NOT_CALLABLE);
+                return INTERPRET_RUNTIME_ERROR;
             }
             default: 
                 error_runtime(ERR_UNKNOWN_OPCODE, op);

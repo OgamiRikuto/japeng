@@ -924,6 +924,36 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
             return resolve_method_call_type(c, node, rec_type);
         }
 
+        case AST_INDEX_ACCESS: {
+            TypeInfo* target_type = compile_expression(c, node->index_access.target);
+            TypeInfo* index_type  = compile_expression(c, node->index_access.index);
+
+            if (target_type->name == sym_Error || index_type->name == sym_Error) {
+                return new_type_info(sym_Error, 0);
+            }
+
+            // 添字は整数型でなければならない
+            if (!is_integer_type(index_type->name)) {
+                error_compile(node->index_access.index, ERR_TYPE_MISMATCH,
+                              sym_Integer->chars, index_type->name->chars);
+                return new_type_info(sym_Error, 0);
+            }
+
+            emit_inst(c, OP_INDEX_GET, 0);
+
+            // 型推論: List<T> なら T、String なら String を返す
+            if (is_list_type(target_type->name)) {
+                if (target_type->type_arg_count > 0 && target_type->type_args[0] != NULL) {
+                    return target_type->type_args[0];
+                }
+                return new_type_info(sym_Auto, 0);
+            } else if (is_string_type(target_type->name)) {
+                return new_type_info(sym_String, 0);
+            }
+
+            return new_type_info(sym_Auto, 0);
+        }
+
         default:
             compile(c, node);
             return new_type_info(sym_Error, 0);

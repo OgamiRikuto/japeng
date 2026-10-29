@@ -58,6 +58,8 @@ typedef enum {
     OP_BXOR,
     OP_BNOT,
     OP_NOT,
+    OP_INDEX_GET,
+    OP_INDEX_SET,
     OP_MAX
 } Opcode;
 

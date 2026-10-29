@@ -137,7 +137,16 @@ ASTNode* create_break_node()
 {
     return alloc_node(AST_BREAK);
 }
+
 ASTNode* create_continue_node()
 {
     return alloc_node(AST_CONTINUE);
+}
+
+ASTNode* create_index_access_node(ASTNode* target, ASTNode* index)
+{
+    ASTNode* node = alloc_node(AST_INDEX_ACCESS);
+    node->index_access.target = target;
+    node->index_access.index = index;
+    return node;
 }
