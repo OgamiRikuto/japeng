@@ -25,6 +25,8 @@ static Symbol* resolve_and_intern(const char* text) {
 %}
 %option nounput
 %option yylineno
+%option stack
+%x IN_STR
 %%
 "class"	{ return CLASS; }
 "based"	{ return BASED; }
@@ -49,7 +51,59 @@ static Symbol* resolve_and_intern(const char* text) {
 [0-9]*"/"[0-9]+		{ yylval.symbol = intern_cstr(yytext); return FRACTION; }
 0b[0|1]+			{ return BINARY; }
 0x[0-9a-fA-F]+ 		{ return HEX; }
-\"[^\"\n]*\" 		{ yylval.symbol = unquote_and_intern(yytext, strlen(yytext)); return STRING; }
+"\"" {
+    yy_push_state(IN_STR);
+    return STR_OPEN;
+}
+
+<IN_STR>"{" {
+    yy_push_state(INITIAL);
+    return STR_EXPR_OPEN;
+}
+
+<IN_STR>"\"" {
+    yy_pop_state();
+    return STR_CLOSE;
+}
+
+	/* 通常の文字（"、{、\、改行 以外） */
+<IN_STR>[^"{\\\n]+ {
+    yylval.symbol = intern_string(yytext, yyleng);
+    return STR_TEXT;
+}
+
+	/* エスケープシーケンス */
+<IN_STR>\\\" {
+    yylval.symbol = intern_string("\"", 1);
+    return STR_TEXT;
+}
+<IN_STR>\\\{ {
+    yylval.symbol = intern_string("{", 1);
+    return STR_TEXT;
+}
+<IN_STR>\\\\ {
+    yylval.symbol = intern_string("\\", 1);
+    return STR_TEXT;
+}
+<IN_STR>\\n {
+    yylval.symbol = intern_string("\n", 1);
+    return STR_TEXT;
+}
+<IN_STR>\\t {
+    yylval.symbol = intern_string("\t", 1);
+    return STR_TEXT;
+}
+
+	/* 式の中の閉じ波括弧 } で文字列モードに復帰 */
+"}" {
+    /* スタックに状態が存在し、かつ直前が文字列モードの場合のみ復帰 */
+    if (yy_start_stack_ptr > 0 && yy_top_state() == IN_STR) {
+        yy_pop_state();
+        return STR_EXPR_CLOSE;
+    }
+    return UNKNOWN;
+}
+	/*\"[^\"\n]*\" 		{ yylval.symbol = unquote_and_intern(yytext, strlen(yytext)); return STRING; }*/
 "+"					{ yylval.symbol = sym_plus; return SP_IDENTIFIER; }
 "-"					{ yylval.symbol = sym_minus; return SP_IDENTIFIER; }
 "*"					{ yylval.symbol = sym_multi; return SP_IDENTIFIER; }

@@ -74,6 +74,7 @@ void emit_inst(Compiler* c, Opcode op, uint32_t operand) {
         case OP_BOR:
         case OP_BXOR:
         case OP_SET_FIELD: // receiver と value を pop して value を push
+        case OP_INDEX_GET:
             c->stack_depth--;
             break;
 
@@ -106,6 +107,10 @@ void emit_inst(Compiler* c, Opcode op, uint32_t operand) {
         case OP_RETURN:
             // 関数の戻り値 (1) を消費して終了
             c->stack_depth -= operand;
+            break;
+            
+        case OP_INDEX_SET:
+            c->stack_depth -= 2;
             break;
 
         case OP_MAX:

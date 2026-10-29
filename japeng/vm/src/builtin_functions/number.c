@@ -94,19 +94,59 @@ static bool native_int_gcd(VM* vm, uint8_t arg_count)
     return true;
 }
 
+static bool native_int_toString(VM* vm, uint8_t arg_count) 
+{
+    Value receiver = pop(vm);
+    char buf[32];
+    if (is_int(receiver)) {
+        snprintf(buf, sizeof(buf), "%d", as_int(receiver));
+    } else {
+        // BigInteger の場合
+        BigInteger* bi = (BigInteger*)as_obj(receiver);
+        Symbol* s = bi_to_string(bi);
+        push(vm, make_obj((Obj*)gc_new_string(&vm->heap, s->chars, s->length)));
+        return true;
+    }
+    ObjString* str = gc_new_string(&vm->heap, buf, strlen(buf));
+    push(vm, make_obj((Obj*)str));
+    return true;
+}
+
+static bool native_float_toString(VM* vm, uint8_t arg_count) 
+{
+    Value receiver = pop(vm);
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%g", as_float(receiver));
+    ObjString* str = gc_new_string(&vm->heap, buf, strlen(buf));
+    push(vm, make_obj((Obj*)str));
+    return true;
+}
+
+static bool native_decimal_toString(VM* vm, uint8_t arg_count) 
+{
+    Value receiver = pop(vm);
+    ObjDecimal* dec = (ObjDecimal*)as_obj(receiver);
+    Symbol* s = dec_toString(dec);
+    push(vm, make_obj((Obj*)gc_new_string(&vm->heap, s->chars, s->length)));
+    return true;
+}
+
 void setup_number(VM* vm) 
 {
     // Integer クラス
     vm->class_integer = vm_new_class(sym_Integer, vm->class_object);
     table_set(vm->globals, sym_Integer, make_obj((Obj*)vm->class_integer));
     vm_define_native(vm->class_integer, "pow", native_int_pow);
-    vm_define_native(vm->class_integer, "gcd", native_int_gcd); // ★ 追加！
+    vm_define_native(vm->class_integer, "gcd", native_int_gcd);
+    vm_define_native(vm->class_integer, "toString", native_int_toString);
 
     // Float クラス
     vm->class_float = vm_new_class(sym_Float, vm->class_object);
     table_set(vm->globals, sym_Float, make_obj((Obj*)vm->class_float));
+    vm_define_native(vm->class_float, "toString", native_float_toString);
 
     // Decimal クラス (★ 第3引数はスーパークラスなので vm->class_object を指定！)
     vm->class_decimal = vm_new_class(sym_Decimal, vm->class_object);
     table_set(vm->globals, sym_Decimal, make_obj((Obj*)vm->class_decimal));
+    vm_define_native(vm->class_decimal, "toString", native_decimal_toString);
 }

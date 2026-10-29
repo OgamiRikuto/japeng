@@ -71,14 +71,14 @@ void compile_statement_node(Compiler* c, ASTNode* node)
     int expected_increase = c->local_count - locals_before;
     int actual_increase = c->stack_depth - depth_before;
 
-    // if (actual_increase != expected_increase) {
-    //     fprintf(stderr, "\033[1;31m[スタック異常検知] %s:%d: "
-    //                     "期待される増加: +%d, 実際の増加: +%d (スタック深さ: %d -> %d)\033[0m\n",
-    //             node->loc.filename ? node->loc.filename : "unknown",
-    //             node->loc.line, expected_increase, actual_increase,
-    //             depth_before, c->stack_depth);
-    //     assert(actual_increase == expected_increase && "文の実行後にスタックのリークまたは過剰POPが発生しました！");
-    // }
+    if (actual_increase != expected_increase) {
+        fprintf(stderr, "\033[1;31m[スタック異常検知] %s:%d: "
+                        "期待される増加: +%d, 実際の増加: +%d (スタック深さ: %d -> %d)\033[0m\n",
+                node->loc.filename ? node->loc.filename : "unknown",
+                node->loc.line, expected_increase, actual_increase,
+                depth_before, c->stack_depth);
+        // assert(actual_increase == expected_increase && "文の実行後にスタックのリークまたは過剰POPが発生しました！");
+    }
 }
 
 void compile(Compiler* c, ASTNode* node)

@@ -144,6 +144,11 @@ static bool native_string_trim(VM* vm, uint8_t arg_count)
     return true;
 }
 
+static bool native_string_toString(VM* vm, uint8_t arg_count) {
+    // レシーバ (self) がすでにスタックトップにあるのでそのまま返す
+    return true;
+}
+
 void setup_string(VM* vm)
 {
     vm->class_string = vm_new_class(sym_String, vm->class_object);
@@ -153,6 +158,7 @@ void setup_string(VM* vm)
     vm_define_native(vm->class_string, "length", native_string_length);
     vm_define_native(vm->class_string, "split",  native_string_split);
     vm_define_native(vm->class_string, "trim",   native_string_trim);
+    vm_define_native(vm->class_string, "toString", native_string_toString);
 
     table_set(vm->globals, sym_String, make_obj((Obj*)vm->class_string));
 }

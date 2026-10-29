@@ -133,21 +133,43 @@ static const char* register_type(const char* name, int len) {
     return ident_map[ident_count - 1].placeholder;
 }
 
+// parser/src/preprocessor.c
+
 // --- パス 1: 宣言の走査 ---
 static void scan_declarations(const char* src) {
     int i = 0;
+    int str_stack[32];
+    int str_stack_top = 0;
+
     while (src[i] != '\0') {
+        bool in_string = (str_stack_top > 0 && str_stack[str_stack_top - 1] == 1);
+
+        // 文字列の中にいる場合
+        if (in_string) {
+            if (src[i] == '\\' && src[i + 1] != '\0') { i += 2; continue; }
+            if (src[i] == '"') { i++; str_stack_top--; continue; }
+            if (src[i] == '{') { i++; str_stack[str_stack_top++] = 0; continue; } // 補間式へ
+            i++;
+            continue;
+        }
+
+        // コメント
         if (src[i] == '/' && src[i + 1] == '/') {
             while (src[i] != '\n' && src[i] != '\0') i++;
             continue;
         }
+
+        // 文字列の開始
         if (src[i] == '"') {
             i++;
-            while (src[i] != '"' && src[i] != '\0') {
-                if (src[i] == '\\' && src[i + 1] != '\0') i++;
-                i++;
-            }
-            if (src[i] == '"') i++;
+            str_stack[str_stack_top++] = 1;
+            continue;
+        }
+
+        // 補間式の終了
+        if (src[i] == '}' && str_stack_top > 0 && str_stack[str_stack_top - 1] == 0) {
+            i++;
+            str_stack_top--;
             continue;
         }
 
@@ -183,7 +205,6 @@ static void scan_declarations(const char* src) {
             while (src[t_start] != '\0' && (src[t_start] == ' ' || src[t_start] == '\t')) t_start++;
             if (src[t_start] != '\n' && src[t_start] != '\r' && src[t_start] != '\0') {
                 int t_end = t_start;
-                // 「は」や区切り文字の手前までを型名とする
                 while (src[t_end] != '\0' && !is_word_boundary(&src[t_end])) {
                     t_end += utf8_char_len((unsigned char)src[t_end]);
                 }
@@ -212,22 +233,59 @@ char* preprocess(const char* src) {
     if (!out) return NULL;
 
     int r = 0, w = 0;
+    int str_stack[32];
+    int str_stack_top = 0;
 
     while (src[r] != '\0') {
+        bool in_string = (str_stack_top > 0 && str_stack[str_stack_top - 1] == 1);
+
+        // ★ 文字列の中にいる場合
+        if (in_string) {
+            // エスケープシーケンス (\", \{ 等)
+            if (src[r] == '\\' && src[r + 1] != '\0') {
+                out[w++] = src[r++];
+                out[w++] = src[r++];
+                continue;
+            }
+            // 文字列終了 (")
+            if (src[r] == '"') {
+                out[w++] = src[r++];
+                str_stack_top--;
+                continue;
+            }
+            // 補間式開始 ({)
+            if (src[r] == '{') {
+                out[w++] = src[r++];
+                str_stack[str_stack_top++] = 0; // 通常コードモードへ
+                continue;
+            }
+            // 通常の文字列テキストは無変換でコピー
+            int clen = utf8_char_len((unsigned char)src[r]);
+            while (clen-- > 0) {
+                out[w++] = src[r++];
+            }
+            continue;
+        }
+
+        // ★ 文字列の外（または補間式の中）にいる場合
+
         // 1. コメント
         if (src[r] == '/' && src[r + 1] == '/') {
             while (src[r] != '\n' && src[r] != '\0') out[w++] = src[r++];
             continue;
         }
 
-        // 2. 文字列リテラル
+        // 2. 文字列開始 (")
         if (src[r] == '"') {
             out[w++] = src[r++];
-            while (src[r] != '"' && src[r] != '\0') {
-                if (src[r] == '\\' && src[r + 1] != '\0') out[w++] = src[r++];
-                out[w++] = src[r++];
-            }
-            if (src[r] == '"') out[w++] = src[r++];
+            str_stack[str_stack_top++] = 1; // 文字列モードへ
+            continue;
+        }
+
+        // 2.5 補間式終了 (})
+        if (src[r] == '}' && str_stack_top > 0 && str_stack[str_stack_top - 1] == 0) {
+            out[w++] = src[r++];
+            str_stack_top--; // 外側の文字列モードへ復帰
             continue;
         }
 
@@ -235,16 +293,12 @@ char* preprocess(const char* src) {
         if (strncmp(&src[r], "・", 3) == 0) { out[w++] = '.'; r += 3; continue; }
         if (strncmp(&src[r], "、", 3) == 0) { out[w++] = ','; r += 3; continue; }
         if (strncmp(&src[r], "。", 3) == 0) { out[w++] = ';'; r += 3; continue; }
-        if (strncmp(&src[r], "「", 3) == 0 || strncmp(&src[r], "」", 3) == 0) { out[w++] = '"'; r += 3; continue; }
-        if (strncmp(&src[r], "『", 3) == 0) { out[w++] = '['; r += 3; continue; }
-        if (strncmp(&src[r], "』", 3) == 0) { out[w++] = ']'; r += 3; continue; }
 
         // 4. 予約語置換
         size_t kw_len = 0;
         const KeywordDef* kw = keyword_match_prefix(&src[r], LANG_JA, &kw_len);
         if (kw) {
             bool is_ha = (strcmp(kw->replacement, " is ") == 0);
-            // 置換先が末尾スペース付き（"return ", "class " 等）なら直後が単語でも安全に置換できる
             bool has_trailing_space = (kw->replacement[strlen(kw->replacement) - 1] == ' ');
             const char* next_p = &src[r + kw_len];
 
@@ -257,8 +311,7 @@ char* preprocess(const char* src) {
             }
         }
 
-        // 5. ★【改修】前後に水平スペースがある「助詞を含む識別子」（例: " 名前の設定 "）
-        // ※ 行頭のインデント直後ではなく、かつ直前がコロンでもない「文の途中」の空白のみ対象！
+        // 5. 前後に水平スペースがある「助詞を含む識別子」
         if (r > 0 && is_blank_space(&src[r - 1]) && !is_after_indent(src, r) && src[r - 1] != ':' && (unsigned char)src[r] >= 0x80) {
             int end = r;
             bool has_inner_particle = false;
@@ -268,7 +321,6 @@ char* preprocess(const char* src) {
                 int p = get_particle_len(&src[end]);
                 if (p > 0 && end > r) {
                     const char* after_p = &src[end + p];
-                    // ★ 助詞の直後が空白や区切りでなければ「中間助詞」
                     if (*after_p != '\0' && !is_blank_space(after_p) && !is_delim(after_p)) {
                         has_inner_particle = true;
                     }
@@ -277,7 +329,6 @@ char* preprocess(const char* src) {
                 end += utf8_char_len((unsigned char)src[end]);
             }
 
-            // ★ 末尾が助詞で終わっている単語（例: "タロウの"）は識別子ではないので除外！
             bool ends_with_particle = (last_particle_end == end);
 
             if (has_inner_particle && !ends_with_particle && is_blank_space(&src[end])) {
@@ -290,7 +341,7 @@ char* preprocess(const char* src) {
             }
         }
 
-        // 5.5 組み込み型・組み込みメソッド（直後が境界なら置換）
+        // 5.5 組み込み型・組み込みメソッド
         size_t b_len = 0;
         const BuiltinDef* bdef = builtin_match_prefix(&src[r], LANG_JA, &b_len);
         if (bdef) {
@@ -304,7 +355,7 @@ char* preprocess(const char* src) {
             }
         }
 
-        // 6. 登録済みシンボル置換
+        // 6. 登録済みシンボル置換 (★ これで補間式内の日本語変数が __id_X__ に置換される！)
         int best_match = -1, best_len = 0;
         for (int m = 0; m < ident_count; m++) {
             int len = strlen(ident_map[m].original);
@@ -326,7 +377,7 @@ char* preprocess(const char* src) {
             }
         }
 
-        // 7. 助詞のスキップ（空白化）
+        // 7. 助詞のスキップ
         int p_len = get_particle_len(&src[r]);
         if (p_len > 0) {
             out[w++] = ' ';
@@ -334,7 +385,7 @@ char* preprocess(const char* src) {
             continue;
         }
 
-        // 8. 未知の日本語識別子の自動登録（境界まで読み進める）
+        // 8. 未知の日本語識別子の自動登録
         if ((unsigned char)src[r] >= 0x80) {
             int id_start = r;
             while (src[r] != '\0' && !is_word_boundary(&src[r])) {

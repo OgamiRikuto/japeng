@@ -147,6 +147,43 @@ static bool native_list_map(VM* vm, uint8_t arg_count)
     return true;
 }
 
+static bool native_list_toString(VM* vm, uint8_t arg_count)
+{
+    Value receiver = pop(vm);
+    ObjList* list = (ObjList*)as_obj(receiver);
+
+    // 最大 2048 バイトのバッファで安全に組み立てる
+    char buf[2048];
+    int p = snprintf(buf, sizeof(buf), "[");
+
+    for (uint32_t i = 0; i < list->size && p < (int)sizeof(buf) - 10; i++) {
+        Value val = list->elements[i];
+        if (i > 0) p += snprintf(buf + p, sizeof(buf) - p, ", ");
+
+        if (is_int(val)) {
+            p += snprintf(buf + p, sizeof(buf) - p, "%d", as_int(val));
+        } else if (is_float(val)) {
+            p += snprintf(buf + p, sizeof(buf) - p, "%g", as_float(val));
+        } else if (is_bool(val)) {
+            p += snprintf(buf + p, sizeof(buf) - p, "%s", as_bool(val) ? "true" : "false");
+        } else if (is_nil(val)) {
+            p += snprintf(buf + p, sizeof(buf) - p, "nil");
+        } else if (is_obj(val)) {
+            Obj* obj = as_obj(val);
+            if (obj->type == OBJ_STRING) {
+                p += snprintf(buf + p, sizeof(buf) - p, "\"%s\"", string_chars((ObjString*)obj));
+            } else {
+                p += snprintf(buf + p, sizeof(buf) - p, "<obj>");
+            }
+        }
+    }
+    snprintf(buf + p, sizeof(buf) - p, "]");
+
+    ObjString* str = gc_new_string(&vm->heap, buf, strlen(buf));
+    push(vm, make_obj((Obj*)str));
+    return true;
+}
+
 void setup_list(VM* vm)
 {
     vm->class_list = vm_new_class(sym_List, vm->class_object);
@@ -158,6 +195,7 @@ void setup_list(VM* vm)
     vm_define_native(vm->class_list, "length", native_list_length);
     vm_define_native(vm->class_list, "swap",   native_list_swap);
     vm_define_native(vm->class_list, "map",    native_list_map);
+    vm_define_native(vm->class_list, "toString", native_list_toString);
 
     table_set(vm->globals, sym_List, make_obj((Obj*)vm->class_list));
 }

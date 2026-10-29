@@ -78,6 +78,14 @@ Location current_ast_loc = {0};
 %type <node> control_chain control_clause_list control_clause
 %type <node> multi_identifier type_item type_list_comma type_list_comma_opt
 
+%token STR_OPEN         
+%token STR_CLOSE        
+%token STR_EXPR_OPEN    "{"
+%token STR_EXPR_CLOSE   "}"
+%token <symbol> STR_TEXT "string text"
+
+%type <node> interpolated_string string_parts
+
 %nonassoc PREC_EXPR
 %left IDENTIFIER SP_IDENTIFIER
 %left COMMA
@@ -408,7 +416,8 @@ primary :
     | NULL_LITERAL  { $$ = create_literal_node(TOKEN_NULL, $1); }
     | BINARY    { }
     | HEX       { }
-    | STRING    { $$ = create_literal_node(TOKEN_STRING, $1); }
+    /*| STRING    { $$ = create_literal_node(TOKEN_STRING, $1); }*/
+    | interpolated_string { $$ = $1; }
     | block     { $$ = $1; }
     | L_PAR expression R_PAR { $$ = $2; }
     | primary L_BLACKET expression R_BLACKET %prec PREC_UNARY
@@ -443,6 +452,48 @@ primary :
             char buf[128];
             snprintf(buf, sizeof(buf), "unsupported unary operator '%s'", $1->chars);
             yyerror(buf);
+        }
+    }
+    ;
+
+interpolated_string :
+    STR_OPEN string_parts STR_CLOSE
+    {
+        $$ = $2;
+    }
+    ;
+
+string_parts :
+    /* 空文字列: "" */
+    /* empty */
+    {
+        $$ = create_literal_node(TOKEN_STRING, new_string("", 0));
+    }
+    /* テキストが来た場合 */
+    | string_parts STR_TEXT
+    {
+        ASTNode* text_node = create_literal_node(TOKEN_STRING, $2);
+        // 先頭が空文字列なら無駄な + を作らず置き換える (最適化)
+        if ($1->kind == AST_LITERAL && $1->literal.kind == TOKEN_STRING && $1->literal.raw->length == 0) {
+            $$ = text_node;
+        } else {
+            ASTNode* plus_op = create_identifier_node(sym_plus);
+            $$ = create_send_node($1, plus_op, text_node);
+        }
+    }
+    /* { 式 } が挟まった場合 */
+    | string_parts STR_EXPR_OPEN expression STR_EXPR_CLOSE
+    {
+        // 1. (expr toString) ノードを作成
+        ASTNode* to_str_msg = create_identifier_node(intern_cstr("toString"));
+        ASTNode* str_expr   = create_send_node($3, to_str_msg, NULL);
+
+        // 2. 先頭が空文字列ならそのまま、既に文字があれば + で結合
+        if ($1->kind == AST_LITERAL && $1->literal.kind == TOKEN_STRING && $1->literal.raw->length == 0) {
+            $$ = str_expr;
+        } else {
+            ASTNode* plus_op = create_identifier_node(sym_plus);
+            $$ = create_send_node($1, plus_op, str_expr);
         }
     }
     ;
