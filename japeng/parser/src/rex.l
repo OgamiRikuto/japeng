@@ -49,8 +49,8 @@ static Symbol* resolve_and_intern(const char* text) {
 [0-9]+				{ yylval.literal = new_string(yytext, yyleng); return INTEGER; }
 [0-9]*"."[0-9]+		{ yylval.literal = new_string(yytext, yyleng); return FLOAT; }
 [0-9]*"/"[0-9]+		{ yylval.symbol = intern_cstr(yytext); return FRACTION; }
-0b[0|1]+			{ return BINARY; }
-0x[0-9a-fA-F]+ 		{ return HEX; }
+0[bB][01]+			{ yylval_literal = new_string(yytext, yyleng); return BINARY; }
+0[xX][0-9a-fA-F]+ 	{ yylval_literal = new_string(yytext, yyleng); return HEX; }
 "\"" {
     yy_push_state(IN_STR);
     return STR_OPEN;

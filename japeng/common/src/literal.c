@@ -29,6 +29,20 @@ Value parse_ast_literal(ASTNode* node)
             }
             return make_obj((Obj*)new_bi_from_string(raw));
         }
+        case TOKEN_BINARY: {
+            int64_t val = strtoll(str + 2, NULL, 2);
+            if (val >= INT32_MIN && val <= INT32_MAX) {
+                return make_int((int32_t)val);
+            }
+            return make_obj((Obj*)bi_from_i64(val));
+        }
+        case TOKEN_HEX: {
+            int64_t val = strtoll(str + 2, NULL, 16);
+            if (val >= INT32_MIN && val <= INT32_MAX) {
+                return make_int((int32_t)val);
+            }
+            return make_obj((Obj*)bi_from_i64(val));
+        }
         case TOKEN_FLOAT:
             return make_float(strtod(str, NULL));
         case TOKEN_STRING:

@@ -236,8 +236,8 @@ Symbol* get_type_name(ASTNode* type_node) {
     if (type_node->kind == AST_IDENTIFIER) {
         return type_node->identifier.name;
     }
-    if (type_node->kind == AST_CLASS && type_node->class.classname != NULL) {
-        return type_node->class.classname->identifier.name;
+    if (type_node->kind == AST_CLASS && type_node->klass.classname != NULL) {
+        return type_node->klass.classname->identifier.name;
     }
     return NULL;
 }
@@ -394,19 +394,19 @@ Value parse_ast_literal_with_expected(ASTNode* node, TypeInfo* expected_type, Ty
             return make_nil();
         }
 
-        // case TOKEN_BINARY: {
-        //     // 0b...
-        //     long long val = strtoll(str + 2, NULL, 2);
-        //     if (out_type) *out_type = new_type_info(sym_Integer, 0);
-        //     return (val >= INT32_MIN && val <= INT32_MAX) ? make_int((int32_t)val) : make_obj((Obj*)bi_from_i64(val));
-        // }
+        case TOKEN_BINARY: {
+            // 0b...
+            long long val = strtoll(str + 2, NULL, 2);
+            if (out_type) *out_type = new_type_info(sym_Integer, 0);
+            return (val >= INT32_MIN && val <= INT32_MAX) ? make_int((int32_t)val) : make_obj((Obj*)bi_from_i64(val));
+        }
 
-        // case TOKEN_HEX: {
-        //     // 0x...
-        //     long long val = strtoll(str + 2, NULL, 16);
-        //     if (out_type) *out_type = new_type_info(sym_Integer, 0);
-        //     return (val >= INT32_MIN && val <= INT32_MAX) ? make_int((int32_t)val) : make_obj((Obj*)bi_from_i64(val));
-        // }
+        case TOKEN_HEX: {
+            // 0x...
+            long long val = strtoll(str + 2, NULL, 16);
+            if (out_type) *out_type = new_type_info(sym_Integer, 0);
+            return (val >= INT32_MIN && val <= INT32_MAX) ? make_int((int32_t)val) : make_obj((Obj*)bi_from_i64(val));
+        }
 
         default:
             if (out_type) *out_type = new_type_info(sym_Error, 0);

@@ -9,7 +9,7 @@ static Symbol* get_class_name_from_node(ASTNode* node)
 {
     if (node == NULL) return NULL;
     if (node->kind == AST_IDENTIFIER) return node->identifier.name;
-    if (node->kind == AST_CLASS) return node->class.classname->identifier.name;
+    if (node->kind == AST_CLASS) return node->klass.classname->identifier.name;
     return NULL;
 }
 
@@ -22,8 +22,8 @@ static ASTNode* find_class_in_node(ASTNode* node, Symbol* name)
         return find_class_in_node(node->stmt.right, name);
     }
     if (node->kind == AST_CLASS_DEF) {
-        ASTNode* class_node = node->class_def.class;
-        Symbol* class_name = class_node->class.classname->identifier.name;
+        ASTNode* class_node = node->class_def.klass;
+        Symbol* class_name = class_node->klass.classname->identifier.name;
         if (class_name == name) return node;
     }
     return NULL;
@@ -201,13 +201,13 @@ TypeInfo* build_type_info(ASTNode* node)
     if (node == NULL) return NULL;
 
     if (node->kind == AST_CLASS) {
-        Symbol* name = node->class.classname->identifier.name;
-        int arg_count = count_type_args(node->class.types);
+        Symbol* name = node->klass.classname->identifier.name;
+        int arg_count = count_type_args(node->klass.types);
 
         TypeInfo* t_info = new_type_info(name, arg_count);
         if (arg_count > 0) {
             int idx = 0;
-            fill_type_args(node->class.types, t_info->type_args, &idx);
+            fill_type_args(node->klass.types, t_info->type_args, &idx);
         }
         return t_info;
     }
@@ -620,8 +620,8 @@ void declare_class_skeleton(Compiler* c, ASTNode* node)
 
     if (node->kind != AST_CLASS_DEF) return;
 
-    ASTNode* class_node = node->class_def.class;
-    Symbol* class_name = class_node->class.classname->identifier.name;
+    ASTNode* class_node = node->class_def.klass;
+    Symbol* class_name = class_node->klass.classname->identifier.name;
     TypeInfo* class_type = build_type_info(class_node);
 
     ClassDef* klass = new_class(class_name, class_type, NULL, NULL, 0);
@@ -644,8 +644,8 @@ void resolve_class_skeleton_relations(Compiler* c, ASTNode* node)
 
     if (node->kind != AST_CLASS_DEF) return;
 
-    ASTNode* class_node = node->class_def.class;
-    Symbol* class_name = class_node->class.classname->identifier.name;
+    ASTNode* class_node = node->class_def.klass;
+    Symbol* class_name = class_node->klass.classname->identifier.name;
     ClassDef* klass = resolve_class(c, class_name);
     if (klass == NULL) return;
 
@@ -732,8 +732,8 @@ void declare_class_signatures(Compiler* c, ASTNode* node)
 
     if (node->kind != AST_CLASS_DEF) return;
 
-    ASTNode* class_node = node->class_def.class;
-    Symbol* class_name = class_node->class.classname->identifier.name;
+    ASTNode* class_node = node->class_def.klass;
+    Symbol* class_name = class_node->klass.classname->identifier.name;
     ClassDef* klass = resolve_class(c, class_name);
     if (klass == NULL) return;
 
@@ -752,8 +752,8 @@ void compile_class_body(Compiler* c, ASTNode* node)
     }
 
     if (node->kind != AST_CLASS_DEF) return;
-    ASTNode* class_node = node->class_def.class;
-    Symbol* class_name = class_node->class.classname->identifier.name;
+    ASTNode* class_node = node->class_def.klass;
+    Symbol* class_name = class_node->klass.classname->identifier.name;
 
     ClassDef* klass = resolve_class(c, class_name);
     if (klass == NULL) {
@@ -896,8 +896,8 @@ void compile_class_def(Compiler* c, ASTNode* node)
 
     if (node->kind != AST_CLASS_DEF) return;
 
-    ASTNode* class_node = node->class_def.class;
-    Symbol* class_name = class_node->class.classname->identifier.name;
+    ASTNode* class_node = node->class_def.klass;
+    Symbol* class_name = class_node->klass.classname->identifier.name;
 
     // すでにコンパイル済みならスキップ
     ClassDef* existing = NULL;

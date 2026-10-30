@@ -418,8 +418,8 @@ primary :
     | TRUE_LITERAL  { $$ = create_literal_node(TOKEN_TRUE, $1); }
     | FALSE_LITERAL { $$ = create_literal_node(TOKEN_FALSE, $1); }
     | NULL_LITERAL  { $$ = create_literal_node(TOKEN_NULL, $1); }
-    | BINARY    { }
-    | HEX       { }
+    | BINARY    {  $$ = create_literal_node(TOKEN_BINARY, $1); }
+    | HEX       {  $$ = create_literal_node(TOKEN_HEX, $1); }
     /*| STRING    { $$ = create_literal_node(TOKEN_STRING, $1); }*/
     | interpolated_string { $$ = $1; }
     | block     { $$ = $1; }

@@ -41,8 +41,8 @@ ASTNode* create_stmt_node(ASTNode* left, ASTNode* right)
 ASTNode* create_class_node(ASTNode* name, ASTNode* type)
 {
     ASTNode* node = alloc_node(AST_CLASS);
-    node->class.classname = name;
-    node->class.types = type;
+    node->klass.classname = name;
+    node->klass.types = type;
     return node;
 }
 
@@ -65,13 +65,6 @@ ASTNode* create_literal_node(LiteralKind kind, Symbol* raw)
 ASTNode* create_identifier_node(Symbol* name)
 {
     ASTNode* node = alloc_node(AST_IDENTIFIER);
-    // if (strncmp(name->chars, "__id_", 5) == 0 || strncmp(name->chars, "CLASSTYPE_", 10) == 0) {
-    //     const char* original = lookup_original_symbol(name->chars);
-    //     if (original != NULL) {
-    //         node->identifier.name = intern_cstr(original);
-    //         return node;
-    //     }
-    // }
     node->identifier.name = name;
     return node;
 }

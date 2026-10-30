@@ -57,7 +57,8 @@ static bool is_bitwise_operator(Symbol* op)
 
 static bool is_raw_numeric_literal(ASTNode* node) {
     if (!node || node->kind != AST_LITERAL) return false;
-    return (node->literal.kind == TOKEN_FLOAT || node->literal.kind == TOKEN_INTEGER);
+    return (node->literal.kind == TOKEN_FLOAT || node->literal.kind == TOKEN_INTEGER ||
+            node->literal.kind == TOKEN_BINARY || node->literal.kind == TOKEN_HEX);
 }
 
 static TypeInfo* peek_identifier_type(Compiler* c, ASTNode* node) {

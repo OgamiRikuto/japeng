@@ -27,6 +27,8 @@ typedef enum {
 
 typedef enum {
     TOKEN_INTEGER,
+    TOKEN_BINARY,
+    TOKEN_HEX,
     TOKEN_FLOAT,
     TOKEN_STRING,
     TOKEN_FRACTION,
@@ -51,7 +53,7 @@ struct ASTNode {
         struct {
             ASTNode* classname;
             ASTNode* types;
-        } class;
+        } klass;
 
         struct {
             ASTNode* params;
@@ -88,7 +90,7 @@ struct ASTNode {
         } var_decl;
         
         struct {
-            ASTNode* class;
+            ASTNode* klass;
             ASTNode* super_class;
             ASTNode* from_classes;
             ASTNode* members;
