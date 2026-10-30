@@ -111,6 +111,37 @@ static ASTNode* rotate_binary_op(ASTNode* node) {
         }
     }
 
+    ASTNode* right = node->send.args;
+    if (is_binary_op_send(right)) {
+        Symbol* op_root = node->send.message->identifier.name;
+        Symbol* op_right = right->send.message->identifier.name;
+
+        int prec_root = get_binary_precedence(op_root);
+        int prec_right = get_binary_precedence(op_right);
+
+        // 親の優先度が高い、または同優先度で左結合（代入 10 以外）の場合に左回転
+        bool should_rotate = (prec_root > prec_right) ||
+                             (prec_root == prec_right && prec_root > 10);
+
+        if (should_rotate) {
+            ASTNode* a = node->send.receiver;
+            ASTNode* b = right->send.receiver;
+            ASTNode* c = right->send.args;
+
+            // node（%）を (A % B) に組み替え
+            node->send.receiver = a;
+            node->send.args = b;
+
+            // right（!=）を ((A % B) != C) に組み替え
+            right->send.receiver = node;
+            right->send.args = c;
+
+            // 付け替えた左サブツリーに対して再帰的に回転チェック
+            right->send.receiver = rotate_binary_op(right->send.receiver);
+            return rotate_binary_op(right);
+        }
+    }
+
     return node;
 }
 

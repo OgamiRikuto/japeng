@@ -65,7 +65,8 @@ void compile_statement_node(Compiler* c, ASTNode* node)
 
         Symbol* msg = node->send.message->identifier.name;
         // if や repeat は内部でスタックを自前制御するので除外
-        if (msg != sym_if && msg != sym_repeat && msg != sym_switch) emit_inst(c, OP_POP, 0);
+        if (msg != sym_if && msg != sym_repeat && 
+            msg != sym_switch && msg != sym_each) emit_inst(c, OP_POP, 0);
     }
 
     int expected_increase = c->local_count - locals_before;
@@ -129,6 +130,12 @@ void compile(Compiler* c, ASTNode* node)
             /* switch */
             if (is_self && msg_sym == sym_switch) {
                 compile_switch(c, node);
+                break;
+            }
+
+            /* each */
+            if (msg_sym == sym_each) {
+                compile_each(c, node);
                 break;
             }
 

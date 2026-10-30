@@ -23,6 +23,7 @@ static const KeywordDef keyword_table[] = {
     { "switch",     "分岐"},
     { "case",       "場合"},
     { "default",    "その他"},
+    { "each",       "各々"},
     { "and",       "かつ"},
     { "or",        "または"},
     { "true",      "真"},

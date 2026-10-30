@@ -70,6 +70,7 @@ void compile_break(Compiler* c, ASTNode* node);
 void compile_continue(Compiler* c, ASTNode* node);
 ObjFunction* compile_block(Compiler* parent, ASTNode* block_node);
 void compile_switch(Compiler* c, ASTNode* node);
+void compile_each(Compiler* c, ASTNode* node);
 
 // クラスコンパイル関数
 TypeInfo* build_type_info(ASTNode* node);

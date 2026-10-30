@@ -138,6 +138,10 @@ static const ErrorMessage error_table[ERR_COUNT] = {
         .en = "Function declaration for '%s' requires a signature (e.g. 'Function(;)' or 'Function(Arg; Ret)').",
         .ja = "'%s' の関数型宣言にはシグネチャの指定が必要です (例: 'Function(;)' や 'Function(引数型; 戻り値型)')。"
     },
+    [ERR_BUILTIN_CACHE] = {
+        .en = "Cache of builtin classes is not newest. Please remove the cache once, and re-compile.",
+        .ja = "組み込み関数のキャッシュが最新ではありません。一度キャッシュを削除してコンパイルし直してください。"
+    },
 
     // VM 実行時エラー
     [ERR_UNDEFINED_GLOBAL] = {

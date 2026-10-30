@@ -26,6 +26,7 @@ typedef struct symbol {
     X(switch,       "switch") \
     X(case,         "case") \
     X(default,      "default") \
+    X(each,         "each") \
     X(init,         "init") \
     X(destroy,      "destroy") \
     X(new,          "new") \

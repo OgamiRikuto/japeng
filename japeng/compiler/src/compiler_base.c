@@ -471,7 +471,6 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                     error_compile(node, ERR_UNDEFINED_MESSAGE, "push", "List");
                     return new_type_info(sym_Error, 0);
                 }
-                printf ("push_slot is %d\n", push_slot);
     
                 // パターン A: カンマで 2 個以上並んでいる場合 (例: arr: List Integer is 1, 2, 3;)
                 if (elem_count > 1) {
