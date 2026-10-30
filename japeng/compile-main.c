@@ -218,6 +218,8 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
+    Table* shared_classes = new_table(16);
+
     // 2. クラス定義の差分チェック & 4パスコンパイル
     if (parsed_cd_count > 0) {
         ASTNode* compile_targets[MAX_FILES];
@@ -236,6 +238,7 @@ int main(int argc, char** argv) {
             Compiler cd_compiler;
             init_compiler(&cd_compiler, &dummy_chunk);
             cd_compiler.output_dir = project_dir;
+            cd_compiler.defined_class = shared_classes;
 
             // 型解決のため、パースされた全クラスの骨格・関係性・シグネチャをメモリに展開
             for (int i = 0; i < parsed_cd_count; i++) declare_class_skeleton(&cd_compiler, parsed_cd[i]);
@@ -259,6 +262,8 @@ int main(int argc, char** argv) {
         Compiler script_compiler;
         init_compiler(&script_compiler, &script_chunk);
         script_compiler.output_dir = project_dir;
+        script_compiler.defined_class = shared_classes;
+
 
         compile(&script_compiler, parsed_je[i]);
         emit_constant(&script_compiler, make_int(0));
