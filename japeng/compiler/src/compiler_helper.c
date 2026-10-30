@@ -23,7 +23,7 @@ void init_compiler(Compiler* compiler, Chunk* chunk)
     compiler->upvalue_count = 0;
     compiler->current_loop = NULL;
     compiler->current_class = NULL;
-    compiler->defined_class = new_table(16);
+    compiler->defined_class = NULL; // shared_classedをあとで渡される
 }
 
 void emit_inst(Compiler* c, Opcode op, uint32_t operand) {

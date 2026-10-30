@@ -135,8 +135,12 @@ void compile_if(Compiler* c, ASTNode* node)
 
     compile_statement_node(c, block_node->block.body);
 
+    int exit_jump = emit_jump(c, OP_JUMP);
+
     patch_jump(c, then_jump);
+    c->stack_depth++;
     emit_inst(c, OP_POP, 0);
+    patch_jump(c, exit_jump);
 }
 
 void compile_repeat(Compiler* c, ASTNode* node)

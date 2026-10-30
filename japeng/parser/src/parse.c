@@ -323,6 +323,14 @@ void print_ast(ASTNode* node, int depth)
             printf(" [INDEX]\n");
             print_ast(node->index_access.index, depth + 2);
             break;
+        case AST_CONSTRUCT:
+            printf("[CONSTRUCT: %s]\n", node->construct.class_name ? node->construct.class_name->chars : "anon");
+            if (node->construct.args) {
+                for (int i = 0; i <= depth; i++) printf("  | ");
+                printf(" [ARGS]\n");
+                print_ast(node->construct.args, depth + 2);
+            }
+            break;
         default:
             printf("[UNKNOWN NODE KIND: %d]\n", node->kind);
             break;

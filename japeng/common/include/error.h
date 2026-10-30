@@ -74,6 +74,7 @@ typedef enum {
     ERR_RETURN_EMPTY_IN_VALUE_FUNC,     // 戻り値が必要なのに値が空の return
     ERR_RETURN_VALUE_IN_VOID_FUNC,      // Void 関数なのに値を返した return
     ERR_CASE_TYPE_MISMATCH,             // switch-case の条件式の型不一致
+    ERR_INDEX_ASSIGN_TYPE_MISMATCH,     // 添字代入の要素型不一致
 
     // --- 実行時エラー ---
     ERR_UNDEFINED_GLOBAL,

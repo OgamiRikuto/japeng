@@ -207,6 +207,10 @@ ASTNode* fix_precedence(ASTNode* node)
             node->index_access.index  = fix_precedence(node->index_access.index);
             break;
 
+        case AST_CONSTRUCT:
+            node->construct.args = fix_precedence(node->construct.args);
+            break;
+
         // 葉ノード（リテラル、識別子、break/continue など）は何もしない
         case AST_LITERAL:
         case AST_IDENTIFIER:
@@ -319,6 +323,9 @@ ASTNode* fold_constants(ASTNode* node)
             node->index_access.index  = fold_constants(node->index_access.index);
             break;
 
+        case AST_CONSTRUCT:
+            node->construct.args = fold_constants(node->construct.args);
+            break;
         default:
             break;
     }

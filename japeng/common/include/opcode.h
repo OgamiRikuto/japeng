@@ -68,16 +68,20 @@ static inline uint32_t make_inst(Opcode op, uint32_t operand) {
     return ((uint32_t)op << 24) | (operand & 0x00FFFFFF);
 }
 
+static inline uint32_t make_call_operand(uint8_t arg_count, uint16_t index) {
+    return ((uint32_t)arg_count << 16) | (index & 0xFFFF);
+}
+
 static inline uint32_t make_send_inst(uint8_t arg_count, uint16_t msg_index) {
-    return ((uint32_t)OP_SEND << 24) | ((uint32_t)arg_count << 16) | (msg_index & 0xFFFF);
+    return make_inst(OP_SEND, make_call_operand(arg_count, msg_index));
 }
 
 static inline uint32_t make_virtual_call_inst(uint8_t arg_count, uint16_t vtable_index) {
-    return ((uint32_t)OP_INVOKE_VIRTUAL << 24) | ((uint32_t)arg_count << 16) | (vtable_index & 0xFFFF);
+    return make_inst(OP_INVOKE_VIRTUAL, make_call_operand(arg_count, vtable_index));
 }
 
 static inline uint32_t make_super_call_inst(uint8_t arg_count, uint16_t fn_index) {
-    return ((uint32_t)OP_SUPER_CALL << 24) | ((uint32_t)arg_count << 16) | (fn_index & 0xFFFF);
+    return make_inst(OP_SUPER_CALL, make_call_operand(arg_count, fn_index));
 }
 
 /* 命令を取り出す */

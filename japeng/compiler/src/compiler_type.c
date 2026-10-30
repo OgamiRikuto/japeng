@@ -477,7 +477,9 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
     // ★ 7. 最大引数数 (max_argc) で OP_SEND 発行！
     int vtable_idx = get_vtable_index(klass, msg);
     if (vtable_idx != -1) {
-        write_chunk(c->chunk, make_virtual_call_inst((uint8_t)max_argc, (uint16_t)vtable_idx));
+        uint32_t call_op = ((uint32_t)max_argc << 16) | ((uint16_t)vtable_idx & 0xFFFF);
+        emit_inst(c, OP_INVOKE_VIRTUAL, call_op);
+        // write_chunk(c->chunk, make_virtual_call_inst((uint8_t)max_argc, (uint16_t)vtable_idx));
     } else {
         error_compile(send_node, ERR_UNDEFINED_MESSAGE, msg->chars, rec_type->name->chars);
         return new_type_info(sym_Error, 0);
@@ -951,6 +953,71 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
             }
 
             return new_type_info(sym_Auto, 0);
+        }
+        case AST_CONSTRUCT: {
+            Symbol* class_name = node->construct.class_name;
+            ClassDef* klass = resolve_class(c, class_name);
+            if (klass == NULL) {
+                error_compile(node, ERR_CLASS_NOT_REGISTERED, class_name->chars);
+                return new_type_info(sym_Error, 0);
+            }
+
+            // 1. init (コンストラクタ) のシグネチャ取得
+            TypeInfo* formal_init_type = find_method_type(klass, sym_init);
+
+            // 2. 実引数の収集
+            ASTNode* args[16];
+            int actual_argc = 0;
+            collect_args(node->construct.args, args, &actual_argc, 16);
+
+            int min_argc = formal_init_type ? formal_init_type->min_param_count : 0;
+            int max_argc = formal_init_type ? formal_init_type->param_count : 0;
+
+            // 3. 引数の個数チェック
+            if (actual_argc < min_argc || actual_argc > max_argc) {
+                if (min_argc == max_argc) {
+                    error_compile(node, ERR_METHOD_ARITY_MISMATCH, "init", max_argc, actual_argc);
+                } else {
+                    error_compile(node, ERR_METHOD_ARITY_RANGE, "init", min_argc, max_argc, actual_argc);
+                }
+                emit_constant(c, make_nil());
+                return new_type_info(sym_Error, 0);
+            }
+
+            // 4. バイトコード生成: クラスオブジェクトをロードしてインスタンス生成
+            uint32_t class_sym_idx = add_constant(c->chunk, make_obj((Obj*)class_name));
+            emit_inst(c, OP_GET_GLOBAL, class_sym_idx); // stack: +1
+            emit_inst(c, OP_NEW_INSTANCE, 0);           // stack: ±0
+
+            // 5. インスタンスを複製 (1つは式の結果としてスタックに残し、1つは init のレシーバにする)
+            emit_inst(c, OP_DUP, 0);                    // stack: +1
+
+            // 6. 各実引数の評価 & 静的型チェック
+            for (int i = 0; i < actual_argc; i++) {
+                TypeInfo* arg_type = compile_expression(c, args[i]);
+                TypeInfo* expected_type = formal_init_type ? formal_init_type->type_args[i] : NULL;
+
+                if (expected_type != NULL && !is_assignable(c, expected_type, arg_type)) {
+                    error_compile(args[i], ERR_METHOD_ARG_TYPE_MISMATCH, "init", i + 1,
+                                  type_to_string(expected_type),
+                                  type_to_string(arg_type));
+                }
+            }
+
+            // 7. デフォルト引数の補完
+            for (int i = actual_argc; i < max_argc; i++) {
+                emit_constant(c, formal_init_type->default_values[i]);
+            }
+
+            // 8. init (vtable スロット 0) を呼び出し
+            uint32_t call_op = ((uint32_t)max_argc << 16) | 0; // スロット 0 固定
+            emit_inst(c, OP_INVOKE_VIRTUAL, call_op);
+
+            // 9. init の戻り値を破棄 (スタックには DUP したインスタンスのみが残る)
+            emit_inst(c, OP_POP, 0);
+
+            // 10. 式の評価結果として、そのクラスの型を返す
+            return klass->type ? klass->type : new_type_info(class_name, 0);
         }
 
         default:

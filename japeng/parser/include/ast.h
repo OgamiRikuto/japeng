@@ -22,6 +22,7 @@ typedef enum {
     AST_BREAK,
     AST_CONTINUE,
     AST_INDEX_ACCESS,
+    AST_CONSTRUCT,
 } ASTNodeType;
 
 typedef enum {
@@ -109,6 +110,11 @@ struct ASTNode {
             ASTNode* target;
             ASTNode* index;
         } index_access;
+
+        struct {
+            Symbol* class_name;
+            ASTNode* args;
+        } construct;
     };
 };
 
@@ -126,6 +132,7 @@ ASTNode* create_return_node(ASTNode*);
 ASTNode* create_break_node();
 ASTNode* create_continue_node();
 ASTNode* create_index_access_node(ASTNode*, ASTNode*);
+ASTNode* create_construct_node(Symbol* class_name, ASTNode* args);
 
 ASTNode* fix_precedence(ASTNode* node);
 ASTNode* fold_constants(ASTNode* node);

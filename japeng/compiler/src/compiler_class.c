@@ -53,24 +53,6 @@ ClassDef* resolve_class(Compiler* c, Symbol* name)
         }
     }
 
-    // ★ 修正 1: すでにパース済みの AST にある場合
-    ASTNode* existing_ast = find_class_ast(name);
-    if (existing_ast != NULL) {
-        // ★★★ 先に骨格を登録！これで再帰時に 1 の table_get で即座に脱出できる！ ★★★
-        declare_class_skeleton(c, existing_ast);
-        resolve_class_skeleton_relations(c, existing_ast);
-        declare_class_signatures(c, existing_ast);
-        compile_class_body(c, existing_ast);
-
-        // defined_class から取り出して返却
-        for (Compiler* comp = c; comp != NULL; comp = comp->enclosing) {
-            if (comp->defined_class != NULL) {
-                Value val;
-                if (table_get(comp->defined_class, name, &val)) return (ClassDef*)as_obj(val);
-            }
-        }
-    }
-
     const char* base_dir = c->output_dir ? c->output_dir : ".";
     char bcd_path[1024];
     get_cache_filepath(base_dir, name->chars, "bcd", bcd_path, sizeof(bcd_path));
@@ -81,7 +63,7 @@ ClassDef* resolve_class(Compiler* c, Symbol* name)
         if (loaded) return loaded;
     }
 
-    // B: ★ システム／組み込みライブラリのキャッシュ (lib/.je_cache/<Name>.bcd)
+    // B: システム／組み込みライブラリのキャッシュ (lib/.je_cache/<Name>.bcd)
     const char* stdlib_dir = get_japeng_lib_dir();
     char builtin_bcd[1024];
 
@@ -106,7 +88,25 @@ ClassDef* resolve_class(Compiler* c, Symbol* name)
         }
     }
 
-    // 3. ディスク探索
+    // 3: すでにパース済みの AST にある場合
+    ASTNode* existing_ast = find_class_ast(name);
+    if (existing_ast != NULL) {
+        // ★★★ 先に骨格を登録！これで再帰時に 1 の table_get で即座に脱出できる！ ★★★
+        declare_class_skeleton(c, existing_ast);
+        resolve_class_skeleton_relations(c, existing_ast);
+        declare_class_signatures(c, existing_ast);
+        compile_class_body(c, existing_ast);
+
+        // defined_class から取り出して返却
+        for (Compiler* comp = c; comp != NULL; comp = comp->enclosing) {
+            if (comp->defined_class != NULL) {
+                Value val;
+                if (table_get(comp->defined_class, name, &val)) return (ClassDef*)as_obj(val);
+            }
+        }
+    }
+
+    // 4. ディスク探索
     char cd_path[1024];
     bool found_source = false;
 
@@ -855,6 +855,8 @@ void compile_class_body(Compiler* c, ASTNode* node)
     c->current_class = enclosing_class;
 
     klass->state = CLASS_STATE_COMPILED;
+    fprintf(stderr, "\033[1;36m[COMPILED CLASS]\033[0m %s (file: %s)\n", 
+            class_name->chars, node->loc.filename ? node->loc.filename : "unknown");
 
 #if DEBUG_CLASS_WRITE
     fprintf(stderr, "=== Compiled Class: %s ===\n", class_name->chars);

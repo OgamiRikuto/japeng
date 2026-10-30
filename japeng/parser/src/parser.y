@@ -408,6 +408,10 @@ expression :
 primary : 
     IDENTIFIER  { $$ = create_identifier_node($1); }
     | SELF      { $$ = create_identifier_node($1); }
+    | CLASS_NAME L_PAR expression_list_opt R_PAR
+    {
+        $$ = create_construct_node($1, $3);
+    }
     | INTEGER   { $$ = create_literal_node(TOKEN_INTEGER, $1); }
     | FLOAT     { $$ = create_literal_node(TOKEN_FLOAT, $1); }
     | FRACTION  { $$ = create_literal_node(TOKEN_FRACTION, $1); }

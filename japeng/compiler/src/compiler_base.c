@@ -281,10 +281,11 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                     var_type = actual_type;
                 } else {
                     if (!is_assignable(c, declared_type, actual_type)) {
-                        error_compile(exprs[i], ERR_TYPE_MISMATCH,
-                                      type_to_string(declared_type), type_to_string(actual_type));
+                        error_compile(exprs[i], ERR_ASSIGN_TYPE_MISMATCH,
+                                      type_to_string(actual_type),
+                                      vars[i]->identifier.name->chars,
+                                      type_to_string(declared_type));
                     }
-                    // ★追加: 右辺がブロックなら、変数の型をブロックの具象シグネチャで確定！
                     if (exprs[i]->kind == AST_BLOCK) {
                         var_type = actual_type;
                     }
@@ -302,37 +303,34 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
         if (expr_count == 1) {
             TypeInfo* rhs_type = compile_expression(c, exprs[0]);
 
-            // 多値戻り値 (__multi__) かチェック
             if (rhs_type != NULL && rhs_type->name == sym___multi__) {
                 int actual_ret_count = rhs_type->type_arg_count;
 
-                // 個数チェック
                 if (actual_ret_count != var_count) {
-                    error_compile(node, ERR_ARITY_MISMATCH, var_count, actual_ret_count);
+                    error_compile(node, ERR_MULTI_ASSIGN_COUNT_MISMATCH, var_count, actual_ret_count);
                     return new_type_info(sym_Error, 0);
                 }
 
-                // ★ スタックには既に関数の戻り値 [ret1, ret2] が積まれている！
-                // それらをそのままローカル変数スロットとして登録＆Auto推論！
                 for (int i = 0; i < var_count; i++) {
                     TypeInfo* var_type = declared_type;
                     if (declared_type->name == sym_Auto) {
-                        var_type = rhs_type->type_args[i]; /* ★ Auto 推論で型確定！ */
+                        var_type = rhs_type->type_args[i];
                     } else if (!is_assignable(c, declared_type, rhs_type->type_args[i])) {
-                        error_compile(vars[i], ERR_TYPE_MISMATCH,
-                                      declared_type->name->chars, rhs_type->type_args[i]->name->chars);
+                        error_compile(vars[i], ERR_ASSIGN_TYPE_MISMATCH,
+                                      type_to_string(rhs_type->type_args[i]),
+                                      vars[i]->identifier.name->chars,
+                                      type_to_string(declared_type));
                     }
 
                     add_local(c, vars[i]->identifier.name, var_type);
-                    // 値はすでにスタック上にあるため、OP_SET_LOCAL や OP_POP は不要！
                 }
                 return declared_type;
             }
 
-            error_compile(node, ERR_ARITY_MISMATCH, var_count, 1);
+            error_compile(node, ERR_MULTI_ASSIGN_COUNT_MISMATCH, var_count, 1);
             return new_type_info(sym_Error, 0);
         }
-        error_compile(node, ERR_ARITY_MISMATCH, var_count, expr_count);
+        error_compile(node, ERR_MULTI_ASSIGN_COUNT_MISMATCH, var_count, expr_count);
         return new_type_info(sym_Error, 0);
     }
 
@@ -359,8 +357,10 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                 if (slot != -1) {
                     TypeInfo* expected = c->locals[slot].type;
                     if (!is_assignable(c, expected, actual_type)) {
-                        error_compile(exprs[i], ERR_TYPE_MISMATCH,
-                                      expected->name->chars, actual_type->name->chars);
+                        error_compile(exprs[i], ERR_ASSIGN_TYPE_MISMATCH,
+                                      type_to_string(actual_type),
+                                      vars[i]->identifier.name->chars,
+                                      type_to_string(expected));
                     }
                     emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
                     emit_inst(c, OP_POP, 0);
@@ -372,7 +372,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
         }
 
         // ---------------------------------------------------------
-        // ★ パターン 2: 右辺が単一の式（多値関数呼び出し a, b are self f;）
+        // パターン 2: 右辺が単一の式（多値関数呼び出し a, b are self f;）
         // ---------------------------------------------------------
         if (expr_count == 1) {
             TypeInfo* rhs_type = compile_expression(c, exprs[0]);
@@ -381,11 +381,10 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                 int actual_ret_count = rhs_type->type_arg_count;
 
                 if (actual_ret_count != var_count) {
-                    error_compile(node, ERR_ARITY_MISMATCH, var_count, actual_ret_count);
+                    error_compile(node, ERR_MULTI_ASSIGN_COUNT_MISMATCH, var_count, actual_ret_count);
                     return new_type_info(sym_Error, 0);
                 }
 
-                // 1. 各変数の存在と型チェック
                 int slots[MAX_ARGS];
                 for (int i = 0; i < var_count; i++) {
                     slots[i] = resolve_local(c, vars[i]->identifier.name);
@@ -396,14 +395,13 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
 
                     TypeInfo* expected = c->locals[slots[i]].type;
                     if (!is_assignable(c, expected, rhs_type->type_args[i])) {
-                        error_compile(vars[i], ERR_TYPE_MISMATCH,
-                                      expected->name->chars, rhs_type->type_args[i]->name->chars);
+                        error_compile(vars[i], ERR_ASSIGN_TYPE_MISMATCH,
+                                      type_to_string(rhs_type->type_args[i]),
+                                      vars[i]->identifier.name->chars,
+                                      type_to_string(expected));
                     }
                 }
 
-                // 2. スタックトップから逆順に取り出して変数スロットへ格納
-                // スタックは [..., 第1戻り値, 第2戻り値] と積まれているので、
-                // 末尾の変数 (var_count - 1) から順に pop していく
                 for (int i = var_count - 1; i >= 0; i--) {
                     if (slots[i] != -1) {
                         emit_inst(c, OP_SET_LOCAL, (uint32_t)slots[i]);
@@ -413,11 +411,11 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                 return new_type_info(sym_Void, 0);
             }
 
-            error_compile(node, ERR_ARITY_MISMATCH, var_count, 1);
+            error_compile(node, ERR_MULTI_ASSIGN_COUNT_MISMATCH, var_count, 1);
             return new_type_info(sym_Error, 0);
         }
 
-        error_compile(node, ERR_ARITY_MISMATCH, var_count, expr_count);
+        error_compile(node, ERR_MULTI_ASSIGN_COUNT_MISMATCH, var_count, expr_count);
         return new_type_info(sym_Error, 0);
     }
 
@@ -435,7 +433,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                                 node->send.args->literal.kind == TOKEN_NULL);
 
         // -----------------------------------------------------
-        // 1-A. 通常の値代入 (基本型、関数ブロック、auto の場合)
+        // 1-A. 通常の値代入 (基本型、関数ブロック、auto、Null の場合)
         // -----------------------------------------------------
         if (is_builtin(type_name) || 
             type_name == sym_Auto || 
@@ -443,16 +441,12 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
             is_null_literal ||
             (node->send.args != NULL && node->send.args->kind == AST_BLOCK)) {
 
-            // Symbol* msg = node->send.message->identifier.name;
-
-            // =====================================================
-            // ★ List の複数初期化 (例: arr: List Integer are 0, 1;)
-            // =====================================================
             ASTNode* elems[MAX_ELEMENTS];
             int elem_count = 0;
             collect_args(node->send.args, elems, &elem_count, MAX_ELEMENTS);
+
             // =====================================================
-            // ★ List の初期化 (単数・複数・is/are 完全自動対応)
+            // List の初期化 (単数・複数・is/are 完全自動対応)
             // =====================================================
             if (is_list_type(type_name)) {
                 int slot = add_local(c, var_name, declared_type);
@@ -460,15 +454,14 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                                           ? declared_type->type_args[0] 
                                           : NULL;
     
-                // ★★★ List クラスから push の vtable インデックスを取得 ★★★
                 ClassDef* list_class = resolve_class(c, sym_List);
                 if (list_class == NULL) {
-                    error_compile(node, ERR_CLASS_NOT_REGISTERED, "List");
+                    error_compile(node, ERR_CLASS_NOT_REGISTERED, sym_List->chars);
                     return new_type_info(sym_Error, 0);
                 }
-                int push_slot = get_vtable_index(list_class, intern_cstr("push"));
+                int push_slot = get_vtable_index(list_class, sym_push);
                 if (push_slot == -1) {
-                    error_compile(node, ERR_UNDEFINED_MESSAGE, "push", "List");
+                    error_compile(node, ERR_UNDEFINED_MESSAGE, sym_push->chars, sym_List->chars);
                     return new_type_info(sym_Error, 0);
                 }
     
@@ -476,20 +469,19 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                 if (elem_count > 1) {
                     uint32_t list_sym = add_constant(c->chunk, make_obj((Obj*)sym_List));
                     emit_inst(c, OP_GET_GLOBAL, list_sym);
-                    emit_inst(c, OP_NEW_INSTANCE, 0); // [ <List> ]
+                    emit_inst(c, OP_NEW_INSTANCE, 0);
     
                     for (int i = 0; i < elem_count; i++) {
                         emit_inst(c, OP_DUP, 0);
                         TypeInfo* actual_elem = compile_expression(c, elems[i]);
     
                         if (expected_elem != NULL && !is_assignable(c, expected_elem, actual_elem)) {
-                            error_compile(elems[i], ERR_TYPE_MISMATCH,
+                            error_compile(elems[i], ERR_EACH_ELEMENT_TYPE,
                                           type_to_string(expected_elem),
                                           actual_elem ? type_to_string(actual_elem) : "nil");
                         }
-    
-                        // ★ OP_SEND ではなく OP_INVOKE_VIRTUAL を発行！
-                        write_chunk(c->chunk, make_virtual_call_inst(1, (uint16_t)push_slot));
+                        
+                        emit_inst(c, OP_INVOKE_VIRTUAL, make_call_operand(1, push_slot));
                         emit_inst(c, OP_POP, 0);
                     }
                     emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
@@ -499,37 +491,32 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                 // パターン B: 右辺の式が 1 つだけの場合 (elem_count == 1)
                 TypeInfo* actual_type = compile_expression(c, elems[0]);
     
-                // B-1: 右辺がすでに List 型の場合 (例: list: List String is input().split(",");)
+                // B-1: 右辺がすでに List 型の場合
                 if (is_assignable(c, declared_type, actual_type)) {
                     emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
                     return declared_type;
                 }
     
-                // B-2: ★ 右辺が要素型の場合 (例: arr: List Integer is 0;)
+                // B-2: 右辺が要素型の場合 (例: arr: List Integer is 0;)
                 if (expected_elem != NULL && is_assignable(c, expected_elem, actual_type)) {
-                    // 1. スタックトップの要素 (0) を一旦スロットに退避してスタックから除去
                     emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
                     emit_inst(c, OP_POP, 0);
     
-                    // 2. 空リストを生成
                     uint32_t list_sym = add_constant(c->chunk, make_obj((Obj*)sym_List));
                     emit_inst(c, OP_GET_GLOBAL, list_sym);
-                    emit_inst(c, OP_NEW_INSTANCE, 0); // [ <List> ]
+                    emit_inst(c, OP_NEW_INSTANCE, 0);
     
-                    // 3. リストを DUP して退避した要素を取り出し push
                     emit_inst(c, OP_DUP, 0);
-                    emit_inst(c, OP_GET_LOCAL, (uint32_t)slot); // [ <List>, <List>, elem ]
+                    emit_inst(c, OP_GET_LOCAL, (uint32_t)slot);
+                    
+                    emit_inst(c, OP_INVOKE_VIRTUAL, make_call_operand(1, push_slot));
+                    emit_inst(c, OP_POP, 0);
     
-                    // ★ OP_SEND ではなく OP_INVOKE_VIRTUAL を発行！
-                    write_chunk(c->chunk, make_virtual_call_inst(1, (uint16_t)push_slot));
-                    emit_inst(c, OP_POP, 0); // [ <List> ]
-    
-                    // 4. 完成した 1 要素リストを変数スロットに格納！
                     emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
                     return declared_type;
                 }
     
-                // B-3: 型が合わない場合はエラー
+                // B-3: 型不一致
                 error_compile(elems[0], ERR_ASSIGN_TYPE_MISMATCH,
                               type_to_string(actual_type),
                               var_name->chars,
@@ -537,7 +524,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                 return declared_type;
             }
 
-            // 1. 右辺の式を評価して実際の型を取得
+            // 通常の値代入評価
             TypeInfo* actual_type = NULL;
 
             if (node->send.args != NULL && node->send.args->kind == AST_LITERAL) {
@@ -547,41 +534,60 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                 actual_type = compile_expression(c, node->send.args);
             }
 
-            // 2. auto の型推論
             if (declared_type->name == sym_Auto) {
-                declared_type = actual_type; // 右辺の型で確定！
+                declared_type = actual_type;
             } else {
-                // 3. 通常の代入型チェック
                 if (!is_assignable(c, declared_type, actual_type)) {
-                    error_compile(node->send.receiver, ERR_TYPE_MISMATCH,
-                                  type_to_string(declared_type), type_to_string(actual_type));
+                    error_compile(node->send.args ? node->send.args : node->send.receiver, ERR_ASSIGN_TYPE_MISMATCH,
+                                  type_to_string(actual_type), var_name->chars, type_to_string(declared_type));
                     return new_type_info(sym_Error, 0);
                 }
             }
 
-            // 4. 右辺がブロックならシグネチャ付き Function 型に更新
             if (node->send.args != NULL && node->send.args->kind == AST_BLOCK) {
                 declared_type = actual_type;
             }
 
-            // 5. ローカル変数に登録してスタックの値を格納
             int slot = add_local(c, var_name, declared_type);
             emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
             return declared_type;
         }
 
         // -----------------------------------------------------
-        // 1-B. ユーザー定義クラスのインスタンス生成 (例: dog: Dog is "ポチ";)
+        // 1-B. ユーザー定義クラスの初期化・代入
         // -----------------------------------------------------
         ClassDef* klass = resolve_class(c, type_name);
         if (klass == NULL) {
             error_compile(decl, ERR_CLASS_NOT_REGISTERED, type_name->chars);
             return new_type_info(sym_Error, 0);
         }
+
+        // 引数の収集
+        ASTNode* args[16];
+        int actual_argc = 0;
+        if (node->send.args != NULL) {
+            collect_args(node->send.args, args, &actual_argc, 16);
+        }
+
+        // ★★★ 追加: 右辺が1式で、その型がすでに declared_type に代入可能な場合 ★★★
+        // (例: r: Regex is self parse_regex; / p: Point is Point(10, 20);)
+        // ➜ 新規インスタンス生成 (OP_NEW_INSTANCE) ではなく、右辺の評価結果をそのまま変数に格納！
+        if (actual_argc == 1) {
+            TypeInfo* actual_type = compile_expression(c, args[0]);
+            if (is_assignable(c, declared_type, actual_type)) {
+                int slot = add_local(c, var_name, declared_type);
+                emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
+                return declared_type;
+            }
+            // 代入不可 (Char is "a" のようなコンストラクタ引数) なら、スタックを掃除して下の生成処理へ
+            emit_inst(c, OP_POP, 0);
+        }
+        // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+
         // 1. クラスをロードしてインスタンス生成
         uint32_t class_sym_idx = add_constant(c->chunk, make_obj((Obj*)type_name));
-        emit_inst(c, OP_GET_GLOBAL, class_sym_idx); // stack: +1
-        emit_inst(c, OP_NEW_INSTANCE, 0);           // stack: ±0 (クラスpop, インスタンスpush)
+        emit_inst(c, OP_GET_GLOBAL, class_sym_idx);
+        emit_inst(c, OP_NEW_INSTANCE, 0);
 
         // 2. init メソッドのシグネチャ取得
         TypeInfo* formal_init_type = find_method_type(klass, sym_init);
@@ -599,14 +605,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
             concrete_init_type = substitute_type(formal_init_type, &env);
         }
 
-        // 3. 実引数の収集
-        ASTNode* args[16];
-        int actual_argc = 0;
-        if (node->send.args != NULL) {
-            collect_args(node->send.args, args, &actual_argc, 16);
-        }
-
-        // ★★★ 4. init の引数個数 (Arity) チェック ★★★
+        // 4. init の引数個数 (Arity) チェック
         int min_argc = concrete_init_type ? concrete_init_type->min_param_count : 0;
         int max_argc = concrete_init_type ? concrete_init_type->param_count : 0;
 
@@ -616,16 +615,15 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
             } else {
                 error_compile(node, ERR_METHOD_ARITY_RANGE, "init", min_argc, max_argc, actual_argc);
             }
-            // エラー時もスタックを壊さないよう、空のインスタンスを変数スロットに退避
             int slot = add_local(c, var_name, declared_type);
             emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
             return declared_type;
         }
 
         // 5. インスタンスを複製して init を呼び出す
-        emit_inst(c, OP_DUP, 0); // stack: +1 (変数格納用 inst, 呼び出しレシーバ用 inst)
+        emit_inst(c, OP_DUP, 0);
 
-        // ★★★ 6. 各実引数の評価 ＆ 型チェック ★★★
+        // 6. 各実引数の評価 ＆ 型チェック
         for (int i = 0; i < actual_argc; i++) {
             TypeInfo* arg_type = compile_expression(c, args[i]);
             TypeInfo* expected_type = concrete_init_type ? concrete_init_type->type_args[i] : NULL;
@@ -643,37 +641,17 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
         }
 
         // 7. init (vtable スロット 0) の呼び出し
-        // レシーバ (1) + 引数 (max_argc) を消費し、init の戻り値を残す
-        uint32_t call_op = ((uint32_t)max_argc << 16) | 0; // スロット 0 固定
+        uint32_t call_op = ((uint32_t)max_argc << 16) | 0;
         emit_inst(c, OP_INVOKE_VIRTUAL, call_op);
 
-        // 8. init の戻り値を破棄 (スタックには無傷の inst が 1 つ残る)
+        // 8. init の戻り値を破棄
         emit_inst(c, OP_POP, 0);
 
-        // 9. 変数スロットに格納 (スタックに inst を残したまま変数を束縛)
+        // 9. 変数スロットに格納
         int slot = add_local(c, var_name, declared_type);
         emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
 
         return declared_type;
-
-        // int slot = add_local(c, var_name, declared_type);
-
-        // // 1. クラスオブジェクトを取得してインスタンス生成
-        // uint32_t class_sym_idx = add_constant(c->chunk, make_obj((Obj*)type_name));
-        // emit_inst(c, OP_GET_GLOBAL, class_sym_idx);
-        // emit_inst(c, OP_NEW_INSTANCE, 0);
-
-        // // 2. 引数があれば DUP して init メソッドを呼び出す
-        // if (node->send.args != NULL) {
-        //     emit_inst(c, OP_DUP, 0);
-        //     int argc = compile_args(c, node->send.args);
-        //     write_chunk(c->chunk, make_virtual_call_inst((uint8_t)argc, 0));
-        //     emit_inst(c, OP_POP, 0); // init の戻り値を POP
-        // }
-
-        // // 3. 生成したインスタンスを変数に格納
-        // emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
-        // return declared_type;
     }
 
     // =========================================================
@@ -690,18 +668,16 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                     if (field_idx != -1) {
                         FieldInfo f_info = c->current_class->field_infos[field_idx];
 
-                        emit_load_self(c); // 1. self を積む
+                        emit_load_self(c);
 
-                        // 2. 右辺を評価して型チェック
                         TypeInfo* val_type = compile_expression(c, node->send.args);
                         if (!is_assignable(c, f_info.type, val_type)) {
-                            error_compile(node, ERR_TYPE_MISMATCH,
-                                          f_info.type->name->chars, val_type->name->chars);
+                            error_compile(node->send.args, ERR_ASSIGN_TYPE_MISMATCH,
+                                          type_to_string(val_type), field_name->chars, type_to_string(f_info.type));
                             return new_type_info(sym_Error, 0);
                         }
 
-                        emit_inst(c, OP_SET_FIELD, (uint32_t)field_idx); // 3. 代入
-                        // emit_inst(c, OP_POP, 0);
+                        emit_inst(c, OP_SET_FIELD, (uint32_t)field_idx);
                         return f_info.type;
                     }
                 }
@@ -722,33 +698,43 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
             TypeInfo* val_type = compile_expression(c, node->send.args);
 
             if (!is_assignable(c, var_type, val_type)) {
-                error_compile(node, ERR_TYPE_MISMATCH,
-                              var_type->name->chars, val_type->name->chars);
-                
+                error_compile(node->send.args, ERR_ASSIGN_TYPE_MISMATCH,
+                              type_to_string(val_type), target_name->chars, type_to_string(var_type));
             }
 
             emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
-            // emit_inst(c, OP_POP, 0);
             return val_type;
         }
 
         // 3-B. アップバリューの場合
         int upval = resolve_upvalue(c, target_name);
         if (upval != -1) {
-            TypeInfo* upval_type = compile_expression(c, node->send.args);
+            TypeInfo* upval_type = resolve_upvalue_type(c, target_name);
+            TypeInfo* val_type = compile_expression(c, node->send.args);
+
+            if (!is_assignable(c, upval_type, val_type)) {
+                error_compile(node->send.args, ERR_ASSIGN_TYPE_MISMATCH,
+                              type_to_string(val_type), target_name->chars, type_to_string(upval_type));
+            }
+
             emit_inst(c, OP_SET_UPVALUE, (uint32_t)upval);
-            // emit_inst(c, OP_POP, 0);
-            return upval_type;
+            return val_type;
         }
 
         // 3-C. self 省略のフィールドの場合
         if (c->current_class != NULL) {
             int field_idx = find_field_index(c->current_class, target_name);
             if (field_idx != -1) {
-                emit_inst(c, OP_GET_LOCAL, 0);
+                FieldInfo f_info = c->current_class->field_infos[field_idx];
+                emit_load_self(c);
                 TypeInfo* field_type = compile_expression(c, node->send.args);
+
+                if (!is_assignable(c, f_info.type, field_type)) {
+                    error_compile(node->send.args, ERR_ASSIGN_TYPE_MISMATCH,
+                                  type_to_string(field_type), target_name->chars, type_to_string(f_info.type));
+                }
+
                 emit_inst(c, OP_SET_FIELD, (uint32_t)field_idx);
-                // emit_inst(c, OP_POP, 0);
                 return field_type;
             }
         }
@@ -765,32 +751,28 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
         ASTNode* index_node  = node->send.receiver->index_access.index;
         ASTNode* val_node    = node->send.args;
 
-        // 1. target と index をスタックに積む
         TypeInfo* target_type = compile_expression(c, target_node);
         TypeInfo* index_type  = compile_expression(c, index_node);
 
-        if (!is_integer_type(index_type->name)) {
-            error_compile(index_node, ERR_TYPE_MISMATCH,
-                          sym_Integer->chars, index_type->name->chars);
+        if (!is_integer_type(index_type->name) && index_type->name != sym_Auto) {
+            error_compile(index_node, ERR_INDEX_KEY_NOT_INT, index_type->name->chars);
         }
 
-        // 2. 右辺の値をスタックに積む
         TypeInfo* val_type = compile_expression(c, val_node);
 
-        // List<T> の型チェック
         if (is_list_type(target_type->name) && target_type->type_arg_count > 0) {
             TypeInfo* elem_type = target_type->type_args[0];
             if (!is_assignable(c, elem_type, val_type)) {
-                error_compile(val_node, ERR_ASSIGN_TYPE_MISMATCH,
-                              val_type->name->chars, "要素", elem_type->name->chars);
+                error_compile(val_node, ERR_INDEX_ASSIGN_TYPE_MISMATCH,
+                              type_to_string(val_type),
+                              type_to_string(elem_type));
             }
         }
 
-        // 3. 代入命令の発行
         emit_inst(c, OP_INDEX_SET, 0);
-        // emit_inst(c, OP_POP, 0); // 代入文として完了するため戻り値を破棄
         return val_type;
     }
+
     return new_type_info(sym_Error, 0);
 }
 
@@ -822,7 +804,7 @@ void compile_mesage_send(Compiler* c, ASTNode* node, Symbol* msg)
 
         // ★ 5. 見つかった関数を定数テーブルに置き、直接呼び出し命令を吐く！
         uint32_t fn_const = add_constant(c->chunk, method_val);
-        write_chunk(c->chunk, make_super_call_inst((uint8_t)argc, (uint16_t)fn_const));
+        emit_inst(c, OP_SUPER_CALL, make_call_operand((uint8_t)argc, (uint16_t)fn_const));
         return;
     }
 

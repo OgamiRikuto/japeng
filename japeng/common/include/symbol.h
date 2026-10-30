@@ -29,8 +29,8 @@ typedef struct symbol {
     X(each,         "each") \
     X(init,         "init") \
     X(destroy,      "destroy") \
-    X(new,          "new") \
-    X(call,         "call") \
+    X(push,         "push") \
+    X(length,       "length") \
     X(Auto,         "Auto") \
     X(SmallInteger, "SmallInteger") \
     X(Function,     "Function") \

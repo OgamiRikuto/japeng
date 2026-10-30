@@ -226,6 +226,10 @@ static const ErrorMessage error_table[ERR_COUNT] = {
         .en = "Condition in 'case' must match target type '%1$s', but got '%2$s'.",
         .ja = "'case' (場合) の条件式には対象と同じ型 '%1$s' が必要ですが、'%2$s' が渡されました。"
     },
+    [ERR_INDEX_ASSIGN_TYPE_MISMATCH] = {
+        .en = "Cannot assign value of type '%1$s' to element of type '%2$s'.",
+        .ja = "型 '%2$s' の要素に型 '%1$s' の値を代入することはできません。"
+    },
 
     // VM 実行時エラー
     [ERR_UNDEFINED_GLOBAL] = {

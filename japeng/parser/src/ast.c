@@ -150,3 +150,11 @@ ASTNode* create_index_access_node(ASTNode* target, ASTNode* index)
     node->index_access.index = index;
     return node;
 }
+
+ASTNode* create_construct_node(Symbol* class_name, ASTNode* args)
+{
+    ASTNode* node = alloc_node(AST_CONSTRUCT);
+    node->construct.class_name = class_name;
+    node->construct.args = args;
+    return node;
+}
