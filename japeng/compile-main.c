@@ -3,6 +3,7 @@
 #include <string.h>
 #include <libgen.h>
 #include <getopt.h>
+#include <dirent.h>
 #include <sys/stat.h>
 #include "defs.h"
 #include "common.h"
@@ -25,6 +26,88 @@ static void print_usage(const char* prog) {
     fprintf(stderr, "Usage:\n");
     fprintf(stderr, "  %s [-ja] <file.je|file.cd ...>         (指定ファイルのコンパイル)\n", prog);
     fprintf(stderr, "  %s [-ja] -d <dir_path>                 (ディレクトリ全探索コンパイル)\n", prog);
+}
+
+// =============================================================================
+// ディレクトリ再帰削除ヘルパー
+// =============================================================================
+static bool remove_dir_recursive(const char* path) {
+    DIR* d = opendir(path);
+    if (!d) return false;
+
+    struct dirent* p;
+    char sub_path[1024];
+
+    while ((p = readdir(d)) != NULL) {
+        if (strcmp(p->d_name, ".") == 0 || strcmp(p->d_name, "..") == 0) {
+            continue;
+        }
+
+        snprintf(sub_path, sizeof(sub_path), "%s/%s", path, p->d_name);
+        struct stat st;
+        if (stat(sub_path, &st) == 0) {
+            if (S_ISDIR(st.st_mode)) {
+                remove_dir_recursive(sub_path);
+            } else {
+                unlink(sub_path);
+            }
+        }
+    }
+    closedir(d);
+    return (rmdir(path) == 0);
+}
+
+// =============================================================================
+// キャッシュクリーン処理
+// =============================================================================
+static int handle_clean_command(int argc, char** argv) {
+    const char* target = NULL;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--clean") == 0 || strcmp(argv[i], "-clean") == 0 ||
+            strcmp(argv[i], "--初期化") == 0) {
+            if (i + 1 < argc && argv[i + 1][0] != '-') {
+                target = argv[i + 1];
+            }
+            break;
+        }
+    }
+
+    bool clean_all = (target != NULL && (strcmp(target, "all") == 0 || strcmp(target, "全") == 0));
+    bool removed_any = false;
+    char cache_path[1024];
+    struct stat st;
+
+    // 1. 標準ライブラリのキャッシュ削除 (all 指定時)
+    if (clean_all) {
+        // ★ 場所探索関数を使って lib の真の位置を取得！
+        const char* lib_dir = get_japeng_lib_dir();
+        snprintf(cache_path, sizeof(cache_path), "%s/.je_cache", lib_dir);
+
+        if (stat(cache_path, &st) == 0 && S_ISDIR(st.st_mode)) {
+            if (remove_dir_recursive(cache_path)) {
+                printf("ライブラリキャッシュを削除しました: %s\n", cache_path);
+                removed_any = true;
+            }
+        }
+    }
+
+    // 2. プロジェクト（指定パス、またはカレント）のキャッシュ削除
+    const char* proj_dir = (!target || clean_all) ? "." : target;
+    snprintf(cache_path, sizeof(cache_path), "%s/.je_cache", proj_dir);
+
+    if (stat(cache_path, &st) == 0 && S_ISDIR(st.st_mode)) {
+        if (remove_dir_recursive(cache_path)) {
+            printf("プロジェクトキャッシュを削除しました: %s\n", cache_path);
+            removed_any = true;
+        }
+    }
+
+    if (!removed_any) {
+        printf("削除対象のキャッシュは見つかりませんでした。\n");
+    }
+
+    return 0;
 }
 
 // ★ AST_STMT で複数クラスが繋がっていても安全に再帰して差分チェックを行うヘルパー
@@ -53,6 +136,13 @@ static void collect_freshness_targets(ASTNode* node, const char* project_dir, AS
 }
 
 int main(int argc, char** argv) {
+    if (argc > 1) {
+        for (int i = 1; i < argc; i++) {
+            if (strcmp(argv[i], "--clean") == 0) {
+                return handle_clean_command(argc, argv);
+            }
+        }
+    }
     if (argc < 2) {
         print_usage(argv[0]);
         return EXIT_FAILURE;
