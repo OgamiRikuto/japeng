@@ -130,5 +130,6 @@ clean:
 	@rm -f common/src/*.o
 	@rm -f compiler/src/*.o
 	@rm -f vm/src/*.o vm/src/builtin_functions/*.o
+	@rm -rf .je_cache */.je_cache */*/.je_cache
 
 .PHONY: all clean run
