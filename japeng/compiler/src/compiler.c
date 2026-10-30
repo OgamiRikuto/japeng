@@ -54,19 +54,24 @@ void compile_statement_node(Compiler* c, ASTNode* node)
 
     // ★ 式文の末尾処理（余分な戻り値を捨てる）
     if (node->kind == AST_SEND && node->send.message != NULL) {
+        Symbol* msg = node->send.message->identifier.name;
 
-        // 宣言代入 (単数・複数) はローカル変数をスタックに残すため POP しない
+        // 1. 宣言代入 (単数・複数) はスロットに値を残すため POP しない
         if (node->send.receiver != NULL && node->send.receiver->kind == AST_VAR_DECL) 
             return;
 
-        // ★追加: 複数再代入 (a, b are ...) も内部ですでに各変数を POP 済みのため POP しない！
-        if (node->send.receiver != NULL && node->send.receiver->kind == AST_STMT)
+        // 2. 再代入 (x is 10; や a, b are ...) は内部で POP 済みのため POP しない
+        if (msg == sym_is || msg == sym_are)
             return;
 
-        Symbol* msg = node->send.message->identifier.name;
-        // if や repeat は内部でスタックを自前制御するので除外
-        if (msg != sym_if && msg != sym_repeat && 
-            msg != sym_switch && msg != sym_each) emit_inst(c, OP_POP, 0);
+        // 3. 制御構文は自前でスタックを整合させているので POP しない
+        if (msg == sym_if || msg == sym_repeat || 
+            msg == sym_switch || msg == sym_each) {
+            return;
+        }
+
+        // 通常のメッセージ送信（式文: 10 println; など）のみ戻り値を破棄
+        emit_inst(c, OP_POP, 0);
     }
 
     int expected_increase = c->local_count - locals_before;
@@ -80,7 +85,8 @@ void compile_statement_node(Compiler* c, ASTNode* node)
                 depth_before, c->stack_depth);
         // assert(actual_increase == expected_increase && "文の実行後にスタックのリークまたは過剰POPが発生しました！");
     }
-}
+}       
+
 
 void compile(Compiler* c, ASTNode* node)
 {
@@ -191,10 +197,15 @@ void compile(Compiler* c, ASTNode* node)
             // =========================================================
             if (c->expected_ret_count == 1 && c->expected_ret_types[0]->name == sym_Void) {
                 if (expr_count > 0) {
-                    error_compile(node, ERR_RETURN_TYPE_MISMATCH, "Void (戻り値なし)", "値あり");
+                    TypeInfo* actual = compile_expression(c, exprs[0]);
+                    error_compile(node, ERR_RETURN_VALUE_IN_VOID_FUNC, actual->name->chars);
+                    emit_inst(c, OP_RETURN, 0);
+                    break;
                 }
-            } else if (expr_count != c->expected_ret_count) {
-                error_compile(node, ERR_ARITY_MISMATCH, c->expected_ret_count, expr_count);
+            } else if (c->expected_ret_count > 0 && expr_count == 0) {
+                error_compile(node, ERR_RETURN_EMPTY_IN_VALUE_FUNC, c->expected_ret_types[0]->name->chars);
+                emit_inst(c, OP_RETURN, 0);
+                break;
             }
 
             if (expr_count == 0) {

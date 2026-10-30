@@ -6,7 +6,7 @@
 #include "common.h"
 
 #define DEBUG_CHUNK_WRITE 0
-#define DEBUG_CLASS_WRITE 1
+#define DEBUG_CLASS_WRITE 0
 #define DEBUG_COMPILE_KIND 0
 #define DEBUG_LOOP_WRITE 0
 
@@ -48,6 +48,7 @@ bool is_list_type(Symbol* name);
 bool is_string_type(Symbol* name);
 bool is_boolean_type(Symbol* name);
 bool is_builtin(Symbol* name);
+bool is_collection_type(Symbol* name);
 Value parse_ast_literal(ASTNode* node, TypeInfo** out_type);
 Value parse_ast_literal_with_expected(ASTNode* node, TypeInfo* expected_type, TypeInfo** out_type);
 void collect_args(ASTNode* node, ASTNode** list, int* count, int max);

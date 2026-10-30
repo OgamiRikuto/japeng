@@ -573,24 +573,107 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
         // -----------------------------------------------------
         // 1-B. ユーザー定義クラスのインスタンス生成 (例: dog: Dog is "ポチ";)
         // -----------------------------------------------------
-        int slot = add_local(c, var_name, declared_type);
-
-        // 1. クラスオブジェクトを取得してインスタンス生成
+        ClassDef* klass = resolve_class(c, type_name);
+        if (klass == NULL) {
+            error_compile(decl, ERR_CLASS_NOT_REGISTERED, type_name->chars);
+            return new_type_info(sym_Error, 0);
+        }
+        // 1. クラスをロードしてインスタンス生成
         uint32_t class_sym_idx = add_constant(c->chunk, make_obj((Obj*)type_name));
-        emit_inst(c, OP_GET_GLOBAL, class_sym_idx);
-        emit_inst(c, OP_NEW_INSTANCE, 0);
+        emit_inst(c, OP_GET_GLOBAL, class_sym_idx); // stack: +1
+        emit_inst(c, OP_NEW_INSTANCE, 0);           // stack: ±0 (クラスpop, インスタンスpush)
 
-        // 2. 引数があれば DUP して init メソッドを呼び出す
-        if (node->send.args != NULL) {
-            emit_inst(c, OP_DUP, 0);
-            int argc = compile_args(c, node->send.args);
-            write_chunk(c->chunk, make_virtual_call_inst((uint8_t)argc, 0));
-            emit_inst(c, OP_POP, 0); // init の戻り値を POP
+        // 2. init メソッドのシグネチャ取得
+        TypeInfo* formal_init_type = find_method_type(klass, sym_init);
+        TypeInfo* concrete_init_type = formal_init_type;
+
+        // 型環境 (Generics) のバインド
+        TypeEnv env;
+        env.count = 0;
+        if (klass->type != NULL && declared_type != NULL) {
+            for (int i = 0; i < klass->type->type_arg_count && i < declared_type->type_arg_count; i++) {
+                env.params[env.count] = klass->type->type_args[i]->name;
+                env.args[env.count]   = declared_type->type_args[i];
+                env.count++;
+            }
+            concrete_init_type = substitute_type(formal_init_type, &env);
         }
 
-        // 3. 生成したインスタンスを変数に格納
+        // 3. 実引数の収集
+        ASTNode* args[16];
+        int actual_argc = 0;
+        if (node->send.args != NULL) {
+            collect_args(node->send.args, args, &actual_argc, 16);
+        }
+
+        // ★★★ 4. init の引数個数 (Arity) チェック ★★★
+        int min_argc = concrete_init_type ? concrete_init_type->min_param_count : 0;
+        int max_argc = concrete_init_type ? concrete_init_type->param_count : 0;
+
+        if (actual_argc < min_argc || actual_argc > max_argc) {
+            if (min_argc == max_argc) {
+                error_compile(node, ERR_METHOD_ARITY_MISMATCH, "init", max_argc, actual_argc);
+            } else {
+                error_compile(node, ERR_METHOD_ARITY_RANGE, "init", min_argc, max_argc, actual_argc);
+            }
+            // エラー時もスタックを壊さないよう、空のインスタンスを変数スロットに退避
+            int slot = add_local(c, var_name, declared_type);
+            emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
+            return declared_type;
+        }
+
+        // 5. インスタンスを複製して init を呼び出す
+        emit_inst(c, OP_DUP, 0); // stack: +1 (変数格納用 inst, 呼び出しレシーバ用 inst)
+
+        // ★★★ 6. 各実引数の評価 ＆ 型チェック ★★★
+        for (int i = 0; i < actual_argc; i++) {
+            TypeInfo* arg_type = compile_expression(c, args[i]);
+            TypeInfo* expected_type = concrete_init_type ? concrete_init_type->type_args[i] : NULL;
+
+            if (expected_type != NULL && !is_assignable(c, expected_type, arg_type)) {
+                error_compile(args[i], ERR_METHOD_ARG_TYPE_MISMATCH, "init", i + 1,
+                              type_to_string(expected_type),
+                              type_to_string(arg_type));
+            }
+        }
+
+        // デフォルト引数の補完
+        for (int i = actual_argc; i < max_argc; i++) {
+            emit_constant(c, concrete_init_type->default_values[i]);
+        }
+
+        // 7. init (vtable スロット 0) の呼び出し
+        // レシーバ (1) + 引数 (max_argc) を消費し、init の戻り値を残す
+        uint32_t call_op = ((uint32_t)max_argc << 16) | 0; // スロット 0 固定
+        emit_inst(c, OP_INVOKE_VIRTUAL, call_op);
+
+        // 8. init の戻り値を破棄 (スタックには無傷の inst が 1 つ残る)
+        emit_inst(c, OP_POP, 0);
+
+        // 9. 変数スロットに格納 (スタックに inst を残したまま変数を束縛)
+        int slot = add_local(c, var_name, declared_type);
         emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
+
         return declared_type;
+
+        // int slot = add_local(c, var_name, declared_type);
+
+        // // 1. クラスオブジェクトを取得してインスタンス生成
+        // uint32_t class_sym_idx = add_constant(c->chunk, make_obj((Obj*)type_name));
+        // emit_inst(c, OP_GET_GLOBAL, class_sym_idx);
+        // emit_inst(c, OP_NEW_INSTANCE, 0);
+
+        // // 2. 引数があれば DUP して init メソッドを呼び出す
+        // if (node->send.args != NULL) {
+        //     emit_inst(c, OP_DUP, 0);
+        //     int argc = compile_args(c, node->send.args);
+        //     write_chunk(c->chunk, make_virtual_call_inst((uint8_t)argc, 0));
+        //     emit_inst(c, OP_POP, 0); // init の戻り値を POP
+        // }
+
+        // // 3. 生成したインスタンスを変数に格納
+        // emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
+        // return declared_type;
     }
 
     // =========================================================

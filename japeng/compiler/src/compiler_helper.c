@@ -296,6 +296,12 @@ bool is_builtin(Symbol* name)
             ;
 }
 
+bool is_collection_type(Symbol* name)
+{
+    if (name == NULL) return false;
+    return  name == sym_List;
+}
+
 
 Value parse_ast_literal_with_expected(ASTNode* node, TypeInfo* expected_type, TypeInfo** out_type)
 {

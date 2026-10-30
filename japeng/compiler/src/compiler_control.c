@@ -81,7 +81,12 @@ void compile_if_chain(Compiler* c, ASTNode* node)
             ASTNode* block_node = clause->send.args->stmt.right;
 
             // 1. 条件式の評価
-            compile(c, cond_node);
+            TypeInfo* cond_type = compile_expression(c, cond_node);
+            if (cond_type != NULL && !is_boolean_type(cond_type->name) &&
+                cond_type->name != sym_Auto && cond_type->name != sym_Error) {
+                error_compile(cond_node, ERR_IF_COND_NOT_BOOL, msg->chars, cond_type->name->chars);
+                return;
+            }
 
             // 2. 偽なら次の節へジャンプ
             int false_jump = emit_jump(c, OP_JUMP_IF_FALSE);
@@ -118,7 +123,12 @@ void compile_if(Compiler* c, ASTNode* node)
     ASTNode* cond_node = node->send.args->stmt.left;
     ASTNode* block_node = node->send.args->stmt.right;
 
-    compile(c, cond_node);
+    TypeInfo* cond_type = compile_expression(c, cond_node);
+    if (cond_type != NULL && !is_boolean_type(cond_type->name) &&
+        cond_type->name != sym_Auto && cond_type->name != sym_Error) {
+        error_compile(cond_node, ERR_IF_COND_NOT_BOOL, "if", cond_type->name->chars);
+        return;
+    }
 
     int then_jump = emit_jump(c, OP_JUMP_IF_FALSE);
     emit_inst(c, OP_POP, 0);
@@ -143,7 +153,13 @@ void compile_repeat(Compiler* c, ASTNode* node)
         Loop loop;
         start_loop(c, &loop, loop_start);
     
-        compile(c, cond_node);
+        TypeInfo* cond_type = compile_expression(c, cond_node);
+        if (cond_type != NULL && !is_boolean_type(cond_type->name) &&
+            cond_type->name != sym_Auto && cond_type->name != sym_Error) {
+            error_compile(cond_node, ERR_REPEAT_COND_NOT_BOOL, cond_type->name->chars);
+            return;
+        }
+
         int exit_jump = emit_jump(c, OP_JUMP_IF_FALSE);
         emit_inst(c, OP_POP, 0);
     
@@ -177,7 +193,12 @@ void compile_repeat(Compiler* c, ASTNode* node)
         ASTNode* block_node = node->send.args;
     
         // 1. 上限値 (limit) を評価して匿名スロットに格納
-        compile(c, node->send.receiver);
+        TypeInfo* limit_type = compile_expression(c, node->send.receiver);
+        if (limit_type != NULL && !is_integer_type(limit_type->name) &&
+            limit_type->name != sym_Auto && limit_type->name != sym_Error) {
+            error_compile(node->send.receiver, ERR_REPEAT_LIMIT_NOT_INT, limit_type->name->chars);
+            return;
+        }
         int limit_slot = add_anonymous_local(c);
         emit_inst(c, OP_SET_LOCAL, limit_slot);
     
@@ -357,7 +378,7 @@ void compile_switch(Compiler* c, ASTNode* node)
     ASTNode* body_block  = node->send.args->stmt.right;
 
     // 1. switch (target) の対象式を評価し、匿名ローカルスロットに格納
-    compile(c, target_expr);
+    TypeInfo* target_type =  compile_expression(c, target_expr);
     int target_slot = add_anonymous_local(c);
     emit_inst(c, OP_SET_LOCAL, (uint32_t)target_slot);
     emit_inst(c, OP_POP, 0); // スタックをクリーンにする
@@ -395,7 +416,14 @@ void compile_switch(Compiler* c, ASTNode* node)
 
                 // target_val == conds[j] を比較 (スタック: +1)
                 emit_inst(c, OP_GET_LOCAL, (uint32_t)target_slot);
-                compile(c, conds[j]);
+                TypeInfo* cond_t = compile_expression(c, conds[j]);
+
+                // switch 対象型と case 条件型の照合
+                if (target_type != NULL && cond_t != NULL && !type_equals(target_type, cond_t)) {
+                    error_compile(conds[j], ERR_CASE_TYPE_MISMATCH,
+                                  type_to_string(target_type),
+                                  type_to_string(cond_t));
+                }
                 emit_inst(c, OP_EQUAL, 0);
 
                 if (!is_last) {
@@ -469,12 +497,17 @@ void compile_each(Compiler* c, ASTNode* node)
     collect_args(block_node->block.args, arg_decls, &arg_count, 4);
 
     if (arg_count < 1 || arg_count > 2) {
-        error_compile(block_node, ERR_WRONG_ARG_COUNT, 1, arg_count);
+        error_compile(block_node, ERR_EACH_ARITY, arg_count);
         return;
     }
 
     // 2. レシーバ（リスト）を評価してスロットに保持 (スタック: +1)
     TypeInfo* rec_type = compile_expression(c, node->send.receiver);
+    if (rec_type != NULL && !is_collection_type(rec_type->name) && 
+        rec_type->name != sym_Auto && rec_type->name != sym_Error) {
+        error_compile(node->send.receiver, ERR_EACH_NOT_LIST, rec_type->name->chars);
+        return;
+    }
     int list_slot = add_anonymous_local(c);
     emit_inst(c, OP_SET_LOCAL, (uint32_t)list_slot);
     // ★ OP_POP はしない！スタックに乗せたままローカル変数として維持する
@@ -517,9 +550,9 @@ void compile_each(Compiler* c, ASTNode* node)
 
         if (declared_type != NULL && elem_type != NULL && elem_type->name != sym_Auto) {
             if (!is_assignable(c, declared_type, elem_type)) {
-                error_compile(decl, ERR_TYPE_MISMATCH,
-                              declared_type->name->chars,
-                              elem_type->name->chars);
+                error_compile(decl, ERR_EACH_ELEMENT_TYPE,
+                              type_to_string(elem_type),
+                              type_to_string(declared_type));
                 return;
             }
         }
@@ -536,16 +569,13 @@ void compile_each(Compiler* c, ASTNode* node)
         TypeInfo* idx_type = build_type_info(decl_i->var_decl.type);
 
         if (idx_type != NULL && !is_integer_type(idx_type->name) && idx_type->name != sym_Auto) {
-            error_compile(decl_i, ERR_TYPE_MISMATCH,
-                          sym_Integer->chars,
-                          idx_type->name->chars);
+            error_compile(decl_i, ERR_EACH_INDEX_TYPE, idx_type->name->chars);
             return;
         }
 
         idx_slot = add_local(c, name_i, idx_type ? idx_type : new_type_info(sym_Integer, 0));
         emit_constant(c, make_int(0));
         emit_inst(c, OP_SET_LOCAL, (uint32_t)idx_slot);
-        // ★ OP_POP はしない！
 
         ASTNode* decl_n = arg_decls[1];
         Symbol* name_n = decl_n->var_decl.identifier->identifier.name;
@@ -553,9 +583,9 @@ void compile_each(Compiler* c, ASTNode* node)
 
         if (declared_elem_type != NULL && elem_type != NULL && elem_type->name != sym_Auto) {
             if (!is_assignable(c, declared_elem_type, elem_type)) {
-                error_compile(decl_n, ERR_TYPE_MISMATCH,
-                              declared_elem_type->name->chars,
-                              elem_type->name->chars);
+                error_compile(decl_n, ERR_EACH_ELEMENT_TYPE,
+                              type_to_string(elem_type),
+                              type_to_string(declared_elem_type));
                 return;
             }
         }
@@ -563,7 +593,6 @@ void compile_each(Compiler* c, ASTNode* node)
         elem_slot = add_local(c, name_n, declared_elem_type ? declared_elem_type : elem_type);
         emit_constant(c, make_nil());
         emit_inst(c, OP_SET_LOCAL, (uint32_t)elem_slot);
-        // ★ OP_POP はしない！
     }
 
     // 6. ループ先頭

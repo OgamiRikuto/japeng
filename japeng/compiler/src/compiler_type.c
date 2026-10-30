@@ -451,21 +451,19 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
     // 引数個数が範囲外の場合にエラー
     if (actual_argc < min_argc || actual_argc > max_argc) {
         if (min_argc == max_argc) {
-            error_compile(send_node, ERR_ARITY_MISMATCH, max_argc, actual_argc);
+            error_compile(send_node, ERR_METHOD_ARITY_MISMATCH, msg->chars, max_argc, actual_argc);
         } else {
-            error_compile(send_node, ERR_ARITY_RANGE_MISMATCH, min_argc, max_argc, actual_argc);
+            error_compile(send_node, ERR_METHOD_ARITY_RANGE, msg->chars, min_argc, max_argc, actual_argc);
         }
         return new_type_info(sym_Error, 0);
     }
 
-    // レシーバは呼び出し元（compile_expression）ですでにスタックに積まれているので、
-    // ここでは渡された実引数だけをスタックに積んで型チェックする！
     for (int i = 0; i < actual_argc; i++) {
         TypeInfo* arg_type = compile_expression(c, args[i]);
         TypeInfo* expected_arg_type = concrete_fn_type->type_args[i];
 
         if (expected_arg_type == NULL || !is_assignable(c, expected_arg_type, arg_type)) {
-            error_compile(args[i], ERR_ARG_TYPE_MISMATCH, i + 1,
+            error_compile(args[i], ERR_METHOD_ARG_TYPE_MISMATCH, msg->chars, i + 1,
                           type_to_string(expected_arg_type),
                           type_to_string(arg_type));
         }
@@ -632,11 +630,7 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                         int max_argc = fn_type->param_count;
 
                         if (!has_ellipsis && (actual_argc < min_argc || actual_argc > max_argc)) {
-                            if (min_argc == max_argc) {
-                                error_compile(node, ERR_ARITY_MISMATCH, max_argc, actual_argc);
-                            } else {
-                                error_compile(node, ERR_ARITY_RANGE_MISMATCH, min_argc, max_argc, actual_argc);
-                            }
+                            error_compile(node, ERR_FUNC_ARITY_MISMATCH, msg->chars, max_argc, actual_argc);
                             emit_constant(c, make_nil());
                             return new_type_info(sym_Error, 0);
                         }
@@ -655,10 +649,9 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                             if (i < expected_argc) {
                                 TypeInfo* expected_arg_type = fn_type->type_args[i];
                                 if (expected_arg_type != NULL && !is_assignable(c, expected_arg_type, arg_type)) {
-                                    error_compile(args[i], ERR_ARG_TYPE_MISMATCH, i + 1,
-                                                    type_to_string(expected_arg_type),
-                                                    type_to_string(arg_type));
-                                    // return new_type_info(sym_Error, 0);
+                                    error_compile(args[i], ERR_FUNC_ARG_TYPE_MISMATCH, msg->chars, i + 1,
+                                                  type_to_string(expected_arg_type),
+                                                  type_to_string(arg_type));
                                 }
                             }
                         }
@@ -711,8 +704,8 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                 compile_binary_operands(c, node, &lhs, &rhs);
 
                 if (!is_integer_type(lhs->name) || !is_integer_type(rhs->name)) {
-                    error_compile(node, ERR_TYPE_MISMATCH, sym_Integer->chars, 
-                                  !is_integer_type(lhs->name) ? lhs->name->chars : rhs->name->chars);
+                    Symbol* bad_sym = !is_integer_type(lhs->name) ? lhs->name : rhs->name;
+                    error_compile(node, ERR_BITWISE_OP_TYPE, msg->chars, bad_sym->chars);
                     return new_type_info(sym_Error, 0);
                 }
 
@@ -728,8 +721,8 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
             if (msg == sym_and) {
                 // 1. 左辺の評価
                 TypeInfo* lhs_type = compile_expression(c, node->send.receiver);
-                if (!is_boolean_type(lhs_type->name)) {
-                    error_compile(node->send.receiver, ERR_TYPE_MISMATCH, sym_Boolean->chars, lhs_type->name->chars);
+                if (!is_boolean_type(lhs_type->name) && lhs_type->name != sym_Auto && lhs_type->name != sym_Error) {
+                    error_compile(node->send.receiver, ERR_LOGICAL_OP_TYPE, msg->chars, lhs_type->name->chars);
                     return new_type_info(sym_Error, 0);
                 }
 
@@ -739,8 +732,8 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                 // 3. 真のパス: スタック上の真値を捨てて、右辺を評価
                 emit_inst(c, OP_POP, 0);
                 TypeInfo* rhs_type = compile_expression(c, node->send.args);
-                if (!is_boolean_type(rhs_type->name)) {
-                    error_compile(node->send.args, ERR_TYPE_MISMATCH, sym_Boolean->chars, rhs_type->name->chars);
+                if (!is_boolean_type(rhs_type->name) && rhs_type->name != sym_Auto && rhs_type->name != sym_Error) {
+                    error_compile(node->send.receiver, ERR_LOGICAL_OP_TYPE, msg->chars, rhs_type->name->chars);
                     return new_type_info(sym_Error, 0);
                 }
 
@@ -753,8 +746,8 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
             if (msg == sym_or) {
                 // 1. 左辺の評価
                 TypeInfo* lhs_type = compile_expression(c, node->send.receiver);
-                if (!is_boolean_type(lhs_type->name)) {
-                    error_compile(node->send.receiver, ERR_TYPE_MISMATCH, sym_Boolean->chars, lhs_type->name->chars);
+                if (!is_boolean_type(lhs_type->name) && lhs_type->name != sym_Auto && lhs_type->name != sym_Error) {
+                    error_compile(node->send.receiver, ERR_LOGICAL_OP_TYPE, msg->chars, lhs_type->name->chars);
                     return new_type_info(sym_Error, 0);
                 }
 
@@ -769,8 +762,8 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                 emit_inst(c, OP_POP, 0);
 
                 TypeInfo* rhs_type = compile_expression(c, node->send.args);
-                if (!is_boolean_type(rhs_type->name)) {
-                    error_compile(node->send.args, ERR_TYPE_MISMATCH, sym_Boolean->chars, rhs_type->name->chars);
+                if (!is_boolean_type(rhs_type->name) && rhs_type->name != sym_Auto && rhs_type->name != sym_Error) {
+                    error_compile(node->send.receiver, ERR_LOGICAL_OP_TYPE, msg->chars, rhs_type->name->chars);
                     return new_type_info(sym_Error, 0);
                 }
 
@@ -781,8 +774,8 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
             // 単項論理否定 
             if (msg == sym_not && node->send.args == NULL) {
                 TypeInfo* rec_type = compile_expression(c, node->send.receiver);
-                if (!is_boolean_type(rec_type->name)) {
-                    error_compile(node, ERR_TYPE_MISMATCH, sym_Boolean->chars, rec_type->name->chars);
+                if (!is_boolean_type(rec_type->name) && rec_type->name != sym_Auto && rec_type->name != sym_Error) {
+                    error_compile(node, ERR_LOGICAL_OP_TYPE, "!", rec_type->name->chars);
                     return new_type_info(sym_Error, 0);
                 }
                 emit_inst(c, OP_NOT, 0);
@@ -811,7 +804,7 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
 
                 // ★ 同型チェック (Float変数やInteger変数はここで確実に弾かれる！)
                 if (!type_equals(lhs, rhs)) {
-                    error_compile(node, ERR_TYPE_MISMATCH, lhs->name->chars, rhs->name->chars);
+                    error_compile(node, ERR_BINARY_OP_TYPE_MISMATCH, msg->chars, lhs->name->chars, rhs->name->chars);
                     return new_type_info(sym_Error, 0);
                 }
 
@@ -887,9 +880,10 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
 
                 // 同型チェック (暗黙の異型比較を弾く)
                 if (!type_equals(lhs, rhs)) {
-                    error_compile(node, ERR_TYPE_MISMATCH, lhs->name->chars, rhs->name->chars);
+                    error_compile(node, ERR_BINARY_OP_TYPE_MISMATCH, msg->chars, lhs->name->chars, rhs->name->chars);
                     return new_type_info(sym_Error, 0);
                 }
+
                 // 1. 整数型同士
                 if (is_integer_type(lhs->name)) {
                     if (msg == sym_equal)       emit_inst(c, OP_EQUAL_INT, 0);
@@ -932,10 +926,15 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                 return new_type_info(sym_Error, 0);
             }
 
+            if (!is_list_type(target_type->name) && !is_string_type(target_type->name) &&
+                target_type->name != sym_Auto) {
+                error_compile(node->index_access.target, ERR_INDEX_TARGET_INVALID, target_type->name->chars);
+                return new_type_info(sym_Error, 0);
+            }
+
             // 添字は整数型でなければならない
-            if (!is_integer_type(index_type->name)) {
-                error_compile(node->index_access.index, ERR_TYPE_MISMATCH,
-                              sym_Integer->chars, index_type->name->chars);
+            if (!is_integer_type(index_type->name) && index_type->name != sym_Auto) {
+                error_compile(node->index_access.index, ERR_INDEX_KEY_NOT_INT, index_type->name->chars);
                 return new_type_info(sym_Error, 0);
             }
 

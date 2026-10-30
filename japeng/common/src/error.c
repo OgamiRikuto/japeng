@@ -142,6 +142,90 @@ static const ErrorMessage error_table[ERR_COUNT] = {
         .en = "Cache of builtin classes is not newest. Please remove the cache once, and re-compile.",
         .ja = "組み込み関数のキャッシュが最新ではありません。一度キャッシュを削除してコンパイルし直してください。"
     },
+    [ERR_IF_COND_NOT_BOOL] = {
+        .en = "Condition of '%1$s' must be of Boolean type, but got '%2$s'.",
+        .ja = "'%1$s' の条件式には真偽値型 (Boolean) が必要ですが、'%2$s' が渡されました。"
+    },
+    [ERR_REPEAT_COND_NOT_BOOL] = {
+        .en = "Condition of 'repeat' loop must be of Boolean type, but got '%s'.",
+        .ja = "条件ループ 'repeat' (繰り返す) の条件式には真偽値型 (Boolean) が必要ですが、'%s' が渡されました。"
+    },
+    [ERR_REPEAT_LIMIT_NOT_INT] = {
+        .en = "Count limit for 'repeat' loop must be an Integer, but got '%s'.",
+        .ja = "回数指定ループ 'repeat' (繰り返す) の回数には整数型 (Integer) が必要ですが、'%s' が渡されました。"
+    },
+    [ERR_EACH_NOT_LIST] = {
+        .en = "'each' can only be applied to a List, but got '%s'.",
+        .ja = "'each' (各々) はリスト型 (List) にのみ適用できますが、'%s' が渡されました。"
+    },
+    [ERR_EACH_ARITY] = {
+        .en = "Block for 'each' must take 1 (element) or 2 (index, element) arguments, but got %d.",
+        .ja = "'each' (各々) のブロックには引数が 1 個 (要素) または 2 個 (添字, 要素) 必要ですが、%d 個指定されました。"
+    },
+    [ERR_EACH_INDEX_TYPE] = {
+        .en = "First argument (index) of 'each' must be of type 'Integer', but got '%s'.",
+        .ja = "'each' (各々) の第 1 引数 (添字) には 'Integer' (整数型) が必要ですが、'%s' が指定されました。"
+    },
+    [ERR_EACH_ELEMENT_TYPE] = {
+        .en = "Element argument of 'each' expects type '%1$s', but got '%2$s'.",
+        .ja = "'each' (各々) の要素引数には型 '%1$s' が必要ですが、'%2$s' が指定されました。"
+    },
+    [ERR_INDEX_KEY_NOT_INT] = {
+        .en = "Index inside '[]' must be an Integer, but got '%s'.",
+        .ja = "添字 '[]' の中身には整数型 (Integer) を指定する必要がありますが、'%s' が渡されました。"
+    },
+    [ERR_INDEX_TARGET_INVALID] = {
+        .en = "Cannot index into value of type '%s' (only List and String are supported).",
+        .ja = "型 '%s' に対するインデックスアクセス '[]' は無効です (List または String のみ対応)。"
+    },
+    [ERR_BITWISE_OP_TYPE] = {
+        .en = "Bitwise operator '%1$s' requires Integer operands, but got '%2$s'.",
+        .ja = "ビット演算子 '%1$s' には整数型 (Integer) が必要ですが、'%2$s' が渡されました。"
+    },
+    [ERR_LOGICAL_OP_TYPE] = {
+        .en = "Logical operator '%1$s' requires Boolean operands, but got '%2$s'.",
+        .ja = "論理演算子 '%1$s' には真偽値型 (Boolean) が必要ですが、'%2$s' が渡されました。"
+    },
+    [ERR_MULTI_ASSIGN_COUNT_MISMATCH] = {
+        .en = "Multi-assignment mismatch: %1$d variable(s) on left, but %2$d value(s) on right.",
+        .ja = "複数代入の要素数が一致しません (左辺: %1$d 個の変数, 右辺: %2$d 個の値)。"
+    },
+    [ERR_BINARY_OP_TYPE_MISMATCH] = {
+        .en = "Operator '%1$s' cannot be applied to different types: '%2$s' and '%3$s'.",
+        .ja = "演算子 '%1$s' の両辺の型が一致しません (左辺: '%2$s', 右辺: '%3$s')。"
+    },
+    [ERR_METHOD_ARITY_MISMATCH] = {
+        .en = "Method '%1$s' expects %2$d argument(s), but got %3$d.",
+        .ja = "メソッド '%1$s' に渡された引数の個数が一致しません (期待値: %2$d 個, 実際: %3$d 個)。"
+    },
+    [ERR_METHOD_ARITY_RANGE] = {
+        .en = "Method '%1$s' expects %2$d to %3$d arguments, but got %4$d.",
+        .ja = "メソッド '%1$s' に渡された引数の個数が一致しません (期待値: %2$d〜%3$d 個, 実際: %4$d 個)。"
+    },
+    [ERR_METHOD_ARG_TYPE_MISMATCH] = {
+        .en = "Type mismatch in argument %2$d of method '%1$s': expected '%3$s', but got '%4$s'.",
+        .ja = "メソッド '%1$s' の第 %2$d 引数の型が一致しません (期待される型: '%3$s', 実際の型: '%4$s')。"
+    },
+    [ERR_FUNC_ARITY_MISMATCH] = {
+        .en = "Function '%1$s' expects %2$d argument(s), but got %3$d.",
+        .ja = "関数 '%1$s' に渡された引数の個数が一致しません (期待値: %2$d 個, 実際: %3$d 個)。"
+    },
+    [ERR_FUNC_ARG_TYPE_MISMATCH] = {
+        .en = "Type mismatch in argument %2$d of function '%1$s': expected '%3$s', but got '%4$s'.",
+        .ja = "関数 '%1$s' の第 %2$d 引数の型が一致しません (期待される型: '%3$s', 実際の型: '%4$s')。"
+    },
+    [ERR_RETURN_EMPTY_IN_VALUE_FUNC] = {
+        .en = "Function declared to return '%s' must return a value, but 'return' is empty.",
+        .ja = "戻り値型 '%s' が宣言されている関数では値を返す必要がありますが、値が指定されていません。"
+    },
+    [ERR_RETURN_VALUE_IN_VOID_FUNC] = {
+        .en = "Cannot return a value from a function with 'Void' return type (attempted to return '%s').",
+        .ja = "戻り値型が 'Void' (無型) の関数内では値を返せません ('%s' が返されました)。"
+    },
+    [ERR_CASE_TYPE_MISMATCH] = {
+        .en = "Condition in 'case' must match target type '%1$s', but got '%2$s'.",
+        .ja = "'case' (場合) の条件式には対象と同じ型 '%1$s' が必要ですが、'%2$s' が渡されました。"
+    },
 
     // VM 実行時エラー
     [ERR_UNDEFINED_GLOBAL] = {
