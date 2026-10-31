@@ -121,14 +121,41 @@ static void collect_freshness_targets(ASTNode* node, const char* project_dir, AS
     }
 
     if (node->kind == AST_CLASS_DEF) {
-        ASTNode* cnode = node->class_def.class;
-        if (cnode && cnode->kind == AST_CLASS && cnode->class.classname) {
-            Symbol* cname = cnode->class.classname->identifier.name;
+        ASTNode* cnode = node->class_def.klass;
+        if (cnode && cnode->kind == AST_CLASS && cnode->klass.classname) {
+            Symbol* cname = cnode->klass.classname->identifier.name;
             char bcd_path[1024];
             get_cache_filepath(project_dir, cname->chars, "bcd", bcd_path, sizeof(bcd_path));
 
             // .bcd が存在しない、または .cd の方が新しい場合のみ再コンパイル対象へ
             if (!is_cache_fresh(bcd_path, project_dir)) {
+                targets[(*target_count)++] = node;
+            }
+        }
+    }
+}
+
+static void prepare_classes(Compiler* c, ASTNode* node, const char* project_dir, ASTNode** targets, int* target_count) {
+    if (!node) return;
+
+    if (node->kind == AST_STMT) {
+        prepare_classes(c, node->stmt.left, project_dir, targets, target_count);
+        prepare_classes(c, node->stmt.right, project_dir, targets, target_count);
+        return;
+    }
+
+    if (node->kind == AST_CLASS_DEF) {
+        ASTNode* cnode = node->class_def.klass;
+        if (cnode && cnode->kind == AST_CLASS && cnode->klass.classname) {
+            Symbol* cname = cnode->klass.classname->identifier.name;
+            char bcd_path[1024];
+            get_cache_filepath(project_dir, cname->chars, "bcd", bcd_path, sizeof(bcd_path));
+
+            if (is_cache_fresh(bcd_path, project_dir)) {
+                // キャッシュが新鮮なら .bcd から完全な型・vtable を復元して共有テーブルに登録！
+                load_class_type_from_bcd(c, bcd_path);
+            } else {
+                // キャッシュが無い、またはソースの方が新しい場合は再コンパイル対象へ
                 targets[(*target_count)++] = node;
             }
         }
@@ -240,14 +267,23 @@ int main(int argc, char** argv) {
             cd_compiler.output_dir = project_dir;
             cd_compiler.defined_class = shared_classes;
 
-            // 型解決のため、パースされた全クラスの骨格・関係性・シグネチャをメモリに展開
-            for (int i = 0; i < parsed_cd_count; i++) declare_class_skeleton(&cd_compiler, parsed_cd[i]);
-            for (int i = 0; i < parsed_cd_count; i++) resolve_class_skeleton_relations(&cd_compiler, parsed_cd[i]);
-            for (int i = 0; i < parsed_cd_count; i++) declare_class_signatures(&cd_compiler, parsed_cd[i]);
-
-            // ★ 更新が必要なクラスだけをコンパイルして .bcd を書き出し
-            for (int i = 0; i < target_count; i++) {
-                compile_class_body(&cd_compiler, compile_targets[i]);
+            ASTNode* compile_targets[MAX_FILES];
+            int target_count = 0;
+    
+            // キャッシュ新鮮なクラスを .bcd からロードし、更新が必要なものだけを抽出
+            for (int i = 0; i < parsed_cd_count; i++) {
+                prepare_classes(&cd_compiler, parsed_cd[i], project_dir, compile_targets, &target_count);
+            }
+    
+            // 更新が必要なクラスがある場合のみ 4 パスを実行
+            if (target_count > 0) {
+                for (int i = 0; i < target_count; i++) declare_class_skeleton(&cd_compiler, compile_targets[i]);
+                for (int i = 0; i < target_count; i++) resolve_class_skeleton_relations(&cd_compiler, compile_targets[i]);
+                for (int i = 0; i < target_count; i++) declare_class_signatures(&cd_compiler, compile_targets[i]);
+    
+                for (int i = 0; i < target_count; i++) {
+                    compile_class_body(&cd_compiler, compile_targets[i]);
+                }
             }
 
             free_chunk(&dummy_chunk);
