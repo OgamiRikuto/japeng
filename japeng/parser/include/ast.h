@@ -114,7 +114,7 @@ struct ASTNode {
         } index_access;
 
         struct {
-            Symbol* class_name;
+            ASTNode* class_node;
             ASTNode* args;
         } construct;
     };
@@ -134,7 +134,7 @@ ASTNode* create_return_node(ASTNode*);
 ASTNode* create_break_node();
 ASTNode* create_continue_node();
 ASTNode* create_index_access_node(ASTNode*, ASTNode*);
-ASTNode* create_construct_node(Symbol* class_name, ASTNode* args);
+ASTNode* create_construct_node(ASTNode*, ASTNode*);
 
 ASTNode* fix_precedence(ASTNode* node);
 ASTNode* fold_constants(ASTNode* node);

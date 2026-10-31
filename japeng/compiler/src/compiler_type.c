@@ -230,12 +230,20 @@ static void collect_block_arg_info(Compiler* c, ASTNode* node,
             }
         } else {
             // デフォルト値なし引数
-            if (*min_param_count < idx) {
-                // デフォルト値あり引数の後ろにデフォルト値なし引数が配置された！
-                error_compile(node, ERR_DEFAULT_ARG_ORDER);
-            }
+            // if (*min_param_count < idx) {
+            //     // デフォルト値あり引数の後ろにデフォルト値なし引数が配置された！
+            //     error_compile(node, ERR_DEFAULT_ARG_ORDER);
+            // }
             default_vals[idx] = make_nil();
-            (*min_param_count)++;
+            if (t != NULL && t->name == sym_ellipsis) {
+                // 可変長部分は 0 個以上で良いため据え置き
+            } else {
+                if (*min_param_count < idx) {
+                    error_compile(node, ERR_DEFAULT_ARG_ORDER);
+                }
+                (*min_param_count)++;
+            }
+            // (*min_param_count)++;
         }
     }
 }
@@ -956,70 +964,176 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
             return new_type_info(sym_Auto, 0);
         }
         case AST_CONSTRUCT: {
-            Symbol* class_name = node->construct.class_name;
+            // 1. クラス名の取得 (単体識別子 or ジェネリクス付き AST_CLASS)
+            Symbol* class_name = NULL;
+            if (node->construct.class_node->kind == AST_IDENTIFIER) {
+                class_name = node->construct.class_node->identifier.name;
+            } else if (node->construct.class_node->kind == AST_CLASS) {
+                class_name = node->construct.class_node->klass.classname->identifier.name;
+            }
+
             ClassDef* klass = resolve_class(c, class_name);
             if (klass == NULL) {
-                error_compile(node, ERR_CLASS_NOT_REGISTERED, class_name->chars);
+                error_compile(node, ERR_CLASS_NOT_REGISTERED, class_name ? class_name->chars : "unknown");
                 return new_type_info(sym_Error, 0);
             }
 
-            // 1. init (コンストラクタ) のシグネチャ取得
+            // ★ 2. ジェネリクスを反映した具象型の構築 (例: List Integer)
+            TypeInfo* target_type = build_type_info(node->construct.class_node);
+
+            // 3. init のシグネチャ取得
             TypeInfo* formal_init_type = find_method_type(klass, sym_init);
 
-            // 2. 実引数の収集
+            // 4. 実引数の収集
             ASTNode* args[16];
             int actual_argc = 0;
             collect_args(node->construct.args, args, &actual_argc, 16);
 
             int min_argc = formal_init_type ? formal_init_type->min_param_count : 0;
             int max_argc = formal_init_type ? formal_init_type->param_count : 0;
+            
+            // ★ 可変長引数 (...) を持っているか判定
+            bool has_ellipsis = (formal_init_type && max_argc > 0 && 
+                                 formal_init_type->type_args[max_argc - 1]->name == sym_ellipsis);
 
-            // 3. 引数の個数チェック
-            if (actual_argc < min_argc || actual_argc > max_argc) {
-                if (min_argc == max_argc) {
-                    error_compile(node, ERR_METHOD_ARITY_MISMATCH, "init", max_argc, actual_argc);
-                } else {
+            // 5. 引数の個数チェック
+            if (has_ellipsis) {
+                if (actual_argc < min_argc) {
                     error_compile(node, ERR_METHOD_ARITY_RANGE, "init", min_argc, max_argc, actual_argc);
+                    emit_constant(c, make_nil());
+                    return new_type_info(sym_Error, 0);
                 }
-                emit_constant(c, make_nil());
-                return new_type_info(sym_Error, 0);
+            } else {
+                if (actual_argc < min_argc || actual_argc > max_argc) {
+                    if (min_argc == max_argc) {
+                        error_compile(node, ERR_METHOD_ARITY_MISMATCH, "init", max_argc, actual_argc);
+                    } else {
+                        error_compile(node, ERR_METHOD_ARITY_RANGE, "init", min_argc, max_argc, actual_argc);
+                    }
+                    emit_constant(c, make_nil());
+                    return new_type_info(sym_Error, 0);
+                }
             }
 
-            // 4. バイトコード生成: クラスオブジェクトをロードしてインスタンス生成
+            // 6. クラスオブジェクトのロード & インスタンス生成
             uint32_t class_sym_idx = add_constant(c->chunk, make_obj((Obj*)class_name));
-            emit_inst(c, OP_GET_GLOBAL, class_sym_idx); // stack: +1
-            emit_inst(c, OP_NEW_INSTANCE, 0);           // stack: ±0
+            emit_inst(c, OP_GET_GLOBAL, class_sym_idx);
+            emit_inst(c, OP_NEW_INSTANCE, 0);
 
-            // 5. インスタンスを複製 (1つは式の結果としてスタックに残し、1つは init のレシーバにする)
-            emit_inst(c, OP_DUP, 0);                    // stack: +1
+            // 7. インスタンスの複製 (1つは戻り値、1つは init のレシーバ用)
+            emit_inst(c, OP_DUP, 0);
 
-            // 6. 各実引数の評価 & 静的型チェック
+            // 8. 各実引数の評価 & 型チェック
             for (int i = 0; i < actual_argc; i++) {
                 TypeInfo* arg_type = compile_expression(c, args[i]);
-                TypeInfo* expected_type = formal_init_type ? formal_init_type->type_args[i] : NULL;
+                TypeInfo* expected_type = NULL;
 
-                if (expected_type != NULL && !is_assignable(c, expected_type, arg_type)) {
-                    error_compile(args[i], ERR_METHOD_ARG_TYPE_MISMATCH, "init", i + 1,
+                if (formal_init_type) {
+                    if (i < max_argc && formal_init_type->type_args[i]->name != sym_ellipsis) {
+                        expected_type = formal_init_type->type_args[i];
+                    } else if (has_ellipsis) {
+                        // 可変長引数の場合: 
+                        // target_type (例: List Integer) に型引数があればそれを期待型にする！
+                        if (target_type != NULL && target_type->type_arg_count > 0) {
+                            expected_type = target_type->type_args[0];
+                        } else {
+                            expected_type = formal_init_type->type_args[max_argc - 1];
+                        }
+                    }
+                }
+
+                // expected_type が sym_ellipsis (型指定なし) 以外なら厳格に型チェック！
+                if (expected_type != NULL && expected_type->name != sym_ellipsis && 
+                    !is_assignable(c, expected_type, arg_type)) {
+                    error_compile(args[i], ERR_METHOD_ARG_TYPE_MISMATCH, sym_init->chars, i + 1,
                                   type_to_string(expected_type),
                                   type_to_string(arg_type));
                 }
             }
 
-            // 7. デフォルト引数の補完
-            for (int i = actual_argc; i < max_argc; i++) {
-                emit_constant(c, formal_init_type->default_values[i]);
+            // 9. デフォルト引数の補完 (可変長でない場合のみ)
+            if (!has_ellipsis) {
+                for (int i = actual_argc; i < max_argc; i++) {
+                    emit_constant(c, formal_init_type->default_values[i]);
+                }
             }
 
-            // 8. init (vtable スロット 0) を呼び出し
-            uint32_t call_op = ((uint32_t)max_argc << 16) | 0; // スロット 0 固定
-            emit_inst(c, OP_INVOKE_VIRTUAL, call_op);
+            // 10. init (vtable スロット 0) を呼び出し
+            // ★ 可変長なら実際に渡された actual_argc で呼ぶ！
+            int emit_argc = has_ellipsis ? actual_argc : max_argc;
+            emit_inst(c, OP_INVOKE_VIRTUAL, make_call_operand((uint8_t)emit_argc, 0));
 
-            // 9. init の戻り値を破棄 (スタックには DUP したインスタンスのみが残る)
+            // 11. init の戻り値を破棄
             emit_inst(c, OP_POP, 0);
 
-            // 10. 式の評価結果として、そのクラスの型を返す
-            return klass->type ? klass->type : new_type_info(class_name, 0);
+            // ★ 12. 式の評価結果として、ジェネリクスを反映した具象型を返す！
+            return target_type ? target_type : (klass->type ? klass->type : new_type_info(class_name, 0));
         }
+        // case AST_CONSTRUCT: {
+        //     Symbol* class_name = node->construct.class_name;
+        //     ClassDef* klass = resolve_class(c, class_name);
+        //     if (klass == NULL) {
+        //         error_compile(node, ERR_CLASS_NOT_REGISTERED, class_name->chars);
+        //         return new_type_info(sym_Error, 0);
+        //     }
+
+        //     // 1. init (コンストラクタ) のシグネチャ取得
+        //     TypeInfo* formal_init_type = find_method_type(klass, sym_init);
+
+        //     // 2. 実引数の収集
+        //     ASTNode* args[16];
+        //     int actual_argc = 0;
+        //     collect_args(node->construct.args, args, &actual_argc, 16);
+
+        //     int min_argc = formal_init_type ? formal_init_type->min_param_count : 0;
+        //     int max_argc = formal_init_type ? formal_init_type->param_count : 0;
+
+        //     // 3. 引数の個数チェック
+        //     if (actual_argc < min_argc || actual_argc > max_argc) {
+        //         if (min_argc == max_argc) {
+        //             error_compile(node, ERR_METHOD_ARITY_MISMATCH, "init", max_argc, actual_argc);
+        //         } else {
+        //             error_compile(node, ERR_METHOD_ARITY_RANGE, "init", min_argc, max_argc, actual_argc);
+        //         }
+        //         emit_constant(c, make_nil());
+        //         return new_type_info(sym_Error, 0);
+        //     }
+
+        //     // 4. バイトコード生成: クラスオブジェクトをロードしてインスタンス生成
+        //     uint32_t class_sym_idx = add_constant(c->chunk, make_obj((Obj*)class_name));
+        //     emit_inst(c, OP_GET_GLOBAL, class_sym_idx); // stack: +1
+        //     emit_inst(c, OP_NEW_INSTANCE, 0);           // stack: ±0
+
+        //     // 5. インスタンスを複製 (1つは式の結果としてスタックに残し、1つは init のレシーバにする)
+        //     emit_inst(c, OP_DUP, 0);                    // stack: +1
+
+        //     // 6. 各実引数の評価 & 静的型チェック
+        //     for (int i = 0; i < actual_argc; i++) {
+        //         TypeInfo* arg_type = compile_expression(c, args[i]);
+        //         TypeInfo* expected_type = formal_init_type ? formal_init_type->type_args[i] : NULL;
+
+        //         if (expected_type != NULL && !is_assignable(c, expected_type, arg_type)) {
+        //             error_compile(args[i], ERR_METHOD_ARG_TYPE_MISMATCH, "init", i + 1,
+        //                           type_to_string(expected_type),
+        //                           type_to_string(arg_type));
+        //         }
+        //     }
+
+        //     // 7. デフォルト引数の補完
+        //     for (int i = actual_argc; i < max_argc; i++) {
+        //         emit_constant(c, formal_init_type->default_values[i]);
+        //     }
+
+        //     // 8. init (vtable スロット 0) を呼び出し
+        //     uint32_t call_op = ((uint32_t)max_argc << 16) | 0; // スロット 0 固定
+        //     emit_inst(c, OP_INVOKE_VIRTUAL, call_op);
+
+        //     // 9. init の戻り値を破棄 (スタックには DUP したインスタンスのみが残る)
+        //     emit_inst(c, OP_POP, 0);
+
+        //     // 10. 式の評価結果として、そのクラスの型を返す
+        //     return klass->type ? klass->type : new_type_info(class_name, 0);
+        // }
 
         default:
             compile(c, node);

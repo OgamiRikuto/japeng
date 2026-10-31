@@ -1028,8 +1028,8 @@ static void print_stack(VM* vm) {
                     }
                     case OBJ_INSTANCE: {
                         ObjInstance* inst = (ObjInstance*)obj;
-                        fprintf(stderr, "<inst %s>", (inst->klass && inst->klass->name) 
-                                            ? inst->klass->name->chars : "Anon");
+                        fprintf(stderr, "<inst %s>", (inst->klass && ((ObjClass*)inst->klass)->name) 
+                                            ? ((ObjClass*)inst->klass)->name->chars : "Anon");
                         break;
                     }
                     case OBJ_BIGINTEGER: {
@@ -1044,7 +1044,7 @@ static void print_stack(VM* vm) {
                     }
                     case OBJ_STRING: {
                         ObjString* str = (ObjString*)obj;
-                        fprintf(stderr, "\"%s\"", str->chars);
+                        fprintf(stderr, "\"%s\"", string_chars(str));
                         break;
                     }
                     case OBJ_LIST: {
@@ -1085,7 +1085,7 @@ static void print_instruction(CallFrame* frame, uint32_t instruction, uint32_t c
             uint16_t sym_idx = get_send_index(instruction);
             Value sym_val = frame->chunk->constants[sym_idx];
             const char* msg = (is_obj(sym_val) && ((Obj*)as_obj(sym_val))->type == OBJ_STRING)
-                              ? ((ObjString*)as_obj(sym_val))->chars : "?";
+                              ? (string_chars((ObjString*)as_obj(sym_val))) : "?";
             fprintf(stderr, "argc: %u, msg: #%s (idx: %u)\n", argc, msg, sym_idx);
             break;
         }
@@ -1110,7 +1110,7 @@ static void print_instruction(CallFrame* frame, uint32_t instruction, uint32_t c
             else if (is_nil(val))   fprintf(stderr, "nil\n");
             else if (is_obj(val)) {
                 Obj* obj = as_obj(val);
-                if (obj->type == OBJ_STRING)   fprintf(stderr, "\"%s\"\n", ((ObjString*)obj)->chars);
+                if (obj->type == OBJ_STRING)   fprintf(stderr, "\"%s\"\n", string_chars((ObjString*)obj));
                 else if (obj->type == OBJ_CLASS) fprintf(stderr, "<class %s>\n", ((ObjClass*)obj)->name->chars);
                 else fprintf(stderr, "<obj type:%d>\n", obj->type);
             } else {

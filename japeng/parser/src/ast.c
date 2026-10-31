@@ -101,7 +101,7 @@ ASTNode* create_vardecl_node(ASTNode* identifier, ASTNode* type)
 ASTNode* create_classdef_node(ASTNode* class, ASTNode* super, ASTNode* from, ASTNode* members)
 {
     ASTNode* node = alloc_node(AST_CLASS_DEF);
-    node->class_def.class = class;
+    node->class_def.klass = class;
     node->class_def.super_class = super;
     node->class_def.from_classes = from;
     node->class_def.members = members;
@@ -144,10 +144,10 @@ ASTNode* create_index_access_node(ASTNode* target, ASTNode* index)
     return node;
 }
 
-ASTNode* create_construct_node(Symbol* class_name, ASTNode* args)
+ASTNode* create_construct_node(ASTNode* class_node, ASTNode* args)
 {
     ASTNode* node = alloc_node(AST_CONSTRUCT);
-    node->construct.class_name = class_name;
+    node->construct.class_node = class_node;
     node->construct.args = args;
     return node;
 }

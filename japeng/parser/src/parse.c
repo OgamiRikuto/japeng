@@ -199,7 +199,7 @@ void print_ast(ASTNode* node, int depth)
             
         case AST_CLASS_DEF:
             printf("[CLASS_DEF]\n");
-            print_ast(node->class_def.class, depth + 1);
+            print_ast(node->class_def.klass, depth + 1);
             if (node->class_def.super_class) {
                 for (int i = 0; i <= depth; i++) printf("  | ");
                 printf(" [SUPER]\n");
@@ -251,8 +251,8 @@ void print_ast(ASTNode* node, int depth)
 
         case AST_CLASS:
             printf("[CLASS_TYPE]\n");
-            print_ast(node->class.classname, depth + 1);
-            if (node->class.types) print_ast(node->class.types, depth + 1); // Generics等
+            print_ast(node->klass.classname, depth + 1);
+            if (node->klass.types) print_ast(node->klass.types, depth + 1); // Generics等
             break;
             
         case AST_IDENTIFIER:
@@ -324,7 +324,8 @@ void print_ast(ASTNode* node, int depth)
             print_ast(node->index_access.index, depth + 2);
             break;
         case AST_CONSTRUCT:
-            printf("[CONSTRUCT: %s]\n", node->construct.class_name ? node->construct.class_name->chars : "anon");
+            printf("[CONSTRUCT]\n");
+            print_ast(node->construct.class_node, depth + 1);
             if (node->construct.args) {
                 for (int i = 0; i <= depth; i++) printf("  | ");
                 printf(" [ARGS]\n");
@@ -350,7 +351,7 @@ void dump_ast(ASTNode* node, int depth)
     switch (node->kind) {
         case AST_CLASS_DEF:
             printf("CLASS_DEF\n");
-            dump_ast(node->class_def.class, depth + 1);
+            dump_ast(node->class_def.klass, depth + 1);
             if (node->class_def.super_class) dump_ast(node->class_def.super_class, depth + 1);
             if (node->class_def.from_classes) dump_ast(node->class_def.from_classes, depth + 1);
             dump_ast(node->class_def.members, depth + 1);
@@ -399,7 +400,7 @@ void dump_ast(ASTNode* node, int depth)
             
         case AST_CLASS:
             printf("CLASS_TYPE\n");
-            dump_ast(node->class.classname, depth + 1);
+            dump_ast(node->klass.classname, depth + 1);
             break;
 
         case AST_FIELD_DECL:

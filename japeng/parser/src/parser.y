@@ -28,6 +28,7 @@ Location current_ast_loc = {0};
         current_ast_loc.col_end = (Current).last_column; \
     } while (0)
 %}
+%glr-parser
 %locations
 %error-verbose
 %union {
@@ -410,7 +411,15 @@ primary :
     | SELF      { $$ = create_identifier_node($1); }
     | CLASS_NAME L_PAR expression_list_opt R_PAR
     {
-        $$ = create_construct_node($1, $3);
+        ASTNode* name = create_identifier_node($1);
+        ASTNode* klass = create_class_node(name, NULL);
+        $$ = create_construct_node(klass, $3);
+    }
+    | CLASS_NAME type_list L_PAR expression_list_opt R_PAR
+    {
+        ASTNode* name = create_identifier_node($1);
+        ASTNode* klass = create_class_node(name, $2);
+        $$ = create_construct_node(klass, $4);
     }
     | INTEGER   { $$ = create_literal_node(TOKEN_INTEGER, $1); }
     | FLOAT     { $$ = create_literal_node(TOKEN_FLOAT, $1); }
@@ -538,6 +547,12 @@ arg_decl :
         ASTNode* decl = create_vardecl_node(create_identifier_node($1), $3);
         decl->var_decl.default_val = $5;
         $$ = decl;
+    }
+    | ELLIPSIS
+    {
+        ASTNode* name = create_identifier_node(sym_ellipsis);
+        ASTNode* type = create_class_node(create_identifier_node(sym_ellipsis), NULL);
+        $$ = create_vardecl_node(name, type);
     }
     ;
 

@@ -81,34 +81,31 @@ void compile_if_chain(Compiler* c, ASTNode* node)
             ASTNode* block_node = clause->send.args->stmt.right;
 
             // 1. 条件式の評価
-            TypeInfo* cond_type = compile_expression(c, cond_node);
-            if (cond_type != NULL && !is_boolean_type(cond_type->name) &&
-                cond_type->name != sym_Auto && cond_type->name != sym_Error) {
-                error_compile(cond_node, ERR_IF_COND_NOT_BOOL, msg->chars, cond_type->name->chars);
-                return;
-            }
+            compile(c, cond_node);
 
             // 2. 偽なら次の節へジャンプ
             int false_jump = emit_jump(c, OP_JUMP_IF_FALSE);
 
             // 3. 真のパス: 条件値を POP してブロック実行
             emit_inst(c, OP_POP, 0);
+
+            int prev_locals = c->local_count;
             compile_statement_node(c, block_node->block.body);
+            c->local_count = prev_locals;
 
             // 4. ブロック終了後は if 全体の末尾へ脱出
             exit_jumps[exit_count++] = emit_jump(c, OP_JUMP);
 
-            // 5. 偽だったときの着地点をここ（次の節の直前）にパッチ
             patch_jump(c, false_jump);
-
             c->stack_depth++;
-
-            // 6. 偽のパス: 条件値を POP (次の elif の評価や else の実行に備える)
             emit_inst(c, OP_POP, 0);
 
         } else if (msg == sym_else) {
             ASTNode* block_node = clause->send.args;
+
+            int prev_locals = c->local_count;
             compile_statement_node(c, block_node->block.body);
+            c->local_count = prev_locals;
         }
     }
 
@@ -507,40 +504,45 @@ void compile_each(Compiler* c, ASTNode* node)
 
     // 2. レシーバ（リスト）を評価してスロットに保持 (スタック: +1)
     TypeInfo* rec_type = compile_expression(c, node->send.receiver);
-    if (rec_type != NULL && !is_collection_type(rec_type->name) && 
+    bool is_collection = is_collection_type(rec_type->name);
+    bool is_string = is_string_type(rec_type->name);
+    if (rec_type != NULL && !is_collection && !is_string &&  
         rec_type->name != sym_Auto && rec_type->name != sym_Error) {
         error_compile(node->send.receiver, ERR_EACH_NOT_LIST, rec_type->name->chars);
         return;
     }
     int list_slot = add_anonymous_local(c);
     emit_inst(c, OP_SET_LOCAL, (uint32_t)list_slot);
-    // ★ OP_POP はしない！スタックに乗せたままローカル変数として維持する
 
-    TypeInfo* elem_type = (rec_type && rec_type->type_arg_count > 0)
-                          ? rec_type->type_args[0]
-                          : new_type_info(sym_Auto, 0);
+    TypeInfo* elem_type = NULL;
+    if (is_string) {
+        elem_type = new_type_info(sym_String, 0);
+    } else if (rec_type && rec_type->type_arg_count > 0) {
+        elem_type = rec_type->type_args[0];
+    } else {
+        elem_type = new_type_info(sym_Auto, 0);
+    }
 
     // 3. リストの長さ (length) を取得してスロットに保持 (スタック: +1)
-    ClassDef* list_class = resolve_class(c, sym_List);
-    int len_vtable_idx = list_class ? get_vtable_index(list_class, intern_cstr("length")) : -1;
+    Symbol* class_sym = is_string ? sym_String : sym_List;
+    ClassDef* rec_class = resolve_class(c, class_sym);
+    int len_vtable_idx = rec_class ? get_vtable_index(rec_class, sym_length) : -1;
     if (len_vtable_idx == -1) {
         error_compile(node, ERR_BUILTIN_CACHE);
         return;
     }
 
-    emit_inst(c, OP_GET_LOCAL, (uint32_t)list_slot); // length のレシーバを積む (stack: +1)
-    uint32_t len_op = ((uint32_t)0 << 16) | ((uint16_t)len_vtable_idx & 0xFFFF);
-    emit_inst(c, OP_INVOKE_VIRTUAL, len_op); // レシーバを消費して length (Integer) を残す
+    emit_inst(c, OP_GET_LOCAL, (uint32_t)list_slot);
+    uint32_t len_op = make_call_operand(0, len_vtable_idx);
+    emit_inst(c, OP_INVOKE_VIRTUAL, len_op);
 
     int len_slot = add_anonymous_local(c);
     emit_inst(c, OP_SET_LOCAL, (uint32_t)len_slot);
-    // ★ OP_POP はしない！
 
     // 4. カウンタ変数 i = 0 (スタック: +1)
     int i_slot = add_anonymous_local(c);
     emit_constant(c, make_int(0));
     emit_inst(c, OP_SET_LOCAL, (uint32_t)i_slot);
-    // ★ OP_POP はしない！
 
     // 5. ブロックの引数スロットを確保 & 静的型チェック
     int idx_slot = -1;
@@ -564,7 +566,6 @@ void compile_each(Compiler* c, ASTNode* node)
         elem_slot = add_local(c, name, declared_type ? declared_type : elem_type);
         emit_constant(c, make_nil());
         emit_inst(c, OP_SET_LOCAL, (uint32_t)elem_slot);
-        // ★ OP_POP はしない！
 
     } else {
         // [ arg i: Integer, n: Type; ] ➜ 添字と要素 (スタック: +2)
@@ -642,7 +643,7 @@ void compile_each(Compiler* c, ASTNode* node)
     // 10. ループ巻き戻し
     emit_loop(c, loop_start);
 
-    // ★★★ 偽の世界線（exit_jump）からの脱出合流地点 ★★★
+    // 偽の世界線（exit_jump）からの脱出合流地点
     patch_jump(c, exit_jump);
     c->stack_depth++;        // 偽の世界線（条件値が 1 個乗っている状態）に合わせて補正！
     emit_inst(c, OP_POP, 0); // 条件値を pop

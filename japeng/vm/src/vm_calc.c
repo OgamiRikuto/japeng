@@ -209,7 +209,7 @@ int calc_compare(Value a, Value b)
         return 0;
     }
 
-    return 0;
+    return (a < b) ? -1 : 1;
 }
 
 // 文字列結合 (OP_CONCAT 用)

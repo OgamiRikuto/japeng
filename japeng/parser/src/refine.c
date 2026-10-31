@@ -180,7 +180,7 @@ ASTNode* fix_precedence(ASTNode* node)
             break;
 
         case AST_CLASS_DEF:
-            node->class_def.class = fix_precedence(node->class_def.class);
+            node->class_def.klass = fix_precedence(node->class_def.klass);
             node->class_def.super_class = fix_precedence(node->class_def.super_class);
             node->class_def.from_classes = fix_precedence(node->class_def.from_classes);
             node->class_def.members = fix_precedence(node->class_def.members);
@@ -208,6 +208,7 @@ ASTNode* fix_precedence(ASTNode* node)
             break;
 
         case AST_CONSTRUCT:
+            node->construct.class_node = fix_precedence(node->construct.class_node);
             node->construct.args = fix_precedence(node->construct.args);
             break;
 
@@ -324,6 +325,7 @@ ASTNode* fold_constants(ASTNode* node)
             break;
 
         case AST_CONSTRUCT:
+            node->construct.class_node = fold_constants(node->construct.class_node);
             node->construct.args = fold_constants(node->construct.args);
             break;
         default:
