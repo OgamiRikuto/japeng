@@ -183,6 +183,7 @@ ASTNode* fix_precedence(ASTNode* node)
             node->class_def.klass = fix_precedence(node->class_def.klass);
             node->class_def.super_class = fix_precedence(node->class_def.super_class);
             node->class_def.from_classes = fix_precedence(node->class_def.from_classes);
+            node->class_def.interfaces = fix_precedence(node->class_def.interfaces);
             node->class_def.members = fix_precedence(node->class_def.members);
             break;
 

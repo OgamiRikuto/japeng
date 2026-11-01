@@ -24,6 +24,7 @@ const char* op_kind[OP_MAX] = {
     [OP_SET_FIELD]    = "OP_SET_FIELD",
     [OP_SEND]          = "OP_SEND",
     [OP_INVOKE_VIRTUAL]= "OP_INVOKE_VIRTUAL",
+    [OP_IMPL_SEND]     = "OP_IMPL_SEND",
     [OP_SUPER_CALL]    = "OP_SUPER_CALL",
     [OP_CALL]          = "OP_CALL",
     [OP_POP]           = "OP_POP",
@@ -406,65 +407,139 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 break;
             }
             case OP_INVOKE_VIRTUAL: {
-            uint8_t argc = get_send_args(instruction);
-            uint16_t vtable_index = get_send_index(instruction);
-
-            // 1. スタックからレシーバを取得 (vm.h の peek を使用)
-            Value receiver = peek(vm, argc);
-
-            if (is_nil(receiver)) {
-                error_runtime(ERR_NULL_REFERENCE, "vtable");
-                return INTERPRET_RUNTIME_ERROR;
-            }
-
-            // 2. 実在する get_class_for_value でクラスを特定
-            ObjClass* klass = get_class_for_value(vm, receiver);
-
-            if (klass == NULL || vtable_index >= (uint16_t)klass->vtable_count) {
-                error_runtime(ERR_INVALID_VTABLE_ACCESS, vtable_index);
-                return INTERPRET_RUNTIME_ERROR;
-            }
-
-            // 3. vtable からスロットを直接参照
-            Value method = klass->vtable[vtable_index];
-
-            if (is_nil(method)) {
-                error_runtime(ERR_UNIMPLEMENTED_VIRTUAL_METHOD, vtable_index);
-                return INTERPRET_RUNTIME_ERROR;
-            }
-
-            // 4-A. ネイティブ関数の呼び出し
-            if (is_obj_type(method, OBJ_NATIVE)) {
-                ObjNative* native = (ObjNative*)as_obj(method);
-                if (!native->function(vm, argc)) {
+                uint8_t argc = get_send_args(instruction);
+                uint16_t vtable_index = get_send_index(instruction);
+    
+                // 1. スタックからレシーバを取得 (vm.h の peek を使用)
+                Value receiver = peek(vm, argc);
+    
+                if (is_nil(receiver)) {
+                    error_runtime(ERR_NULL_REFERENCE, "vtable");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                break;
+    
+                // 2. 実在する get_class_for_value でクラスを特定
+                ObjClass* klass = get_class_for_value(vm, receiver);
+    
+                if (klass == NULL || vtable_index >= (uint16_t)klass->vtable_count) {
+                    error_runtime(ERR_INVALID_VTABLE_ACCESS, vtable_index);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+    
+                // 3. vtable からスロットを直接参照
+                Value method = klass->vtable[vtable_index];
+    
+                if (is_nil(method)) {
+                    error_runtime(ERR_UNIMPLEMENTED_VIRTUAL_METHOD, vtable_index);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+    
+                // 4-A. ネイティブ関数の呼び出し
+                if (is_obj_type(method, OBJ_NATIVE)) {
+                    ObjNative* native = (ObjNative*)as_obj(method);
+                    if (!native->function(vm, argc)) {
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    break;
+                }
+    
+                // 4-B. JapEng 関数 (ObjFunction) の呼び出し
+                if (is_obj_type(method, OBJ_FUNCTION)) {
+                    ObjFunction* func = (ObjFunction*)as_obj(method);
+    
+                    if (argc != func->arity) {
+                        error_runtime(ERR_WRONG_ARG_COUNT, func->arity, argc);
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+    
+                    if (vm->frame_count >= FRAME_MAX) {
+                        error_runtime(ERR_STACK_OVERFLOW);
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+    
+                    // ★ 実行中フレームポインタを最新に更新
+                    frame = setup_call_frame(vm, func, NULL, argc);
+                    if (frame == NULL) return INTERPRET_RUNTIME_ERROR;
+                    break;
+                }
+    
+                error_runtime(ERR_NOT_CALLABLE);
+                return INTERPRET_RUNTIME_ERROR;
             }
+            case OP_IMPL_SEND: {
+                uint8_t  argc   = get_send_args(instruction);
+                uint16_t cs_idx = get_send_index(instruction);
 
-            // 4-B. JapEng 関数 (ObjFunction) の呼び出し
-            if (is_obj_type(method, OBJ_FUNCTION)) {
-                ObjFunction* func = (ObjFunction*)as_obj(method);
+                // 1. 定数プールからコールサイト構造体を取得
+                Value cs_val = frame->chunk->constants[cs_idx];
+                ObjCallSite* cs = (ObjCallSite*)as_obj(cs_val);
+                Symbol* target_iface_name = cs->interface_name;
+                uint16_t iface_method_idx = cs->method_index;
 
-                if (argc != func->arity) {
-                    error_runtime(ERR_WRONG_ARG_COUNT, func->arity, argc);
+                // 2. スタック上のレシーバを取得
+                Value receiver = peek(vm, argc);
+
+                if (is_nil(receiver)) {
+                    error_runtime(ERR_NULL_REFERENCE, target_iface_name->chars);
                     return INTERPRET_RUNTIME_ERROR;
                 }
 
-                if (vm->frame_count >= FRAME_MAX) {
-                    error_runtime(ERR_STACK_OVERFLOW);
+                ObjClass* klass = get_class_for_value(vm, receiver);
+                if (klass == NULL) {
+                    error_runtime(ERR_NOT_CALLABLE);
                     return INTERPRET_RUNTIME_ERROR;
                 }
 
-                // ★ 実行中フレームポインタを最新に更新
-                frame = setup_call_frame(vm, func, NULL, argc);
-                if (frame == NULL) return INTERPRET_RUNTIME_ERROR;
-                break;
-            }
+                // 3. レシーバの interface_maps から対象インターフェースを検索
+                uint16_t real_vtable_slot = 0xFFFF;
+                for (uint16_t i = 0; i < klass->interface_count; i++) {
+                    if (klass->interface_maps[i].interface_name == target_iface_name) {
+                        if (iface_method_idx < klass->interface_maps[i].method_count) {
+                            real_vtable_slot = klass->interface_maps[i].vtable_slots[iface_method_idx];
+                        }
+                        break;
+                    }
+                }
 
-            error_runtime(ERR_NOT_CALLABLE);
-            return INTERPRET_RUNTIME_ERROR;
-        }
+                if (real_vtable_slot == 0xFFFF || real_vtable_slot >= klass->vtable_count) {
+                    error_runtime(ERR_UNIMPLEMENTED_VIRTUAL_METHOD, real_vtable_slot);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                // 4. vtable からスロットを直接参照
+                Value method = klass->vtable[real_vtable_slot];
+
+                if (is_nil(method)) {
+                    error_runtime(ERR_UNIMPLEMENTED_VIRTUAL_METHOD, real_vtable_slot);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                // 5-A. ネイティブ関数の呼び出し
+                if (is_obj_type(method, OBJ_NATIVE)) {
+                    ObjNative* native = (ObjNative*)as_obj(method);
+                    if (!native->function(vm, argc)) {
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    break;
+                }
+
+                // 5-B. 関数 (ObjFunction) の呼び出し
+                if (is_obj_type(method, OBJ_FUNCTION)) {
+                    ObjFunction* func = (ObjFunction*)as_obj(method);
+
+                    if (argc != func->arity) {
+                        error_runtime(ERR_WRONG_ARG_COUNT, func->arity, argc);
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+
+                    frame = setup_call_frame(vm, func, NULL, argc);
+                    if (frame == NULL) return INTERPRET_RUNTIME_ERROR;
+                    break;
+                }
+
+                error_runtime(ERR_NOT_CALLABLE);
+                return INTERPRET_RUNTIME_ERROR;
+            }
             case OP_SUPER_CALL: {
                 uint8_t arg_count = get_send_args(instruction);
                 uint16_t fn_index = get_send_index(instruction);
@@ -1145,6 +1220,12 @@ static void print_instruction(CallFrame* frame, uint32_t instruction, uint32_t c
         case OP_LOOP:
             fprintf(stderr, "offset: -%u -> %04d\n", operand, current_ip + 1 - operand);
             break;
+        case OP_IMPL_SEND: {
+            uint8_t argc = get_send_args(instruction);
+            uint16_t cs_idx = get_send_index(instruction);
+            fprintf(stderr, "argc: %u, cs_idx: %u\n", argc, cs_idx);
+            break;
+        }
         case OP_POP:
         case OP_DUP:
         case OP_RETURN:

@@ -569,9 +569,8 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
             collect_args(node->send.args, args, &actual_argc, 16);
         }
 
-        // ★★★ 追加: 右辺が1式で、その型がすでに declared_type に代入可能な場合 ★★★
-        // (例: r: Regex is self parse_regex; / p: Point is Point(10, 20);)
-        // ➜ 新規インスタンス生成 (OP_NEW_INSTANCE) ではなく、右辺の評価結果をそのまま変数に格納！
+        // 右辺が1式で、その型がすでに declared_type に代入可能な場合
+        // 新規インスタンス生成 (OP_NEW_INSTANCE) ではなく、右辺の評価結果をそのまま変数に格納！
         if (actual_argc == 1) {
             TypeInfo* actual_type = compile_expression(c, args[0]);
             if (is_assignable(c, declared_type, actual_type)) {
@@ -579,10 +578,8 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                 emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
                 return declared_type;
             }
-            // 代入不可 (Char is "a" のようなコンストラクタ引数) なら、スタックを掃除して下の生成処理へ
             emit_inst(c, OP_POP, 0);
         }
-        // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
         // 1. クラスをロードしてインスタンス生成
         uint32_t class_sym_idx = add_constant(c->chunk, make_obj((Obj*)type_name));

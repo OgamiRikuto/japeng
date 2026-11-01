@@ -29,8 +29,10 @@ static Symbol* resolve_and_intern(const char* text) {
 %x IN_STR
 %%
 "class"	{ return CLASS; }
+"interface" { return INTERFACE; }
 "based"	{ return BASED; }
 "from"	{ return FROM; }
+"implements" { return IMPLEMENTS; }
 "is"	{ yylval.symbol = sym_is; return SP_IDENTIFIER; }
 "are"	{ yylval.symbol = sym_are; return SP_IDENTIFIER; }
 "self"	{ yylval.symbol = sym_self; return SELF; }

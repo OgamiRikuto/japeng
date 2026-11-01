@@ -20,6 +20,7 @@ typedef enum {
     OBJ_CLASS,
     OBJ_INSTANCE,
     OBJ_NATIVE,
+    OBJ_CALL_SITE,
     OBJ_MAX
 } ObjType;
 
@@ -32,21 +33,6 @@ typedef struct obj {
 } Obj;
 
 #include "symbol.h"
-// // 文字列オブジェクト(シンボル)
-// typedef struct objString {
-//     Obj header;
-//     uint32_t hash;
-//     int length;
-//     char chars[];
-// } ObjString;
-
-// // リストオブジェクト
-// typedef struct objList {
-//     Obj header;
-//     Value* elements;
-//     int size;
-//     int capacity;
-// } ObjList;
 
 typedef struct upvalueInfo {
     uint8_t index;
@@ -62,12 +48,11 @@ typedef struct objFunc {
     UpvalueInfo* upvalues;
 } ObjFunction;
 
-// typedef struct objClosure {
-//     Obj header;
-//     ObjFunction* function;
-//     int capture_count;
-//     Value captures[];
-// } ObjClosure;
+typedef struct {
+    Obj      header;
+    Symbol*  interface_name; // 呼び出し対象インターフェース名 (例: "Speak")
+    uint16_t method_index;   // インターフェース内でのメソッド番号 (0, 1, 2...)
+} ObjCallSite;
 
 static inline ObjType obj_type(Value value) {
     return (ObjType)(((Obj*)as_obj(value))->type);
@@ -86,8 +71,7 @@ static inline bool is_closure(Value value) {
 }
 
 ObjFunction* new_function(Chunk* chunk, uint8_t arity);
-// ObjClosure* new_closure(ObjFunction* function);
 Symbol* new_string(const char* chars, int length);
-// ObjList* new_list();
+ObjCallSite* new_call_site(Symbol* interface_name, uint16_t method_index);
 
 #endif

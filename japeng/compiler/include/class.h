@@ -41,6 +41,7 @@ typedef struct classDef {
     // クラスの情報
     Symbol* name;
     TypeInfo* type;
+    bool is_interface;
 
     // 継承元の情報
     struct classDef* superclass;
@@ -50,6 +51,10 @@ typedef struct classDef {
     struct classDef** delegates;
     TypeInfo** delegate_types;
     int delegate_count;
+
+    struct classDef** interfaces;
+    TypeInfo** interface_types;
+    int interface_count;
 
     // メソッド
     Table* methods;

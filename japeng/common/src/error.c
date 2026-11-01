@@ -230,6 +230,26 @@ static const ErrorMessage error_table[ERR_COUNT] = {
         .en = "Cannot assign value of type '%1$s' to element of type '%2$s'.",
         .ja = "型 '%2$s' の要素に型 '%1$s' の値を代入することはできません。"
     },
+    [ERR_INTERFACE_CANNOT_HAVE_FIELDS] = {
+        .en = "Interface '%1$s' cannot define field '%2$s'.",
+        .ja = "インターフェース '%1$s' でフィールド '%2$s' を定義することはできません。"
+    },
+    [ERR_INTERFACE_METHOD_CANNOT_HAVE_BODY] = {
+        .en = "Method '%1$s' in interface '%2$s' cannot have an implementation body.",
+        .ja = "インターフェース '%2$s' のメソッド '%1$s' に実装本体を持たせることはできません。"
+    },
+    [ERR_INTERFACE_NOT_IMPLEMENTED] = {
+        .en = "Class '%1$s' does not implement method '%2$s' required by interface '%3$s'.",
+        .ja = "クラス '%1$s' はインターフェース '%3$s' で要求されるメソッド '%2$s' を実装していません。"
+    },
+    [ERR_INTERFACE_METHOD_CONFLICT] = {
+        .en = "Conflicting signatures for method '%1$s' required by interface '%2$s' in class '%3$s'.",
+        .ja = "クラス '%3$s' において、インターフェース '%2$s' が要求するメソッド '%1$s' のシグネチャが一致しません。"
+    },
+    [ERR_CANNOT_INSTANTIATE_INTERFACE] = {
+        .en = "Cannot instantiate interface '%s'.",
+        .ja = "インターフェース '%s' を直接インスタンス化することはできません。"
+    },
 
     // VM 実行時エラー
     [ERR_UNDEFINED_GLOBAL] = {

@@ -8,6 +8,12 @@
 #include "object.h"
 #include "native.h"
 
+typedef struct {
+    Symbol*  interface_name; // 対象インターフェース名 (例: "Speak")
+    uint16_t method_count;   // そのインターフェースのメソッド数
+    uint16_t* vtable_slots;  // インターフェースの 0, 1, 2... 番が自クラスの何番スロットか
+} InterfaceMap;
+
 typedef struct ObjClass {
     Obj              header;
     Symbol*          name;
@@ -23,6 +29,10 @@ typedef struct ObjClass {
     uint16_t         vtable_capacity;
     Value*           vtable;
     Symbol**         vtable_names;
+
+    bool             is_interface;
+    uint16_t         interface_count;
+    InterfaceMap*    interface_maps;
 } ObjClass;
 
 // クラス生成 (数値指定なし)

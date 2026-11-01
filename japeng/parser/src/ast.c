@@ -98,12 +98,14 @@ ASTNode* create_vardecl_node(ASTNode* identifier, ASTNode* type)
     return node;
 }
 
-ASTNode* create_classdef_node(ASTNode* class, ASTNode* super, ASTNode* from, ASTNode* members)
+ASTNode* create_classdef_node(bool is_interface, ASTNode* class, ASTNode* super, ASTNode* from, ASTNode* interfaces, ASTNode* members)
 {
     ASTNode* node = alloc_node(AST_CLASS_DEF);
+    node->class_def.is_interface = is_interface;
     node->class_def.klass = class;
     node->class_def.super_class = super;
     node->class_def.from_classes = from;
+    node->class_def.interfaces = interfaces;
     node->class_def.members = members;
     return node;
 }

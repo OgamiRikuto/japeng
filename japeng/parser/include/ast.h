@@ -90,9 +90,11 @@ struct ASTNode {
         } var_decl;
         
         struct {
+            bool is_interface;
             ASTNode* klass;
             ASTNode* super_class;
             ASTNode* from_classes;
+            ASTNode* interfaces;
             ASTNode* members;
         } class_def;
         
@@ -128,7 +130,7 @@ ASTNode* create_identifier_node(Symbol*);
 ASTNode* create_send_node(ASTNode*, ASTNode*, ASTNode*);
 ASTNode* create_block_node(ASTNode*, ASTNode*, ASTNode*);
 ASTNode* create_vardecl_node(ASTNode*, ASTNode*);
-ASTNode* create_classdef_node(ASTNode*, ASTNode*, ASTNode*, ASTNode*);
+ASTNode* create_classdef_node(bool , ASTNode*, ASTNode*, ASTNode*, ASTNode*, ASTNode*);
 ASTNode* create_fielddecl_node(bool, ASTNode*, ASTNode*, ASTNode*, ASTNode*);
 ASTNode* create_return_node(ASTNode*);
 ASTNode* create_break_node();

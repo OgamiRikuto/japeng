@@ -134,6 +134,13 @@ static void write_value(FILE* fp, Value val, BcdStringPool* pool) {
             uint8_t tag = BCD_VAL_FUNCTION;
             fwrite(&tag, sizeof(uint8_t), 1, fp);
             write_function(fp, (ObjFunction*)obj, pool);
+        } else if (obj->type == OBJ_CALL_SITE) {
+            uint8_t tag = BCD_VAL_CALL_SITE;
+            ObjCallSite* cs = (ObjCallSite*)obj;
+            uint32_t id = pool_add(pool, cs->interface_name);
+            fwrite(&tag, sizeof(uint8_t), 1, fp);
+            fwrite(&id, sizeof(uint32_t), 1, fp);
+            fwrite(&cs->method_index, sizeof(uint16_t), 1, fp);
         } else {
             uint8_t tag = BCD_VAL_NIL;
             fwrite(&tag, sizeof(uint8_t), 1, fp);
@@ -241,6 +248,9 @@ bool write_class_bcd(const char* base_dir, ClassDef* klass, const char* source_f
     for (int i = 0; i < klass->delegate_count; i++) {
         if (klass->delegate_types) pool_collect_type_names(&pool, klass->delegate_types[i]);
     }
+    for (int i = 0; i < klass->interface_count; i++) {
+        if (klass->interfaces[i]) pool_add(&pool, klass->interfaces[i]->name);
+    }
 
     // 1. 文字列プール
     write_string_pool(fp, &pool);
@@ -286,11 +296,37 @@ bool write_class_bcd(const char* base_dir, ClassDef* klass, const char* source_f
             fwrite(&kind, sizeof(uint8_t), 1, fp);
         }
     }
+    uint8_t is_iface = klass->is_interface ? 1 : 0;
+    fwrite(&is_iface, sizeof(uint8_t), 1, fp);
+
+    uint16_t iface_cnt = (uint16_t)klass->interface_count;
+    fwrite(&iface_cnt, sizeof(uint16_t), 1, fp);
+
+    for (int i = 0; i < klass->interface_count; i++) {
+        ClassDef* iface = klass->interfaces[i];
+        uint32_t iface_name_id = pool_add(&pool, iface->name);
+        fwrite(&iface_name_id, sizeof(uint32_t), 1, fp);
+
+        // インターフェース側のメソッド数
+        uint16_t m_cnt = (uint16_t)iface->vtable_count;
+        fwrite(&m_cnt, sizeof(uint16_t), 1, fp);
+
+        // インターフェースのメソッド 0, 1, 2... が自クラスの何番スロットか
+        for (int m = 0; m < iface->vtable_count; m++) {
+            Symbol* m_name = iface->vtable_names[m];
+            int real_slot = get_vtable_index(klass, m_name);
+            uint16_t s = (real_slot != -1) ? (uint16_t)real_slot : 0xFFFF;
+            fwrite(&s, sizeof(uint16_t), 1, fp);
+        }
+    }
 
     // =========================================================================
     // ★★★ 3. 型メタデータセクション ★★★
     // =========================================================================
     long type_section_start = ftell(fp);
+
+    uint8_t is_iface_flag = klass->is_interface ? 1 : 0;
+    fwrite(&is_iface_flag, sizeof(uint8_t), 1, fp);
 
     write_type_info(fp, klass->type, &pool);
     write_type_info(fp, klass->superclass_type, &pool);
@@ -299,6 +335,11 @@ bool write_class_bcd(const char* base_dir, ClassDef* klass, const char* source_f
     fwrite(&del_count, sizeof(uint16_t), 1, fp);
     for (int i = 0; i < klass->delegate_count; i++) {
         write_type_info(fp, klass->delegate_types ? klass->delegate_types[i] : NULL, &pool);
+    }
+    // インターフェース型リスト
+    fwrite(&iface_cnt, sizeof(uint16_t), 1, fp);
+    for (int i = 0; i < klass->interface_count; i++) {
+        write_type_info(fp, klass->interface_types ? klass->interface_types[i] : NULL, &pool);
     }
 
     // フィールド型リスト (個数 + 各型)
@@ -361,6 +402,7 @@ bool write_script_bje(const char* base_dir, const char* script_name, Chunk* chun
         if (is_obj_type(cv, OBJ_STRING)) pool_add(&pool, (Symbol*)as_obj(cv));
         if (is_obj_type(cv, OBJ_CLASS)) pool_add(&pool, ((ClassDef*)as_obj(cv))->name);
         if (is_obj_type(cv, OBJ_FUNCTION)) collect_function_strings((ObjFunction*)as_obj(cv), &pool);
+        if (is_obj_type(cv, OBJ_CALL_SITE)) pool_add(&pool, ((ObjCallSite*)as_obj(cv))->interface_name);
     }
 
     write_string_pool(fp, &pool);

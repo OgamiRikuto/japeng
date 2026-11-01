@@ -35,6 +35,7 @@ typedef enum {
     BCD_VAL_BIGINT,
     BCD_VAL_DECIMAL,
     BCD_VAL_FUNCTION,
+    BCD_VAL_CALL_SITE,
 } BcdValTag;
 
 const char* get_japeng_lib_dir(void);

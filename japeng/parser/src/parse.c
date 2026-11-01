@@ -198,7 +198,11 @@ void print_ast(ASTNode* node, int depth)
             break;
             
         case AST_CLASS_DEF:
-            printf("[CLASS_DEF]\n");
+            if (node->class_def.is_interface) {
+                printf("[INTERFACE_DEF]\n");
+            } else {
+                printf("[CLASS_DEF]\n");
+            }
             print_ast(node->class_def.klass, depth + 1);
             if (node->class_def.super_class) {
                 for (int i = 0; i <= depth; i++) printf("  | ");
@@ -209,6 +213,11 @@ void print_ast(ASTNode* node, int depth)
                 for (int i = 0; i <= depth; i++) printf("  | ");
                 printf(" [FROM_CLASSES]\n");
                 print_ast(node->class_def.from_classes, depth + 2);
+            }
+            if (node->class_def.interfaces) {
+                for (int i = 0; i <= depth; i++) printf("  | ");
+                printf(" [IMPLEMENTS]\n");
+                print_ast(node->class_def.interfaces, depth + 2);
             }
             print_ast(node->class_def.members, depth + 1);
             break;

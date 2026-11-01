@@ -222,7 +222,8 @@ ClassDef* new_class(Symbol* name, TypeInfo* type,
     ClassDef* klass = (ClassDef*)malloc(sizeof(ClassDef));
     klass->header.type = OBJ_CLASS;
     klass->name = name;
-    klass-> type = type;
+    klass->type = type;
+    klass->is_interface = false;
     klass->superclass = superclass;
     klass->superclass_type = superclass_type;
 
@@ -238,6 +239,10 @@ ClassDef* new_class(Symbol* name, TypeInfo* type,
         klass->delegates = NULL;
         klass->delegate_types = NULL;
     }
+
+    klass->interface_count = 0;
+    klass->interfaces = NULL;
+    klass->interface_types = NULL;
 
     klass->methods = new_table(8);
     klass->method_from = new_table(8);
@@ -277,6 +282,10 @@ void free_class(ClassDef* klass)
     if (klass->delegates != NULL) {
         free(klass->delegates);
         free(klass->delegate_types);
+    }
+    if (klass->interfaces != NULL) {
+        free(klass->interfaces);
+        free(klass->interface_types);
     }
     if (klass->field_infos != NULL) {
         free(klass->field_infos);

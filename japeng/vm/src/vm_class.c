@@ -92,5 +92,13 @@ void vm_free_class(ObjClass* klass)
     if (klass->field_names != NULL)    free(klass->field_names);
     if (klass->vtable != NULL)         free(klass->vtable);
     if (klass->vtable_names != NULL)   free(klass->vtable_names);
+    if (klass->interface_maps != NULL) {
+        for (uint16_t i = 0; i < klass->interface_count; i++) {
+            if (klass->interface_maps[i].vtable_slots != NULL) {
+                free(klass->interface_maps[i].vtable_slots);
+            }
+        }
+        free(klass->interface_maps);
+    }
     free(klass);
 }

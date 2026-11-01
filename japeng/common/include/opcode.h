@@ -4,10 +4,10 @@
 #include <stdint.h>
 
 typedef enum {
-    OP_CONSTANT,        // 0
-    OP_GET_LOCAL,       // 1
-    OP_SET_LOCAL,       // 2
-    OP_GET_GLOBAL,      // 3
+    OP_CONSTANT,
+    OP_GET_LOCAL,
+    OP_SET_LOCAL,
+    OP_GET_GLOBAL,
     OP_SET_GLOBAL,
     OP_GET_FIELD,
     OP_SET_FIELD,
@@ -16,6 +16,7 @@ typedef enum {
     OP_LOOP,
     OP_SEND,
     OP_INVOKE_VIRTUAL,
+    OP_IMPL_SEND,
     OP_SUPER_CALL,
     OP_CALL,
     OP_POP,

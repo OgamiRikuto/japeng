@@ -121,6 +121,14 @@ Value vm_read_value(FILE* fp, Symbol** pool, VM* vm)
             ObjFunction* fn = read_function(fp, pool, vm);
             return make_obj((Obj*)fn);
         }
+        case BCD_VAL_CALL_SITE: {
+            uint32_t id;
+            uint16_t method_idx;
+            fread(&id, sizeof(uint32_t), 1, fp);
+            fread(&method_idx, sizeof(uint16_t), 1, fp);
+            ObjCallSite* cs = new_call_site(pool[id], method_idx);
+            return make_obj((Obj*)cs);
+        }
         default: return make_nil();
     }
 }
@@ -227,6 +235,31 @@ ObjClass* vm_load_class_bcd(VM* vm, const char* bcd_path)
         if (kind == 1) {
             ObjFunction* fn = read_function(fp, pool, vm);
             klass->vtable[i] = make_obj((Obj*)fn);
+        }
+    }
+
+    uint8_t is_iface = 0;
+    fread(&is_iface, sizeof(uint8_t), 1, fp);
+    klass->is_interface = (is_iface != 0);
+
+    uint16_t iface_cnt = 0;
+    fread(&iface_cnt, sizeof(uint16_t), 1, fp);
+    klass->interface_count = iface_cnt;
+    klass->interface_maps = NULL;
+
+    if (iface_cnt > 0) {
+        klass->interface_maps = (InterfaceMap*)malloc(sizeof(InterfaceMap) * iface_cnt);
+        for (uint16_t i = 0; i < iface_cnt; i++) {
+            uint32_t iface_name_id;
+            fread(&iface_name_id, sizeof(uint32_t), 1, fp);
+            klass->interface_maps[i].interface_name = pool[iface_name_id];
+
+            uint16_t m_cnt;
+            fread(&m_cnt, sizeof(uint16_t), 1, fp);
+            klass->interface_maps[i].method_count = m_cnt;
+
+            klass->interface_maps[i].vtable_slots = (uint16_t*)malloc(sizeof(uint16_t) * m_cnt);
+            fread(klass->interface_maps[i].vtable_slots, sizeof(uint16_t), m_cnt, fp);
         }
     }
 

@@ -5,7 +5,9 @@
 static const KeywordDef keyword_table[] = {
     // 既存の lex トークンに対応するもの
     { "class ",   "クラス" },
-    //{ "class ",   "型定義" }, // 表記揺れもここに追加するだけで対応可能
+    { "interface ", "インターフェース" },
+    { "implements ", "実装" },
+    //{ "class ",   "型定義" },
     { "based ",   "基は"   },
     { "from ",    "委譲元は" },
     { "super ",    "親"     },   

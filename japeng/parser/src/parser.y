@@ -37,8 +37,10 @@ Location current_ast_loc = {0};
     ASTNode* node;
 }
 %token CLASS        "class"
+%token INTERFACE    "interface"
 %token BASED        "based"
 %token FROM         "from"
+%token IMPLEMENTS   "implements"
 %token ARG          "arg"
 %token RET          "ret"
 %token RETURN       "return"
@@ -78,6 +80,8 @@ Location current_ast_loc = {0};
 %type <node> expression primary block args arg_decl_list arg_decl rets expression_list_opt expression_list
 %type <node> control_chain control_clause_list control_clause
 %type <node> multi_identifier type_item type_list_comma type_list_comma_opt
+%type <node> interface_list implements_clause_opt
+%type <node> interface_def interface_decl
 
 %token STR_OPEN         
 %token STR_CLOSE        
@@ -107,8 +111,12 @@ program :
 
 class_def_list :
     class_def
+    { $$ = $1; } 
+    | interface_def
     { $$ = $1; }
     | class_def_list class_def
+    { $$ = create_stmt_node($1, $2); }
+    | class_def_list interface_def
     { $$ = create_stmt_node($1, $2); }
     ;
 
@@ -248,12 +256,14 @@ control_clause :
 
 
 class_decl : 
-    name_def 
-    { $$ = create_classdef_node($1, NULL, NULL, NULL); }
-    | name_def BASED class 
-    { $$ = create_classdef_node($1, $3, NULL, NULL); }
-    | name_def FROM class_list
-    { $$ = create_classdef_node($1, NULL, $3, NULL); }
+    name_def implements_clause_opt
+    { $$ = create_classdef_node(false, $1, NULL, NULL, $2, NULL); }
+    | name_def BASED class implements_clause_opt
+    { $$ = create_classdef_node(false, $1, $3, NULL, $4, NULL); }
+    | name_def FROM class_list implements_clause_opt
+    { $$ = create_classdef_node(false, $1, NULL, $3, $4, NULL); }
+    | name_def BASED class FROM class_list implements_clause_opt
+    { $$ = create_classdef_node(false, $1, $3, $5, $6, NULL); }
     ;
 
 name_def : 
@@ -322,6 +332,41 @@ class_list :
     class { $$ = $1; }
     | class_list COMMA class
     { $$ = create_stmt_node($1, $3); }
+    ;
+
+implements_clause_opt :
+    /* empty */
+    { $$ = NULL; }
+    | IMPLEMENTS interface_list
+    { $$ = $2; }
+    ;
+
+interface_list :
+    class
+    { $$ = $1; }
+    | interface_list COMMA class
+    { $$ = create_stmt_node($1, $3); }
+    ;
+
+interface_def :
+    interface_decl COLON member_list
+    {
+        $1->class_def.members = $3;
+        $$ = $1;
+    }
+    ;
+
+interface_decl :
+    INTERFACE class
+    {
+        // 継承なし単独インターフェース
+        $$ = create_classdef_node(true, $2, NULL, NULL, NULL, NULL);
+    }
+    | INTERFACE class BASED class_list
+    {
+        // 継承・多重合成 (super_class スロットに class_list を渡す)
+        $$ = create_classdef_node(true, $2, $4, NULL, NULL, NULL);
+    }
     ;
 
 member_list : 

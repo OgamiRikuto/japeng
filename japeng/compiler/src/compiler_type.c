@@ -186,9 +186,24 @@ bool is_assignable(Compiler* c, TypeInfo* target, TypeInfo* source) {
 
     // 5. 継承関係チェック
     ClassDef* src_class = resolve_class(c, source->name);
-    while (src_class != NULL && src_class->superclass != NULL) {
-        if (src_class->superclass->name == target->name) return true;
-        src_class = src_class->superclass;
+    ClassDef* curr = src_class;
+    while (curr != NULL && curr->superclass != NULL) {
+        if (curr->superclass->name == target->name) return true;
+        curr = curr->superclass;
+    }
+
+    // 6. インターフェース実装チェック
+    ClassDef* tgt_class = resolve_class(c, target->name);
+    if (tgt_class != NULL && tgt_class->is_interface) {
+        curr = src_class;
+        while (curr != NULL) {
+            for (int i = 0; i < curr->interface_count; i++) {
+                if (curr->interfaces[i] != NULL && curr->interfaces[i]->name == target->name) {
+                    return true;
+                }
+            }
+            curr = curr->superclass;
+        }
     }
 
     return false;
@@ -483,15 +498,35 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
         emit_constant(c, concrete_fn_type->default_values[i]);
     }
 
-    // ★ 7. 最大引数数 (max_argc) で OP_SEND 発行！
-    int vtable_idx = get_vtable_index(klass, msg);
-    if (vtable_idx != -1) {
-        uint32_t call_op = ((uint32_t)max_argc << 16) | ((uint16_t)vtable_idx & 0xFFFF);
-        emit_inst(c, OP_INVOKE_VIRTUAL, call_op);
-        // write_chunk(c->chunk, make_virtual_call_inst((uint8_t)max_argc, (uint16_t)vtable_idx));
+    // 7. 最大引数数 (max_argc) で OP_SEND 発行！
+    ClassDef* rec_class = resolve_class(c, rec_type->name);
+
+    if (rec_class != NULL && rec_class->is_interface) {
+        // 1. インターフェース内でのメソッド番号を取得 (0, 1, 2...)
+        int iface_method_idx = get_vtable_index(rec_class, msg);
+        if (iface_method_idx == -1) {
+            error_compile(send_node, ERR_UNDEFINED_MESSAGE, msg->chars, rec_class->name->chars);
+            return new_type_info(sym_Error, 0);
+        }
+
+        // 2. コールサイト構造体を定数プールに登録
+        ObjCallSite* cs = new_call_site(rec_class->name, (uint16_t)iface_method_idx);
+        uint32_t cs_const_idx = add_constant(c->chunk, make_obj((Obj*)cs));
+
+        // 3. OP_IMPL_SEND 命令を発行 (argc と 定数インデックス)
+        uint32_t operand = make_call_operand(actual_argc, cs_const_idx);
+        emit_inst(c, OP_IMPL_SEND, operand);
+
     } else {
-        error_compile(send_node, ERR_UNDEFINED_MESSAGE, msg->chars, rec_type->name->chars);
-        return new_type_info(sym_Error, 0);
+        // 通常のクラス呼び出し (既存の処理)
+        int vtable_idx = get_vtable_index(rec_class, msg);
+        if (vtable_idx == -1) {
+            error_compile(send_node, ERR_UNDEFINED_MESSAGE, msg->chars, rec_class ? rec_class->name->chars : "unknown");
+            return new_type_info(sym_Error, 0);
+        }
+
+        uint32_t operand = make_call_operand(actual_argc, vtable_idx);
+        emit_inst(c, OP_INVOKE_VIRTUAL, operand);
     }
 
     // 8. 戻り値型を返す（param_count 以降が戻り値型）
@@ -975,6 +1010,10 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
             ClassDef* klass = resolve_class(c, class_name);
             if (klass == NULL) {
                 error_compile(node, ERR_CLASS_NOT_REGISTERED, class_name ? class_name->chars : "unknown");
+                return new_type_info(sym_Error, 0);
+            }
+            if (klass->is_interface) {
+                error_compile(node, ERR_CANNOT_INSTANTIATE_INTERFACE, class_name->chars);
                 return new_type_info(sym_Error, 0);
             }
 

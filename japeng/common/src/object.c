@@ -12,15 +12,6 @@ ObjFunction* new_function(Chunk* chunk, uint8_t arity)
     return fn;
 }
 
-// ObjClosure* new_closure(ObjFunction* function)
-// {
-//     ObjClosure* closure = (ObjClosure*)malloc(sizeof(ObjClosure));
-//     closure->header.type = OBJ_CLOSURE;
-//     closure->function = function;
-//     closure->capture_count = 0;
-//     return closure;
-// }
-
 Symbol* new_string(const char* chars, int length)
 {
     Symbol* string = (Symbol*)malloc(sizeof(Symbol) + length + 1);
@@ -32,12 +23,11 @@ Symbol* new_string(const char* chars, int length)
     return string;
 }
 
-// ObjList* new_list()
-// {
-//     ObjList* list = (ObjList*)malloc(sizeof(ObjList));
-//     list->header.type = OBJ_LIST;
-//     list->size = 0;
-//     list->capacity = 8;
-//     list->elements = (Value*)malloc(sizeof(Value) * list->capacity);
-//     return list;
-// }
+ObjCallSite* new_call_site(Symbol* interface_name, uint16_t method_index) 
+{
+    ObjCallSite* cs = (ObjCallSite*)malloc(sizeof(ObjCallSite));
+    cs->header.type = OBJ_CALL_SITE;
+    cs->interface_name = interface_name;
+    cs->method_index = method_index;
+    return cs;
+}

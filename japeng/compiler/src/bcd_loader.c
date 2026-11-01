@@ -83,6 +83,9 @@ ClassDef* load_class_type_from_bcd(Compiler* c, const char* bcd_path)
     // ★ 型メタデータセクションへジャンプ！
     fseek(fp, header.type_meta_offset, SEEK_SET);
 
+    uint8_t is_iface = 0;
+    fread(&is_iface, sizeof(uint8_t), 1, fp);
+
     // ① クラス型
     TypeInfo* class_type = read_type_info(fp, pool);
     Symbol* class_name = class_type ? class_type->name : NULL;
@@ -93,8 +96,9 @@ ClassDef* load_class_type_from_bcd(Compiler* c, const char* bcd_path)
     ClassDef* superclass = super_type ? resolve_class(c, super_type->name) : NULL;
 
     ClassDef* klass = new_class(class_name, class_type, superclass, super_type, 0);
+    klass->is_interface = (is_iface != 0);
 
-    // ★ 修正 3: 委譲型リストの完全復元
+    // 委譲型リストの完全復元
     uint16_t del_count = 0;
     fread(&del_count, sizeof(uint16_t), 1, fp);
     for (int i = 0; i < del_count; i++) {
@@ -102,7 +106,23 @@ ClassDef* load_class_type_from_bcd(Compiler* c, const char* bcd_path)
         (void)dt; // 必要に応じて klass->delegate_types にセット
     }
 
-    // ★ 修正 3: フィールド型リストの完全復元
+    // インターフェースの型復元
+    uint16_t iface_cnt;
+    fread(&iface_cnt, sizeof(uint16_t), 1, fp);
+    klass->interface_count = iface_cnt;
+    if (iface_cnt > 0) {
+        klass->interfaces = (ClassDef**)malloc(sizeof(ClassDef*) * iface_cnt);
+        klass->interface_types = (TypeInfo**)malloc(sizeof(TypeInfo*) * iface_cnt);
+        for (int i = 0; i < iface_cnt; i++) {
+            klass->interface_types[i] = read_type_info(fp, pool);
+            // インターフェースの ClassDef 実体は名前から引いて接続
+            klass->interfaces[i] = klass->interface_types[i] 
+                ? resolve_class(c, klass->interface_types[i]->name) 
+                : NULL;
+        }
+    }
+
+    // フィールド型リストの完全復元
     uint16_t f_count = 0;
     fread(&f_count, sizeof(uint16_t), 1, fp);
     for (int i = 0; i < f_count; i++) {
@@ -110,7 +130,7 @@ ClassDef* load_class_type_from_bcd(Compiler* c, const char* bcd_path)
         (void)ft;
     }
 
-    // ★ 修正 4: vtable スロット順にメソッドシグネチャを復元 (スロット番号ズレゼロ)
+    // vtable スロット順にメソッドシグネチャを復元 (スロット番号ズレゼロ)
     uint16_t vt_count = 0;
     fread(&vt_count, sizeof(uint16_t), 1, fp);
     for (int i = 0; i < vt_count; i++) {

@@ -164,6 +164,41 @@ static void collect_delegate_classes(Compiler* c, ASTNode* node, ClassDef** list
     }
 }
 
+// ヘルパー: AST_STMT 連結ツリーからインターフェース数をカウント
+static int count_interfaces(ASTNode* node) {
+    if (node == NULL) return 0;
+    if (node->kind == AST_STMT) {
+        return count_interfaces(node->stmt.left) + count_interfaces(node->stmt.right);
+    }
+    return 1;
+}
+
+// ヘルパー: インターフェースの ClassDef を収集
+static void collect_interfaces(Compiler* c, ASTNode* node, ClassDef** list, int* idx) {
+    if (node == NULL) return;
+    if (node->kind == AST_STMT) {
+        collect_interfaces(c, node->stmt.left, list, idx);
+        collect_interfaces(c, node->stmt.right, list, idx);
+        return;
+    }
+    Symbol* name = get_class_name_from_node(node);
+    ClassDef* iface = resolve_class(c, name);
+    if (iface != NULL) {
+        list[(*idx)++] = iface;
+    }
+}
+
+// ヘルパー: インターフェースの TypeInfo を収集
+static void collect_interface_types(ASTNode* node, TypeInfo** list, int* idx) {
+    if (node == NULL) return;
+    if (node->kind == AST_STMT) {
+        collect_interface_types(node->stmt.left, list, idx);
+        collect_interface_types(node->stmt.right, list, idx);
+        return;
+    }
+    list[(*idx)++] = build_type_info(node);
+}
+
 static void collect_delegate_types(ASTNode* node, TypeInfo** list, int* idx)
 {
     if (node == NULL) return;
@@ -194,6 +229,35 @@ static void fill_type_args(ASTNode* node, TypeInfo** args, int* index)
         return;
     }
     args[(*index)++] = build_type_info(node);
+}
+
+// ヘルパー: 重複を避けてインターフェースを追加
+static void add_interface_if_missing(ClassDef* target_class, ClassDef* iface, TypeInfo* iface_type) {
+    if (iface == NULL) return;
+    for (int i = 0; i < target_class->interface_count; i++) {
+        if (target_class->interfaces[i] == iface) return;
+    }
+    target_class->interfaces = (ClassDef**)realloc(
+        target_class->interfaces, sizeof(ClassDef*) * (target_class->interface_count + 1));
+    target_class->interface_types = (TypeInfo**)realloc(
+        target_class->interface_types, sizeof(TypeInfo*) * (target_class->interface_count + 1));
+
+    target_class->interfaces[target_class->interface_count] = iface;
+    target_class->interface_types[target_class->interface_count] = iface_type;
+    target_class->interface_count++;
+}
+
+// ヘルパー: 親インターフェースを再帰的に収集
+static void collect_all_ancestor_interfaces(ClassDef* target_class, ClassDef* iface) {
+    if (iface == NULL) return;
+    for (int i = 0; i < iface->interface_count; i++) {
+        ClassDef* parent_iface = iface->interfaces[i];
+        TypeInfo* parent_type = iface->interface_types ? iface->interface_types[i] : NULL;
+        if (parent_iface != NULL) {
+            add_interface_if_missing(target_class, parent_iface, parent_type);
+            collect_all_ancestor_interfaces(target_class, parent_iface);
+        }
+    }
 }
 
 TypeInfo* build_type_info(ASTNode* node)
@@ -437,6 +501,10 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
                             member_type->name == sym_Function);
         
         if (is_function) {
+            if (klass->is_interface) {
+                add_or_override_vtable_slot(klass, member_name, make_nil());
+                return;
+            }
             if (node->field_decl.default_data != NULL &&
                 node->field_decl.default_data->kind == AST_SEND) {
                 ASTNode* send_node = node->field_decl.default_data;
@@ -625,6 +693,7 @@ void declare_class_skeleton(Compiler* c, ASTNode* node)
     TypeInfo* class_type = build_type_info(class_node);
 
     ClassDef* klass = new_class(class_name, class_type, NULL, NULL, 0);
+    klass->is_interface = node->class_def.is_interface;
     
     if (c->defined_class == NULL) {
         c->defined_class = new_table(16);
@@ -649,6 +718,27 @@ void resolve_class_skeleton_relations(Compiler* c, ASTNode* node)
     ClassDef* klass = resolve_class(c, class_name);
     if (klass == NULL) return;
 
+    if (klass->is_interface) {
+        klass->superclass = NULL;
+        klass->superclass_type = NULL;
+
+        if (node->class_def.super_class != NULL) {
+            int iface_count = count_interfaces(node->class_def.super_class);
+            if (iface_count > 0) {
+                klass->interfaces = (ClassDef**)malloc(sizeof(ClassDef*) * iface_count);
+                klass->interface_types = (TypeInfo**)malloc(sizeof(TypeInfo*) * iface_count);
+
+                int idx = 0;
+                collect_interfaces(c, node->class_def.super_class, klass->interfaces, &idx);
+                klass->interface_count = idx;
+
+                int type_idx = 0;
+                collect_interface_types(node->class_def.super_class, klass->interface_types, &type_idx);
+            }
+        }
+        return;
+    }
+
     // 1. スーパークラス (based) の接続
     Symbol* super_name = NULL;
     if (node->class_def.super_class != NULL) {
@@ -663,7 +753,7 @@ void resolve_class_skeleton_relations(Compiler* c, ASTNode* node)
         klass->superclass_type = new_type_info(sym_Object, 0);
     }
 
-    // 2. ★ 委譲元 (from) の接続（ここに追加！）
+    // 2. ★ 委譲元 (from) の接続
     int delegate_count = count_classes(node->class_def.from_classes);
     if (delegate_count > 0) {
         klass->delegates = (ClassDef**)malloc(sizeof(ClassDef*) * delegate_count);
@@ -675,6 +765,22 @@ void resolve_class_skeleton_relations(Compiler* c, ASTNode* node)
 
         int type_idx = 0;
         collect_delegate_types(node->class_def.from_classes, klass->delegate_types, &type_idx);
+    }
+
+    // 3. インターフェース
+    if (node->class_def.interfaces != NULL) {
+        int iface_count = count_interfaces(node->class_def.interfaces);
+        if (iface_count > 0) {
+            klass->interfaces = (ClassDef**)malloc(sizeof(ClassDef*) * iface_count);
+            klass->interface_types = (TypeInfo**)malloc(sizeof(TypeInfo*) * iface_count);
+
+            int idx = 0;
+            collect_interfaces(c, node->class_def.interfaces, klass->interfaces, &idx);
+            klass->interface_count = idx;
+
+            int type_idx = 0;
+            collect_interface_types(node->class_def.interfaces, klass->interface_types, &type_idx);
+        }
     }
 }
 
@@ -709,10 +815,27 @@ static void declare_class_member_signatures(Compiler* c, ClassDef* klass, ASTNod
     if (node->kind == AST_FIELD_DECL) {
         Symbol* member_name = node->field_decl.identifier->identifier.name;
         TypeInfo*  member_type = build_type_info(node->field_decl.type);
+
+        if (klass->is_interface) {
+            // インターフェースに Function 以外のフィールドがあれば即エラー！
+            if (member_type == NULL || member_type->name != sym_Function) {
+                error_compile(node, ERR_INTERFACE_CANNOT_HAVE_FIELDS, klass->name->chars, member_name->chars);
+                return;
+            }
+            add_method_type(klass, member_name, member_type);
+            add_or_override_vtable_slot(klass, member_name, make_nil());
+            return;
+        }
+
         if (member_type && member_type->name == sym_Function) {
             if (node->field_decl.default_data && node->field_decl.default_data->kind == AST_SEND) {
                 ASTNode* send_node = node->field_decl.default_data;
                 if (send_node->send.args && send_node->send.args->kind == AST_BLOCK) {
+                    if (klass->is_interface && send_node->send.args->block.body != NULL) {
+                    // インターフェースメソッドに中身があれば即エラー！
+                        error_compile(node, ERR_INTERFACE_METHOD_CANNOT_HAVE_BODY, member_name->chars, klass->name->chars);
+                        return;
+                    }
                     add_method_type(klass, member_name, build_function_type_from_block(c, send_node->send.args));
                 }
             }
@@ -777,6 +900,47 @@ void compile_class_body(Compiler* c, ASTNode* node)
         }
     }
 
+    for (int i = 0; i < klass->interface_count; i++) {
+        ClassDef* iface = klass->interfaces[i];
+        if (iface == NULL) continue;
+        if (iface->state != CLASS_STATE_COMPILED) {
+            ASTNode* iface_ast = find_class_ast(iface->name);
+            if (iface_ast != NULL) {
+                compile_class_body(c, iface_ast);
+            }
+        }
+    }
+
+    if (klass->superclass != NULL && klass->superclass->interface_count > 0) {
+        ClassDef* super = klass->superclass;
+        for (int i = 0; i < super->interface_count; i++) {
+            ClassDef* parent_iface = super->interfaces[i];
+            TypeInfo* parent_iface_type = super->interface_types ? super->interface_types[i] : NULL;
+            if (parent_iface == NULL) continue;
+
+            // 子クラス側で明示的に二重指定されていないかチェック
+            bool already_has = false;
+            for (int j = 0; j < klass->interface_count; j++) {
+                if (klass->interfaces[j] == parent_iface) {
+                    already_has = true;
+                    break;
+                }
+            }
+
+            // 未登録なら子クラスのインターフェース配列へ追加
+            if (!already_has) {
+                klass->interfaces = (ClassDef**)realloc(
+                    klass->interfaces, sizeof(ClassDef*) * (klass->interface_count + 1));
+                klass->interface_types = (TypeInfo**)realloc(
+                    klass->interface_types, sizeof(TypeInfo*) * (klass->interface_count + 1));
+
+                klass->interfaces[klass->interface_count] = parent_iface;
+                klass->interface_types[klass->interface_count] = parent_iface_type;
+                klass->interface_count++;
+            }
+        }
+    }
+
     // 親クラスのフィールドを継承
     if (klass->superclass != NULL) {
         for (int i = 0; i < klass->superclass->field_count; i++) {
@@ -784,9 +948,11 @@ void compile_class_body(Compiler* c, ASTNode* node)
         }
     }
 
-    init_class_vtable_from_super(klass);
+    if (!klass->is_interface) {
+        init_class_vtable_from_super(klass);
+    }
     
-    // 追加: 委譲元クラス（delegates）用の隠しフィールドを自動追加
+    // 委譲元クラス（delegates）用の隠しフィールドを自動追加
     for (int i = 0; i < klass->delegate_count; i++) {
         ClassDef* del_klass = klass->delegates[i];
         if (del_klass == NULL) continue;
@@ -820,14 +986,13 @@ void compile_class_body(Compiler* c, ASTNode* node)
     c->current_class = klass;
 
     // ★★★ 1. 先にクラス内の全メソッドシグネチャを先行登録！ ★★★
-    // （これで下にある parse_regex を上から呼んでもエラーにならなくなる！）
     declare_class_member_signatures(c, klass, node->class_def.members);
 
     // ★★★ 2. その後、各メソッドの本体をコンパイル ★★★
     compile_class_members(c, klass, node->class_def.members);
 
-    // 追加: init / destroy が未定義ならデフォルトを自動合成
-    if (!is_builtin(klass->name)) {
+    // init / destroy が未定義ならデフォルトを自動合成
+    if (!is_builtin(klass->name) && !klass->is_interface) {
         Value dummy;
         // 1. init の自動補完
         if (!find_method(klass, sym_init, &dummy)) {
@@ -851,8 +1016,60 @@ void compile_class_body(Compiler* c, ASTNode* node)
         }
     }
 
-
     c->current_class = enclosing_class;
+
+    if (klass->is_interface && klass->interface_count > 0) {
+        for (int i = 0; i < klass->interface_count; i++) {
+            ClassDef* parent_iface = klass->interfaces[i];
+            if (parent_iface == NULL) continue;
+
+            for (int m = 0; m < parent_iface->vtable_count; m++) {
+                Symbol* mname = parent_iface->vtable_names[m];
+                TypeInfo* mtype = find_method_type(parent_iface, mname);
+                if (find_method_type(klass, mname) == NULL) {
+                    add_method_type(klass, mname, mtype);
+                    add_or_override_vtable_slot(klass, mname, make_nil());
+                }
+            }
+        }
+    }
+
+    // クラスの場合: implements されたインターフェースの親たちを推移的に全展開！
+    if (!klass->is_interface && klass->interface_count > 0) {
+        int initial_count = klass->interface_count;
+        for (int i = 0; i < initial_count; i++) {
+            collect_all_ancestor_interfaces(klass, klass->interfaces[i]);
+        }
+    }
+
+    if (!klass->is_interface && klass->interface_count > 0) {
+        for (int i = 0; i < klass->interface_count; i++) {
+            ClassDef* iface = klass->interfaces[i];
+            if (iface == NULL || iface->method_types == NULL) continue;
+
+            for (int k = 0; k < iface->method_types->capacity; k++) {
+                HashEntry* entry = &iface->method_types->entries[k];
+                if (entry->status != OCCUPIED || entry->key == NULL) continue;
+
+                Symbol* req_method_name = entry->key;
+                TypeInfo* req_type = (TypeInfo*)as_obj(entry->value);
+
+                // 1. クラス側にそのメソッドが実装されているか？
+                TypeInfo* actual_type = find_method_type(klass, req_method_name);
+                if (actual_type == NULL) {
+                    error_compile(node, ERR_INTERFACE_NOT_IMPLEMENTED,
+                                  klass->name->chars, req_method_name->chars, iface->name->chars);
+                    continue;
+                }
+
+                // 2. シグネチャが合致しているか？ (is_assignable で照合)
+                if (!is_assignable(c, req_type, actual_type)) {
+                    error_compile(node, ERR_INTERFACE_METHOD_CONFLICT,
+                                  req_method_name->chars, iface->name->chars, klass->name->chars);
+                }
+            }
+        }
+    }
 
     klass->state = CLASS_STATE_COMPILED;
     fprintf(stderr, "\033[1;36m[COMPILED CLASS]\033[0m %s (file: %s)\n", 

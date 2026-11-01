@@ -75,6 +75,11 @@ typedef enum {
     ERR_RETURN_VALUE_IN_VOID_FUNC,      // Void 関数なのに値を返した return
     ERR_CASE_TYPE_MISMATCH,             // switch-case の条件式の型不一致
     ERR_INDEX_ASSIGN_TYPE_MISMATCH,     // 添字代入の要素型不一致
+    ERR_INTERFACE_CANNOT_HAVE_FIELDS,       // インターフェースにフィールド宣言
+    ERR_INTERFACE_METHOD_CANNOT_HAVE_BODY,  // インターフェースメソッドに実装ブロック
+    ERR_INTERFACE_NOT_IMPLEMENTED,          // インターフェースメソッド未実装
+    ERR_INTERFACE_METHOD_CONFLICT,          // インターフェースメソッドのシグネチャ競合
+    ERR_CANNOT_INSTANTIATE_INTERFACE,       // インターフェースの new 禁止
 
     // --- 実行時エラー ---
     ERR_UNDEFINED_GLOBAL,
