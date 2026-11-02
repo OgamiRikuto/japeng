@@ -14,7 +14,7 @@ TARGET_PARSE = jpen-parse       # 既存: パーサー単体用
 TARGET_COMPILER = jpenc
 TARGET_RUN   = jpen   # 新規: AST -> Compiler -> VM 統合実行用
 
-BUILTIN_CD      = lib/builtins.cd
+BUILTIN_CD      = lib/
 
 # インストール先設定
 PREFIX  ?= /usr/local
@@ -104,7 +104,7 @@ run: $(TARGET_RUN)
 
 builtins: $(TARGET_COMPILER) $(BUILTIN_CD)
 	@echo "Compiling built-in classes to .bcd..."
-	@./$(TARGET_COMPILER) $(BUILTIN_CD)
+	@./$(TARGET_COMPILER) -d lib/
 
 install: all
 	@echo "Installing JapEng to $(PREFIX)..."
