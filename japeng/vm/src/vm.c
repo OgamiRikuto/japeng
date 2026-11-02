@@ -83,6 +83,17 @@ const char* op_kind[OP_MAX] = {
 };
 #endif
 
+uint32_t utf8_char_count(const char* s, uint32_t byte_len) 
+{
+    uint32_t count = 0;
+    uint32_t i = 0;
+    while (i < byte_len) {
+        i += utf8_char_len((unsigned char)s[i]);
+        count++;
+    }
+    return count;
+}
+
 static void reset_stack(VM* vm)
 {
     vm->stack_top = vm->stack;
@@ -941,13 +952,31 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                     // 2. String の添字アクセス (1文字抽出)
                     else if (obj->type == OBJ_STRING) {
                         ObjString* string = (ObjString*)obj;
-                        if (idx < 0 || (uint32_t)idx >= string->length) {
-                            error_runtime(ERR_INDEX_OUT_OF_BOUNDS, idx, string->length);
+                        const char* s = string_chars(string);
+                        uint32_t byte_len = string->length;
+
+                        if (idx < 0) {
+                            error_runtime(ERR_INDEX_OUT_OF_BOUNDS, idx, 0);
                             return INTERPRET_RUNTIME_ERROR;
                         }
-                        const char* s = string_chars(string);
-                        char ch[2] = { s[idx], '\0' };
-                        ObjString* c = gc_new_string(&vm->heap, ch, 1);
+
+                        // idx 番目の文字の先頭バイト位置まで走査
+                        uint32_t current_char = 0;
+                        uint32_t byte_pos = 0;
+                        while (byte_pos < byte_len && current_char < (uint32_t)idx) {
+                            byte_pos += utf8_char_len((unsigned char)s[byte_pos]);
+                            current_char++;
+                        }
+
+                        if (byte_pos >= byte_len || current_char != (uint32_t)idx) {
+                            uint32_t total_chars = utf8_char_count(s, byte_len);
+                            error_runtime(ERR_INDEX_OUT_OF_BOUNDS, idx, total_chars);
+                            return INTERPRET_RUNTIME_ERROR;
+                        }
+
+                        // 該当文字のバイト長を判定して丸ごと切り出す
+                        int clen = utf8_char_len((unsigned char)s[byte_pos]);
+                        ObjString* c = gc_new_string(&vm->heap, s + byte_pos, clen);
                         push(vm, make_obj((Obj*)c));
                         break;
                     }

@@ -5,6 +5,7 @@
 #include "gc_heap.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 
 static bool native_string_init(VM* vm, uint8_t arg_count)
 {
@@ -23,14 +24,30 @@ static bool native_string_get(VM* vm, uint8_t arg_count)
     ObjString* string = (ObjString*)as_obj(receiver);
     int index = (int)as_int(idx_val);
 
-    if (index < 0 || (uint32_t)index >= string->length) {
-        error_runtime(ERR_INDEX_OUT_OF_BOUNDS, index, string->length);
+    if (index < 0) {
+        error_runtime(ERR_INDEX_OUT_OF_BOUNDS, index, 0);
         return false;
     }
 
     const char* s = string_chars(string);
-    char ch[2] = { s[index], '\0' };
-    ObjString* c = gc_new_string(&vm->heap, ch, 1);
+    uint32_t byte_len = string->length;
+
+    uint32_t current_char = 0;
+    uint32_t byte_pos = 0;
+
+    while (byte_pos < byte_len && current_char < (uint32_t)index) {
+        byte_pos += utf8_char_len((unsigned char)s[byte_pos]);
+        current_char++;
+    }
+
+    if (byte_pos >= byte_len || current_char != (uint32_t)index) {
+        uint32_t total_chars = utf8_char_count(s, byte_len);
+        error_runtime(ERR_INDEX_OUT_OF_BOUNDS, index, total_chars);
+        return false;
+    }
+
+    int clen = utf8_char_len((unsigned char)s[byte_pos]);
+    ObjString* c = gc_new_string(&vm->heap, s + byte_pos, clen);
 
     push(vm, make_obj((Obj*)c));
     return true;
@@ -40,8 +57,10 @@ static bool native_string_length(VM* vm, uint8_t arg_count)
 {
     Value receiver = pop(vm);
     ObjString* string = (ObjString*)as_obj(receiver);
+    const char* s = string_chars(string);
 
-    push(vm, make_int(string->length));
+    uint32_t char_count = utf8_char_count(s, string->length);
+    push(vm, make_int((int32_t)char_count));
     return true;
 }
 
