@@ -109,9 +109,11 @@ ClassDef* resolve_class(Compiler* c, Symbol* name)
     // 4. ディスク探索
     char cd_path[1024];
     bool found_source = false;
-
-    snprintf(cd_path, sizeof(cd_path), "%s/%s.cd", base_dir, name->chars);
+    const char* target_dir = base_dir;
     struct stat st;
+
+    // A: プロジェクトディレクトリ内を探索
+    snprintf(cd_path, sizeof(cd_path), "%s/%s.cd", base_dir, name->chars);
     if (stat(cd_path, &st) == 0) {
         found_source = true;
     } else {
@@ -121,6 +123,22 @@ ClassDef* resolve_class(Compiler* c, Symbol* name)
         }
     }
 
+    // B: プロジェクト内に無ければ標準ライブラリディレクトリ (lib/) を探索
+    if (!found_source && stdlib_dir != NULL) {
+        snprintf(cd_path, sizeof(cd_path), "%s/%s.cd", stdlib_dir, name->chars);
+        if (stat(cd_path, &st) == 0) {
+            found_source = true;
+            target_dir = stdlib_dir;
+        } else {
+            snprintf(cd_path, sizeof(cd_path), "%s/%s.jcd", stdlib_dir, name->chars);
+            if (stat(cd_path, &st) == 0) {
+                found_source = true;
+                target_dir = stdlib_dir;
+            }
+        }
+    }
+
+    // ソースが見つかった場合、パースして対象ディレクトリの .je_cache/ に書き出す
     if (found_source && parse_file(cd_path)) {
         ASTNode* ast = find_class_ast(name);
         if (ast) {
@@ -131,7 +149,7 @@ ClassDef* resolve_class(Compiler* c, Symbol* name)
 
             const char* filename_only = strrchr(cd_path, '/');
             filename_only = filename_only ? filename_only + 1 : cd_path;
-            write_class_bcd(base_dir, resolve_class(c, name), filename_only);
+            write_class_bcd(target_dir, resolve_class(c, name), filename_only);
 
             return resolve_class(c, name);
         }

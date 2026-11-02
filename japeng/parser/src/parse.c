@@ -11,6 +11,8 @@
 #include "error.h"
 #include "preprocessor.h"
 
+#define OUTPUT_PREPROCESS 0
+
 typedef struct yy_buffer_state *YY_BUFFER_STATE;
 extern YY_BUFFER_STATE yy_scan_string(const char *str);
 extern void yy_delete_buffer(YY_BUFFER_STATE buffer);
@@ -110,7 +112,9 @@ bool parse_file(const char* full_path)
         free(raw_code);
 
         char* clean_code = preprocess(formatted_code);
+#if OUTPUT_PREPROCESS
         fprintf(stderr, "=== PREPROCESS OUTPUT ===\n%s\n=========================\n", clean_code);
+#endif
         YY_BUFFER_STATE bp = yy_scan_string(clean_code);
 
         if (yyparse() == 0 && current_parsed_ast != NULL && syntax_error_count == 0) {

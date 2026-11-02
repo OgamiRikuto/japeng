@@ -828,11 +828,15 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                 return rec_type; // Boolean
             }
 
-            // ★ 算術二項演算 (+, -, *, /)
+            // ★ 算術二項演算 (+, -, *, /, %)
             if (is_calc_operator(msg)) {
                 TypeInfo* lhs = NULL;
                 TypeInfo* rhs = NULL;
                 compile_binary_operands(c, node, &lhs, &rhs);
+
+                if (lhs == NULL || rhs == NULL || lhs->name == sym_Error || rhs->name == sym_Error) {
+                    return new_type_info(sym_Error, 0);
+                }
 
                 // 文字列の結合 (+)
                 if (is_string_type(lhs->name)) {
@@ -848,52 +852,84 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                     return new_type_info(sym_Error, 0);
                 }
 
-                // ★ 同型チェック (Float変数やInteger変数はここで確実に弾かれる！)
-                if (!type_equals(lhs, rhs)) {
-                    error_compile(node, ERR_BINARY_OP_TYPE_MISMATCH, msg->chars, lhs->name->chars, rhs->name->chars);
+                // 組み込み数値型 (Integer, Float, Decimal) の同型判定とインライン命令発行
+                if (is_integer_type(lhs->name) || is_float_type(lhs->name) || is_decimal_type(lhs->name)) {
+                    if (!type_equals(lhs, rhs)) {
+                        error_compile(node, ERR_BINARY_OP_TYPE_MISMATCH, msg->chars, lhs->name->chars, rhs->name->chars);
+                        return new_type_info(sym_Error, 0);
+                    }
+
+                    // 1-A. 整数同士
+                    if (is_integer_type(lhs->name)) {
+                        if (msg == sym_plus)       emit_inst(c, OP_ADD_INT, 0);
+                        else if (msg == sym_minus) emit_inst(c, OP_SUB_INT, 0);
+                        else if (msg == sym_multi) emit_inst(c, OP_MUL_INT, 0);
+                        else if (msg == sym_div)   emit_inst(c, OP_DIV_INT, 0);
+                        else if (msg == sym_rem)   emit_inst(c, OP_REM_INT, 0);
+                        return lhs;
+                    }
+
+                    // 1-B. Float 同士
+                    if (is_float_type(lhs->name)) {
+                        if (msg == sym_rem) {
+                            error_compile(node, ERR_NON_NUMERIC_OPERATION, msg->chars, lhs->name->chars);
+                            return new_type_info(sym_Error, 0);
+                        }
+                        if (msg == sym_plus)       emit_inst(c, OP_ADD_FLOAT, 0);
+                        else if (msg == sym_minus) emit_inst(c, OP_SUB_FLOAT, 0);
+                        else if (msg == sym_multi) emit_inst(c, OP_MUL_FLOAT, 0);
+                        else if (msg == sym_div)   emit_inst(c, OP_DIV_FLOAT, 0);
+                        return lhs;
+                    }
+
+                    // 1-C. Decimal 同士
+                    if (is_decimal_type(lhs->name)) {
+                        if (msg == sym_rem) {
+                            error_compile(node, ERR_NON_NUMERIC_OPERATION, msg->chars, lhs->name->chars);
+                            return new_type_info(sym_Error, 0);
+                        }
+                        if (msg == sym_plus)       emit_inst(c, OP_ADD_DEC, 0);
+                        else if (msg == sym_minus) emit_inst(c, OP_SUB_DEC, 0);
+                        else if (msg == sym_multi) emit_inst(c, OP_MUL_DEC, 0);
+                        else if (msg == sym_div)   emit_inst(c, OP_DIV_DEC, 0);
+                        return lhs;
+                    }
+                }
+
+                // ★ 自作クラス (Fraction 等) の演算子オーバーロード
+                ClassDef* klass = resolve_class(c, lhs->name);
+                if (klass == NULL) {
+                    error_compile(node, ERR_CLASS_NOT_REGISTERED, lhs->name->chars);
                     return new_type_info(sym_Error, 0);
                 }
 
-                // 1-A. 整数同士
-                if (is_integer_type(lhs->name)) {
-                    if (msg == sym_plus)       emit_inst(c, OP_ADD_INT, 0);
-                    else if (msg == sym_minus) emit_inst(c, OP_SUB_INT, 0);
-                    else if (msg == sym_multi) emit_inst(c, OP_MUL_INT, 0);
-                    else if (msg == sym_div)   emit_inst(c, OP_DIV_INT, 0);
-                    else if (msg == sym_rem)   emit_inst(c, OP_REM_INT, 0);
-                    return lhs;
+                TypeInfo* method_type = find_method_type(klass, msg);
+                if (method_type == NULL) {
+                    error_compile(node, ERR_UNDEFINED_MESSAGE, msg->chars, klass->name->chars);
+                    return new_type_info(sym_Error, 0);
                 }
 
-                // 1-B. Float 同士
-                if (is_float_type(lhs->name)) {
-                    if (msg == sym_rem) {
-                        error_compile(node, ERR_NON_NUMERIC_OPERATION, msg->chars, lhs->name->chars);
-                        return new_type_info(sym_Error, 0);
-                    }
-                    if (msg == sym_plus)       emit_inst(c, OP_ADD_FLOAT, 0);
-                    else if (msg == sym_minus) emit_inst(c, OP_SUB_FLOAT, 0);
-                    else if (msg == sym_multi) emit_inst(c, OP_MUL_FLOAT, 0);
-                    else if (msg == sym_div)   emit_inst(c, OP_DIV_FLOAT, 0);
-                    return lhs;
+                // 型チェック (rhs が引数型と一致するか)
+                if (method_type->type_arg_count < 2 || !is_assignable(c, method_type->type_args[0], rhs)) {
+                    error_compile(node, ERR_ARG_TYPE_MISMATCH, 1,
+                                  type_to_string(method_type->type_args[0]),
+                                  type_to_string(rhs));
+                    return new_type_info(sym_Error, 0);
                 }
 
-                // 1-C. Decimal 同士
-                if (is_decimal_type(lhs->name)) {
-                    if (msg == sym_plus)       emit_inst(c, OP_ADD_DEC, 0);
-                    else if (msg == sym_minus) emit_inst(c, OP_SUB_DEC, 0);
-                    else if (msg == sym_multi) emit_inst(c, OP_MUL_DEC, 0);
-                    else if (msg == sym_div)   emit_inst(c, OP_DIV_DEC, 0);
-                    else if (msg == sym_rem) {
-                        error_compile(node, ERR_NON_NUMERIC_OPERATION, msg->chars, lhs->name->chars);
-                        return new_type_info(sym_Error, 0);
-                    }
-                    return lhs;
+                // vtable インデックスを取得して、argc: 1 で直接呼び出し命令を発行！
+                int vtable_idx = get_vtable_index(klass, msg);
+                if (vtable_idx == -1) {
+                    error_compile(node, ERR_UNDEFINED_CLASS_METHOD, klass->name->chars, msg->chars);
+                    return new_type_info(sym_Error, 0);
                 }
+                emit_inst(c, OP_INVOKE_VIRTUAL, make_call_operand(1, vtable_idx));
 
-                return resolve_method_call_type(c, node, lhs);
+                // 戻り値型を返却
+                return method_type->type_args[1];
             }
 
-            // ★ 比較二項演算 (==, !=, <, >)
+            // ★ 比較二項演算 (==, !=, <, >, <=, >=)
             if (is_compare_operator(msg)) {
                 TypeInfo* lhs = NULL;
                 TypeInfo* rhs = NULL;
@@ -908,7 +944,6 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
 
                 if (is_equality && has_null) {
                     TypeInfo* non_null = (lhs->name == sym_Null) ? rhs : lhs;
-                    // 生の数値型や Boolean と null の比較は弾く
                     if (is_integer_type(non_null->name) ||
                         is_float_type(non_null->name) ||
                         is_decimal_type(non_null->name) ||
@@ -917,32 +952,31 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                         return new_type_info(sym_Error, 0);
                     }
 
-                    // オブジェクト/ポインタ同士の比較命令を発行
                     if (msg == sym_equal)  emit_inst(c, OP_EQUAL, 0);
                     if (msg == sym_nequal) emit_inst(c, OP_NEQUAL, 0);
                     return new_type_info(sym_Boolean, 0);
                 }
 
+                // 組み込み基本型 (Integer, Float, Decimal, String) の同型判定
+                if (is_integer_type(lhs->name) || is_float_type(lhs->name) ||
+                    is_decimal_type(lhs->name) || is_string_type(lhs->name)) {
+                    if (!type_equals(lhs, rhs)) {
+                        error_compile(node, ERR_BINARY_OP_TYPE_MISMATCH, msg->chars, lhs->name->chars, rhs->name->chars);
+                        return new_type_info(sym_Error, 0);
+                    }
 
-                // 同型チェック (暗黙の異型比較を弾く)
-                if (!type_equals(lhs, rhs)) {
-                    error_compile(node, ERR_BINARY_OP_TYPE_MISMATCH, msg->chars, lhs->name->chars, rhs->name->chars);
-                    return new_type_info(sym_Error, 0);
-                }
+                    // 1. 整数型同士
+                    if (is_integer_type(lhs->name)) {
+                        if (msg == sym_equal)       emit_inst(c, OP_EQUAL_INT, 0);
+                        else if (msg == sym_nequal) emit_inst(c, OP_NEQUAL_INT, 0);
+                        else if (msg == sym_less)   emit_inst(c, OP_LESS_INT, 0);
+                        else if (msg == sym_gt)     emit_inst(c, OP_GREAT_INT, 0);
+                        else if (msg == sym_nless)  emit_inst(c, OP_NLESS_INT, 0);
+                        else if (msg == sym_ngt)    emit_inst(c, OP_NGREAT_INT, 0);
+                        return new_type_info(sym_Boolean, 0);
+                    }
 
-                // 1. 整数型同士
-                if (is_integer_type(lhs->name)) {
-                    if (msg == sym_equal)       emit_inst(c, OP_EQUAL_INT, 0);
-                    else if (msg == sym_nequal) emit_inst(c, OP_NEQUAL_INT, 0);
-                    else if (msg == sym_less)   emit_inst(c, OP_LESS_INT, 0);
-                    else if (msg == sym_gt)     emit_inst(c, OP_GREAT_INT, 0);
-                    else if (msg == sym_nless)  emit_inst(c, OP_NLESS_INT, 0);
-                    else if (msg == sym_ngt)    emit_inst(c, OP_NGREAT_INT, 0);
-                    return new_type_info(sym_Boolean, 0);
-                }
-
-                // 2. Float / Decimal / String
-                if (is_float_type(lhs->name) || is_decimal_type(lhs->name) || is_string_type(lhs->name)) {
+                    // 2. Float / Decimal / String
                     if (msg == sym_equal)       emit_inst(c, OP_EQUAL, 0);
                     else if (msg == sym_nequal) emit_inst(c, OP_NEQUAL, 0);
                     else if (msg == sym_less)   emit_inst(c, OP_LESS, 0);
@@ -952,7 +986,36 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                     return new_type_info(sym_Boolean, 0);
                 }
 
-                return resolve_method_call_type(c, node, lhs);
+                // ★ 自作クラスの比較演算子オーバーロード
+                ClassDef* klass = resolve_class(c, lhs->name);
+                if (klass == NULL) {
+                    error_compile(node, ERR_CLASS_NOT_REGISTERED, lhs->name->chars);
+                    return new_type_info(sym_Error, 0);
+                }
+
+                TypeInfo* method_type = find_method_type(klass, msg);
+                if (method_type == NULL) {
+                    error_compile(node, ERR_UNDEFINED_MESSAGE, msg->chars, klass->name->chars);
+                    return new_type_info(sym_Error, 0);
+                }
+
+                // 型チェック (rhs が引数型と一致するか)
+                if (method_type->type_arg_count < 2 || !is_assignable(c, method_type->type_args[0], rhs)) {
+                    error_compile(node, ERR_ARG_TYPE_MISMATCH, 1,
+                                  type_to_string(method_type->type_args[0]),
+                                  type_to_string(rhs));
+                    return new_type_info(sym_Error, 0);
+                }
+
+                // vtable インデックスを取得して、argc: 1 で直接呼び出し命令を発行！
+                int vtable_idx = get_vtable_index(klass, msg);
+                if (vtable_idx == -1) {
+                    error_compile(node, ERR_UNDEFINED_CLASS_METHOD, klass->name->chars, msg->chars);
+                    return new_type_info(sym_Error, 0);
+                }
+                emit_inst(c, OP_INVOKE_VIRTUAL, make_call_operand(1, vtable_idx));
+
+                return method_type->type_args[1];
             }
 
             if (msg == sym_is || msg == sym_are) {
