@@ -445,6 +445,17 @@ static bool print_previous_line_missing_semicolon(const char* filename, int curr
             while (end_col > 0 && (buf[end_col - 1] == ' ' || buf[end_col - 1] == '\t')) {
                 end_col--;
             }
+
+            // 直前の行がすでに ';' や '}' や ']' や ':' で終わっているなら、
+            // 直前行のセミコロン抜けではないため補正を発動させない！
+            if (end_col > 0) {
+                char last_char = buf[end_col - 1];
+                if (last_char == ';' || last_char == '{' || last_char == '}' || 
+                    last_char == '[' || last_char == ']' || last_char == ':') {
+                    return false; // 現在の行のエラー表示に任せる
+                }
+            }
+
             int caret_col = end_col + 1;
 
             const char* label = (current_lang == LANG_JA) ? "構文エラー" : "syntax error";

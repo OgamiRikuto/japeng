@@ -63,6 +63,7 @@ Location current_ast_loc = {0};
 %token <symbol> IDENTIFIER      "identifier"
 %token <symbol> CLASS_NAME      "class name"
 %token <symbol> SP_IDENTIFIER   "operator"
+%token <symbol> ASSIGN_IDENTIFIER "assign_operator"
 %token <symbol> STRING          "string"
 %token <symbol> FRACTION        "fraction"
 %token <literal> INTEGER        "integer"
@@ -73,7 +74,7 @@ Location current_ast_loc = {0};
 %token <literal> FALSE_LITERAL  "false"
 %token <literal> NULL_LITERAL   "null"
 
-%type <node> program statement statement_list class_def class_def_list message
+%type <node> program statement statement_list class_def class_def_list message assignment
 %type <node> member member_list receiver return_stmt
 %type <node> class_decl name_def class type_list class_list field_decl
 %type <node> identifier_decl statement_list_opt
@@ -92,7 +93,7 @@ Location current_ast_loc = {0};
 %type <node> interpolated_string string_parts
 
 %nonassoc PREC_EXPR
-%left IDENTIFIER SP_IDENTIFIER
+%left IDENTIFIER SP_IDENTIFIER ASSIGN_IDENTIFIER
 %left COMMA
 %left DOT
 %right PREC_UNARY
@@ -140,19 +141,22 @@ statement_list_opt :
 
 
 statement : 
-    message SEMICOLON
+    /*message SEMICOLON*/
+    expression SEMICOLON
+    { $$ = $1; }
+    | assignment SEMICOLON
     { $$ = $1; }
     | multi_identifier COLON class SEMICOLON
     {
         $$ = create_vardecl_node($1, $3);
     }
-    | multi_identifier COLON class SP_IDENTIFIER expression_list SEMICOLON
+    | multi_identifier COLON class ASSIGN_IDENTIFIER expression_list SEMICOLON
     {
         ASTNode* decl = create_vardecl_node($1, $3);
         ASTNode* msg = create_identifier_node($4);
         $$ = create_send_node(decl, msg, $5);
     }
-    | multi_identifier SP_IDENTIFIER expression_list SEMICOLON
+    | multi_identifier ASSIGN_IDENTIFIER expression_list SEMICOLON
     {
         ASTNode* msg = create_identifier_node($2);
         $$ = create_send_node($1, msg, $3);
@@ -177,22 +181,45 @@ class_def :
     }
     ;
 
+assignment : 
+    receiver ASSIGN_IDENTIFIER expression_list 
+    {
+        ASTNode* msg = create_identifier_node($2);
+        $$ = create_send_node($1, msg, $3);
+    }
+    ;
+
 message : 
     receiver IDENTIFIER 
     {
         ASTNode* msg = create_identifier_node($2);
         $$ = create_send_node($1, msg, NULL);
     }
-    | receiver IDENTIFIER expression_list 
+    | receiver IDENTIFIER L_PAR expression_list R_PAR
+    {
+        ASTNode* msg = create_identifier_node($2);
+        $$ = create_send_node($1, msg, $4);
+    }
+    | receiver IDENTIFIER block
     {
         ASTNode* msg = create_identifier_node($2);
         $$ = create_send_node($1, msg, $3);
     }
-    | receiver SP_IDENTIFIER expression_list 
-    {
-        ASTNode* msg = create_identifier_node($2);
-        $$ = create_send_node($1, msg, $3);
-    }
+    //| receiver SP_IDENTIFIER expression 
+    //{
+    //    ASTNode* msg = create_identifier_node($2);
+    //    $$ = create_send_node($1, msg, $3);
+    //}
+    //| message SP_IDENTIFIER expression
+    //{
+    //    ASTNode* msg = create_identifier_node($2);
+    //    $$ = create_send_node($1, msg, $3);
+    //}
+    //| receiver ASSIGN_IDENTIFIER expression_list 
+    //{
+    //    ASTNode* msg = create_identifier_node($2);
+    //    $$ = create_send_node($1, msg, $3);
+    //}
     | IDENTIFIER L_PAR expression_list_opt R_PAR
     {
         ASTNode* self_node = create_identifier_node(intern_cstr("self"));
@@ -206,12 +233,12 @@ message :
         ASTNode* msg = create_identifier_node($3);
         $$ = create_send_node($1, msg, NULL);
     }
-    | message DOT IDENTIFIER expression_list
+    | message DOT IDENTIFIER L_PAR expression_list R_PAR
     {
         ASTNode* msg = create_identifier_node($3);
-        $$ = create_send_node($1, msg, $4);
+        $$ = create_send_node($1, msg, $5);
     }
-    | message DOT SP_IDENTIFIER expression_list
+    | message DOT SP_IDENTIFIER expression
     {
         ASTNode* msg = create_identifier_node($3);
         $$ = create_send_node($1, msg, $4);
@@ -413,6 +440,35 @@ member :
             $$ = $2;
         }
     }
+    | assignment SEMICOLON
+    { $$ = $1; }
+    | STATIC assignment SEMICOLON
+    {
+        if($2->kind == AST_FIELD_DECL) {
+            $2->field_decl.is_static = true;
+        }else if ($2->kind == AST_SEND && $2->send.receiver && $2->send.receiver->kind == AST_VAR_DECL) {
+            $2->send.receiver->var_decl.is_static = true;
+        }
+        $$ = $2;
+    }
+    | assignment FROM CLASS_NAME SEMICOLON
+    {
+        if ($1->kind == AST_SEND && $1->send.receiver && $1->send.receiver->kind == AST_VAR_DECL) {
+            ASTNode* from_node = create_identifier_node($3);
+            $$ = create_fielddecl_node(false, $1->send.receiver->var_decl.identifier, $1->send.receiver->var_decl.type, from_node, $1);
+        } else {
+            $$ = $1;
+        }
+    }
+    | STATIC assignment FROM CLASS_NAME SEMICOLON
+    {
+        if ($2->kind == AST_SEND && $2->send.receiver && $2->send.receiver->kind == AST_VAR_DECL) {
+            ASTNode* from_node = create_identifier_node($4);
+            $$ = create_fielddecl_node(true, $2->send.receiver->var_decl.identifier, $2->send.receiver->var_decl.type, from_node, $2);
+        } else {
+            $$ = $2;
+        }
+    }
     ;
 
 field_decl : 
@@ -449,6 +505,11 @@ multi_identifier :
 expression : 
     primary     { $$ = $1; }
     | message %prec PREC_EXPR  { $$ = $1; }
+    | expression SP_IDENTIFIER expression
+    {
+        ASTNode* msg = create_identifier_node($2);
+        $$ = create_send_node($1, msg, $3);
+    }
     ;
 
 primary : 
@@ -584,7 +645,7 @@ arg_decl :
     { $$ = create_vardecl_node(create_identifier_node($1), $3); }
     | SP_IDENTIFIER COLON class
     { $$ = create_vardecl_node(create_identifier_node($1), $3); }
-    | IDENTIFIER COLON class SP_IDENTIFIER expression
+    | IDENTIFIER COLON class ASSIGN_IDENTIFIER expression
     {
         if ($4 != sym_is) {
             yyerror("expected 'is' for default parameter value.");

@@ -33,8 +33,8 @@ static Symbol* resolve_and_intern(const char* text) {
 "based"	{ return BASED; }
 "from"	{ return FROM; }
 "implements" { return IMPLEMENTS; }
-"is"	{ yylval.symbol = sym_is; return SP_IDENTIFIER; }
-"are"	{ yylval.symbol = sym_are; return SP_IDENTIFIER; }
+"is"	{ yylval.symbol = sym_is; return ASSIGN_IDENTIFIER; }
+"are"	{ yylval.symbol = sym_are; return ASSIGN_IDENTIFIER; }
 "self"	{ yylval.symbol = sym_self; return SELF; }
 "arg"	{ return ARG; }
 "ret"	{ return RET; }
