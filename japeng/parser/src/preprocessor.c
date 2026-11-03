@@ -1,5 +1,6 @@
 #include "preprocessor.h"
 #include "builtin_convert.h"
+#include "utf8_util.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,14 +21,6 @@ static int type_count = 0;
 void reset_preprocessor(void) {
     ident_count = 0;
     type_count = 0;
-}
-
-static inline int utf8_char_len(unsigned char c) {
-    if (c < 0x80) return 1;
-    if ((c & 0xE0) == 0xC0) return 2;
-    if ((c & 0xF0) == 0xE0) return 3;
-    if ((c & 0xF8) == 0xF0) return 4;
-    return 1;
 }
 
 static inline bool is_blank_space(const char* p) {

@@ -11,5 +11,6 @@
 #include "symbol.h"
 #include "table.h"
 #include "error.h"
+#include "utf8_util.h"
 
 #endif

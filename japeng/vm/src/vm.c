@@ -83,17 +83,6 @@ const char* op_kind[OP_MAX] = {
 };
 #endif
 
-uint32_t utf8_char_count(const char* s, uint32_t byte_len) 
-{
-    uint32_t count = 0;
-    uint32_t i = 0;
-    while (i < byte_len) {
-        i += utf8_char_len((unsigned char)s[i]);
-        count++;
-    }
-    return count;
-}
-
 static void reset_stack(VM* vm)
 {
     vm->stack_top = vm->stack;
