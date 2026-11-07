@@ -1,0 +1,192 @@
+%{
+#include <stdlib.h>
+#include <string.h>
+#include "defs.h"
+#include "token.h"
+#include "literal.h"
+#include "symbol.h"
+#include "object.h"
+#include "compiler-error.h"
+#include "preprocessor.h"
+
+int linecounter = 1;
+extern const char* current_filename;
+int yycolumn = 1;
+
+static Symbol* resolve_and_intern(const char* text) {
+    const char* orig = frontend_lookup_symbol(text);
+    return intern_cstr(orig ? orig : text);
+}
+
+#define YY_USER_ACTION \
+    yylloc.first_line   = yylineno; \
+    yylloc.first_column = yycolumn; \
+    yylloc.last_line    = yylineno; \
+    yylloc.last_column  = yycolumn + yyleng - 1; \
+    current_ast_loc.line     = yylineno; \
+    current_ast_loc.column   = yycolumn; \
+    current_ast_loc.col_end  = yycolumn + yyleng - 1; \
+    current_ast_loc.filename = current_filename; \
+    yycolumn += yyleng;
+%}
+%option nounput
+%option yylineno
+%option stack
+%x IN_STR
+%%
+"class"	{ return CLASS; }
+"interface" { return INTERFACE; }
+"based"	{ return BASED; }
+"from"	{ return FROM; }
+"implements" { return IMPLEMENTS; }
+"is"	{ yylval.symbol = sym_is; return ASSIGN_IDENTIFIER; }
+"are"	{ yylval.symbol = sym_are; return ASSIGN_IDENTIFIER; }
+"self"	{ yylval.symbol = sym_self; return SELF; }
+"arg"	{ return ARG; }
+"ret"	{ return RET; }
+"return"	{ return RETURN; }
+"break"	{ return BREAK; }
+"continue"	{ return CONTINUE; }
+"and"	{ yylval.symbol = sym_and; return SP_IDENTIFIER; }
+"or"	{ yylval.symbol = sym_or;  return SP_IDENTIFIER; }
+"true"	{ yylval.literal = new_string(yytext, yyleng); return TRUE_LITERAL; }
+"false"	{ yylval.literal = new_string(yytext, yyleng); return FALSE_LITERAL; }
+"null"	{ yylval.literal = new_string(yytext, yyleng); return NULL_LITERAL; }
+[A-Z][a-zA-Z0-9_]*	{ yylval.symbol = resolve_and_intern(yytext); return CLASS_NAME; }
+[a-z_][a-zA-Z0-9_]*	{ yylval.symbol = resolve_and_intern(yytext); return IDENTIFIER; }
+[0-9]+				{ yylval.literal = new_string(yytext, yyleng); return INTEGER; }
+[0-9]*"."[0-9]+		{ yylval.literal = new_string(yytext, yyleng); return FLOAT; }
+[0-9]*"/"[0-9]+		{ yylval.symbol = intern_cstr(yytext); return FRACTION; }
+0[bB][01]+			{ yylval.literal = new_string(yytext, yyleng); return BINARY; }
+0[xX][0-9a-fA-F]+ 	{ yylval.literal = new_string(yytext, yyleng); return HEX; }
+"\"" {
+    yy_push_state(IN_STR);
+    return STR_OPEN;
+}
+
+<IN_STR>"{" {
+    yy_push_state(INITIAL);
+    return STR_EXPR_OPEN;
+}
+
+<IN_STR>"\"" {
+    yy_pop_state();
+    return STR_CLOSE;
+}
+
+	/* 通常の文字（"、{、\、改行 以外） */
+<IN_STR>[^"{\\\n]+ {
+    yylval.symbol = intern_string(yytext, yyleng);
+    return STR_TEXT;
+}
+
+	/* エスケープシーケンス */
+<IN_STR>\\\" {
+    yylval.symbol = intern_string("\"", 1);
+    return STR_TEXT;
+}
+<IN_STR>\\\{ {
+    yylval.symbol = intern_string("{", 1);
+    return STR_TEXT;
+}
+<IN_STR>\\\\ {
+    yylval.symbol = intern_string("\\", 1);
+    return STR_TEXT;
+}
+<IN_STR>\\n {
+    yylval.symbol = intern_string("\n", 1);
+    return STR_TEXT;
+}
+<IN_STR>\\t {
+    yylval.symbol = intern_string("\t", 1);
+    return STR_TEXT;
+}
+
+	/* 式の中の閉じ波括弧 } で文字列モードに復帰 */
+"}" {
+    /* スタックに状態が存在し、かつ直前が文字列モードの場合のみ復帰 */
+    if (yy_start_stack_ptr > 0 && yy_top_state() == IN_STR) {
+        yy_pop_state();
+        return STR_EXPR_CLOSE;
+    }
+    return UNKNOWN;
+}
+	/*\"[^\"\n]*\" 		{ yylval.symbol = unquote_and_intern(yytext, strlen(yytext)); return STRING; }*/
+"+"					{ yylval.symbol = sym_plus; return SP_IDENTIFIER; }
+"-"					{ yylval.symbol = sym_minus; return SP_IDENTIFIER; }
+"*"					{ yylval.symbol = sym_multi; return SP_IDENTIFIER; }
+"/"					{ yylval.symbol = sym_div; return SP_IDENTIFIER; }
+"%"					{ yylval.symbol = sym_rem; return SP_IDENTIFIER; }
+"="					{ yylval.symbol = sym_equal; return SP_IDENTIFIER; }
+"!="				{ yylval.symbol = sym_nequal; return SP_IDENTIFIER; }
+">"					{ yylval.symbol = sym_gt; return SP_IDENTIFIER; }
+"<"					{ yylval.symbol = sym_less; return SP_IDENTIFIER; }
+">="				{ yylval.symbol = sym_nless; return SP_IDENTIFIER; }
+"<="				{ yylval.symbol = sym_ngt; return SP_IDENTIFIER; }
+"+="				{ yylval.symbol = sym_plus_eq; return SP_IDENTIFIER; }
+"-="				{ yylval.symbol = sym_minus_eq; return SP_IDENTIFIER; }
+"*="				{ yylval.symbol = sym_multi_eq; return SP_IDENTIFIER; }
+"/="				{ yylval.symbol = sym_div_eq; return SP_IDENTIFIER; }
+"&="				{ yylval.symbol = sym_band_eq; return SP_IDENTIFIER; }
+"|="				{ yylval.symbol = sym_bor_eq; return SP_IDENTIFIER; }
+"^="				{ yylval.symbol = sym_bxor_eq; return SP_IDENTIFIER; }
+"<<="				{ yylval.symbol = sym_shl_eq; return SP_IDENTIFIER; }
+">>="				{ yylval.symbol = sym_shr_eq; return SP_IDENTIFIER; }
+"<<"				{ yylval.symbol = sym_shl; return SP_IDENTIFIER; }
+">>"				{ yylval.symbol = sym_shr; return SP_IDENTIFIER; }
+"&"					{ yylval.symbol = sym_band;  return SP_IDENTIFIER; }
+"|"					{ yylval.symbol = sym_bor;   return SP_IDENTIFIER; }
+"^"					{ yylval.symbol = sym_bxor;  return SP_IDENTIFIER; }
+"~"					{ yylval.symbol = sym_bnot;  return SP_IDENTIFIER; }
+"!"					{ yylval.symbol = sym_not; return SP_IDENTIFIER; }
+"//".*				{ }
+"/*"				{ comment(); }
+"..."				{ return ELLIPSIS; }
+","					{ return COMMA; }
+"."					{ return DOT; }
+":"					{ return COLON; }
+";"					{ return SEMICOLON; }
+"("					{ return L_PAR; }
+")"					{ return R_PAR; }
+"["					{ return L_BLACKET; }
+"]"					{ return R_BLACKET; }
+"\n"				{ yycolumn = 1; linecounter++; }
+[ \t\r]+			{ }
+.					{ return UNKNOWN; }
+%%
+int yywrap(void) { return 1; }
+
+void comment(void) {
+	int boolean, first, second;
+
+	boolean = TRUE;
+	first = input();
+	while (first != EOF && boolean) {
+		second = input();
+		if (first == '*' && second == '/') {
+			boolean = FALSE;
+		} else if (first == '\r' && second == '\n') {
+			linecounter++;
+			first = input();
+		} else {
+			if (first == '\r' || first == '\n') {
+				linecounter++;
+			}
+			first = second;
+		}
+	}
+	if (first == EOF) {
+		fprintf(stderr, "eof in comment\n");
+	}
+}
+
+Symbol* unquote_and_intern(const char* text, int len) {
+    char buf[1024];
+    int content_len = len - 2;
+    if (content_len >= (int)sizeof(buf)) {
+        content_len = sizeof(buf) - 1;
+    }
+    memcpy(buf, text + 1, content_len);
+    buf[content_len] = '\0';
+    return new_string(buf, content_len);
+}

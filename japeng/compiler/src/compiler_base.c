@@ -491,28 +491,28 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                 // パターン B: 右辺の式が 1 つだけの場合 (elem_count == 1)
                 TypeInfo* actual_type = compile_expression(c, elems[0]);
     
-                // B-1: 右辺がすでに List 型の場合
+                // B-1: 右辺がすでに List 型の場合 (例: arr2: List Integer is list;)
                 if (is_assignable(c, declared_type, actual_type)) {
                     emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
                     return declared_type;
                 }
     
-                // B-2: 右辺が要素型の場合 (例: arr: List Integer is 0;)
+                // B-2: 右辺が要素型の場合 (例: arr: List (List Integer) is list;)
                 if (expected_elem != NULL && is_assignable(c, expected_elem, actual_type)) {
                     emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
-                    emit_inst(c, OP_POP, 0);
-    
+
                     uint32_t list_sym = add_constant(c->chunk, make_obj((Obj*)sym_List));
                     emit_inst(c, OP_GET_GLOBAL, list_sym);
                     emit_inst(c, OP_NEW_INSTANCE, 0);
-    
+
                     emit_inst(c, OP_DUP, 0);
-                    emit_inst(c, OP_GET_LOCAL, (uint32_t)slot);
+                    emit_inst(c, OP_GET_LOCAL, (uint32_t)slot); 
                     
                     emit_inst(c, OP_INVOKE_VIRTUAL, make_call_operand(1, push_slot));
                     emit_inst(c, OP_POP, 0);
-    
+
                     emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
+                    emit_inst(c, OP_POP, 0);
                     return declared_type;
                 }
     

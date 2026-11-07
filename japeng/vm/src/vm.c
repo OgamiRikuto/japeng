@@ -167,6 +167,36 @@ static inline CallFrame* setup_call_frame(VM* vm, ObjFunction* func, ObjClosure*
     return next_frame;
 }
 
+static void init_delegate_fields(VM* vm, ObjInstance* inst) {
+    ObjClass* klass = inst->klass;
+    if (klass == NULL || klass->field_count == 0 || klass->field_names == NULL) {
+        return;
+    }
+
+    const char* prefix = "__delegate_";
+    size_t prefix_len = 11;
+
+    for (uint32_t i = 0; i < klass->field_count; i++) {
+        Symbol* fname = klass->field_names[i];
+        if (fname != NULL && strncmp(fname->chars, prefix, prefix_len) == 0) {
+            // "__delegate_" の後ろのクラス名を取得 
+            const char* delegate_class_name = fname->chars + prefix_len;
+            Symbol* del_sym = intern_string(delegate_class_name, (int)strlen(delegate_class_name));
+            
+            // クラスを解決してインスタンスを生成
+            ObjClass* del_klass = vm_resolve_class(vm, del_sym);
+            if (del_klass != NULL) {
+                ObjInstance* del_inst = gc_new_instance(&vm->heap, del_klass);
+                // 委譲先がさらに委譲元を持っている場合に備えて再帰呼び出し
+                init_delegate_fields(vm, del_inst);
+
+                inst->fields[i] = make_obj((Obj*)del_inst);
+                gc_write_barrier(&vm->heap, inst, inst->fields[i]);
+            }
+        }
+    }
+}
+
 static InterpretResult run(VM* vm, int stop_frame_count)
 {
     CallFrame* frame = &vm->frames[vm->frame_count - 1]; 
@@ -302,15 +332,17 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                     error_runtime(ERR_CANNOT_INSTANTIATE);
                     return INTERPRET_RUNTIME_ERROR;
                 }
-            
+
                 ObjClass* klass = (ObjClass*)as_obj(class_val);
                 if (klass != NULL && klass != vm->class_object && klass->superclass == NULL) {
                     klass->superclass = vm->class_object;
                 }
                 if (klass == vm->class_list) {
-                    push(vm, make_obj((Obj*)gc_new_list(&vm->heap, 8))); // ★ gc_new_list に更新
+                    push(vm, make_obj((Obj*)gc_new_list(&vm->heap, 8)));
                 } else {
-                    push(vm, make_obj((Obj*)gc_new_instance(&vm->heap, klass))); // ★ gc_new_instance に更新
+                    ObjInstance* inst = gc_new_instance(&vm->heap, klass);
+                    init_delegate_fields(vm, inst);
+                    push(vm, make_obj((Obj*)inst));
                 }
                 break;
             }
@@ -418,8 +450,16 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                     return INTERPRET_RUNTIME_ERROR;
                 }
     
-                // 2. 実在する get_class_for_value でクラスを特定
-                ObjClass* klass = get_class_for_value(vm, receiver);
+                // 2. クラスを特定
+                ObjClass* klass = NULL;
+                if (is_obj_type(receiver, OBJ_INSTANCE)) {
+                    klass = ((ObjInstance*)as_obj(receiver))->klass;
+                } else if (is_obj_type(receiver, OBJ_CLASS)) {
+                    // ★ クラスオブジェクト自体がレシーバー（静的メソッド呼び出し）の場合！
+                    klass = (ObjClass*)as_obj(receiver);
+                } else {
+                    klass = get_class_for_value(vm, receiver);
+                }
     
                 if (klass == NULL || vtable_index >= (uint16_t)klass->vtable_count) {
                     error_runtime(ERR_INVALID_VTABLE_ACCESS, vtable_index);
@@ -470,35 +510,36 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 uint8_t  argc   = get_send_args(instruction);
                 uint16_t cs_idx = get_send_index(instruction);
 
-                // 1. 定数プールからコールサイト構造体を取得
                 Value cs_val = frame->chunk->constants[cs_idx];
                 ObjCallSite* cs = (ObjCallSite*)as_obj(cs_val);
                 Symbol* target_iface_name = cs->interface_name;
                 uint16_t iface_method_idx = cs->method_index;
 
-                // 2. スタック上のレシーバを取得
                 Value receiver = peek(vm, argc);
-
                 if (is_nil(receiver)) {
                     error_runtime(ERR_NULL_REFERENCE, target_iface_name->chars);
                     return INTERPRET_RUNTIME_ERROR;
                 }
 
                 ObjClass* klass = get_class_for_value(vm, receiver);
-                if (klass == NULL) {
+                if (klass == NULL || klass->interface_table == NULL) {
                     error_runtime(ERR_NOT_CALLABLE);
                     return INTERPRET_RUNTIME_ERROR;
                 }
 
-                // 3. レシーバの interface_maps から対象インターフェースを検索
+                // ★★★ ここが O(1) ハッシュ引き ★★★
                 uint16_t real_vtable_slot = 0xFFFF;
-                for (uint16_t i = 0; i < klass->interface_count; i++) {
-                    if (klass->interface_maps[i].interface_name == target_iface_name) {
-                        if (iface_method_idx < klass->interface_maps[i].method_count) {
-                            real_vtable_slot = klass->interface_maps[i].vtable_slots[iface_method_idx];
+                uint32_t mask = klass->interface_mask;
+                uint32_t idx = target_iface_name->hash & mask;
+
+                while (klass->interface_table[idx].interface_name != NULL) {
+                    if (klass->interface_table[idx].interface_name == target_iface_name) {
+                        if (iface_method_idx < klass->interface_table[idx].method_count) {
+                            real_vtable_slot = klass->interface_table[idx].vtable_slots[iface_method_idx];
                         }
                         break;
                     }
+                    idx = (idx + 1) & mask;
                 }
 
                 if (real_vtable_slot == 0xFFFF || real_vtable_slot >= klass->vtable_count) {
@@ -508,7 +549,6 @@ static InterpretResult run(VM* vm, int stop_frame_count)
 
                 // 4. vtable からスロットを直接参照
                 Value method = klass->vtable[real_vtable_slot];
-
                 if (is_nil(method)) {
                     error_runtime(ERR_UNIMPLEMENTED_VIRTUAL_METHOD, real_vtable_slot);
                     return INTERPRET_RUNTIME_ERROR;
@@ -517,21 +557,17 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 // 5-A. ネイティブ関数の呼び出し
                 if (is_obj_type(method, OBJ_NATIVE)) {
                     ObjNative* native = (ObjNative*)as_obj(method);
-                    if (!native->function(vm, argc)) {
-                        return INTERPRET_RUNTIME_ERROR;
-                    }
+                    if (!native->function(vm, argc)) return INTERPRET_RUNTIME_ERROR;
                     break;
                 }
 
                 // 5-B. 関数 (ObjFunction) の呼び出し
                 if (is_obj_type(method, OBJ_FUNCTION)) {
                     ObjFunction* func = (ObjFunction*)as_obj(method);
-
                     if (argc != func->arity) {
                         error_runtime(ERR_WRONG_ARG_COUNT, func->arity, argc);
                         return INTERPRET_RUNTIME_ERROR;
                     }
-
                     frame = setup_call_frame(vm, func, NULL, argc);
                     if (frame == NULL) return INTERPRET_RUNTIME_ERROR;
                     break;
@@ -1127,12 +1163,12 @@ static void print_stack(VM* vm) {
                     }
                     case OBJ_BIGINTEGER: {
                         BigInteger* bi = (BigInteger*)obj;
-                        fprintf(stderr, "%s", bi_to_string(bi)->chars);
+                        fprintf(stderr, "%s", bi_to_string(bi, NULL));
                         break;
                     }
                     case OBJ_DECIMAL: {
                         ObjDecimal* dec = (ObjDecimal*)obj;
-                        fprintf(stderr, "%s", dec_toString(dec)->chars);
+                        fprintf(stderr, "%s", dec_toString(dec, NULL));
                         break;
                     }
                     case OBJ_STRING: {

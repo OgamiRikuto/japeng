@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-#include "error.h"
+#include "language.h"
 
 typedef enum {
     BUILTIN_TYPE,    // クラス・型名（Flexで CLASS_NAME 扱い）

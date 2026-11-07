@@ -99,7 +99,7 @@ Value vm_read_value(FILE* fp, Symbol** pool, VM* vm)
             uint32_t id;
             fread(&id, sizeof(uint32_t), 1, fp);
             Symbol* cname = pool[id];
-            // クラス参照が来たら遅延解決！
+            if (cname == NULL) return make_nil();
             ObjClass* klass = vm_resolve_class(vm, cname);
             return make_obj((Obj*)klass);
         }
@@ -107,14 +107,14 @@ Value vm_read_value(FILE* fp, Symbol** pool, VM* vm)
             uint32_t id;
             fread(&id, sizeof(uint32_t), 1, fp);
             Symbol* s = pool[id];
-            return make_obj((Obj*)new_bi_from_string(s));
+            return make_obj((Obj*)new_bi_from_string(s->chars, s->length));
         }
         case BCD_VAL_DECIMAL: {
             uint32_t id; int32_t scale;
             fread(&id, sizeof(uint32_t), 1, fp);
             fread(&scale, sizeof(int32_t), 1, fp);
             Symbol* s = pool[id];
-            BigInteger* mantissa = new_bi_from_string(s);
+            BigInteger* mantissa = new_bi_from_string(s->chars, s->length);
             return make_obj((Obj*)gc_new_decimal(&vm->heap, mantissa, scale));
         }
         case BCD_VAL_FUNCTION: {
@@ -200,6 +200,10 @@ ObjClass* vm_load_class_bcd(VM* vm, const char* bcd_path)
 
     ObjClass* klass = vm_new_class(class_name, superclass);
 
+    if (vm != NULL) {
+        table_set(vm->globals, class_name, make_obj((Obj*)klass));
+    }
+
     if (f_count > 0) {
         klass->field_count    = f_count;
         klass->field_names    = (Symbol**)realloc(klass->field_names, sizeof(Symbol*) * f_count);
@@ -245,21 +249,36 @@ ObjClass* vm_load_class_bcd(VM* vm, const char* bcd_path)
     uint16_t iface_cnt = 0;
     fread(&iface_cnt, sizeof(uint16_t), 1, fp);
     klass->interface_count = iface_cnt;
-    klass->interface_maps = NULL;
+    klass->interface_table = NULL;
 
     if (iface_cnt > 0) {
-        klass->interface_maps = (InterfaceMap*)malloc(sizeof(InterfaceMap) * iface_cnt);
+        // 負荷率 50% 以下を保つ 2^n の容量を計算 (最低 4)
+        uint16_t cap = 4;
+        while (cap < iface_cnt * 2) cap *= 2;
+        klass->interface_capacity = cap;
+        klass->interface_mask = cap - 1;
+
+        klass->interface_table = (InterfaceMap*)calloc(cap, sizeof(InterfaceMap));
+
         for (uint16_t i = 0; i < iface_cnt; i++) {
             uint32_t iface_name_id;
             fread(&iface_name_id, sizeof(uint32_t), 1, fp);
-            klass->interface_maps[i].interface_name = pool[iface_name_id];
+            Symbol* iface_name = pool[iface_name_id];
 
             uint16_t m_cnt;
             fread(&m_cnt, sizeof(uint16_t), 1, fp);
-            klass->interface_maps[i].method_count = m_cnt;
+            uint16_t* slots = (uint16_t*)malloc(sizeof(uint16_t) * m_cnt);
+            fread(slots, sizeof(uint16_t), m_cnt, fp);
 
-            klass->interface_maps[i].vtable_slots = (uint16_t*)malloc(sizeof(uint16_t) * m_cnt);
-            fread(klass->interface_maps[i].vtable_slots, sizeof(uint16_t), m_cnt, fp);
+            // ハッシュ値でオープンアドレス法挿入
+            uint32_t idx = iface_name->hash & klass->interface_mask;
+            while (klass->interface_table[idx].interface_name != NULL) {
+                idx = (idx + 1) & klass->interface_mask;
+            }
+
+            klass->interface_table[idx].interface_name = iface_name;
+            klass->interface_table[idx].method_count = m_cnt;
+            klass->interface_table[idx].vtable_slots = slots;
         }
     }
 

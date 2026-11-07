@@ -43,8 +43,8 @@ BigInteger* bi_div(BigInteger* lhs, BigInteger* rhs);
 BigInteger* bi_mod(BigInteger* lhs, BigInteger* rhs);
 BigInteger* bi_pow(const BigInteger* base, uint64_t exp);
 BigInteger* bi_gcd(const BigInteger* a, const BigInteger* b);
-BigInteger* new_bi_from_string(Symbol* string);
-Symbol* bi_to_string(const BigInteger* bi);
+BigInteger* new_bi_from_string(const char* str, size_t len);
+char*       bi_to_string(const BigInteger* bi, size_t* out_len);
 
 bool        bi_is_zero(const BigInteger* bi);
 BigInteger* bi_copy(const BigInteger* bi);

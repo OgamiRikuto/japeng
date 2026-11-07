@@ -50,8 +50,8 @@ typedef struct objFunc {
 
 typedef struct {
     Obj      header;
-    Symbol*  interface_name; // 呼び出し対象インターフェース名 (例: "Speak")
-    uint16_t method_index;   // インターフェース内でのメソッド番号 (0, 1, 2...)
+    Symbol*  interface_name; // 呼び出し対象インターフェース名
+    uint16_t method_index;   // インターフェース内でのメソッド番号
 } ObjCallSite;
 
 static inline ObjType obj_type(Value value) {
@@ -72,6 +72,6 @@ static inline bool is_closure(Value value) {
 
 ObjFunction* new_function(Chunk* chunk, uint8_t arity);
 Symbol* new_string(const char* chars, int length);
-ObjCallSite* new_call_site(Symbol* interface_name, uint16_t method_index);
+ObjCallSite* new_call_site(Symbol* interface_name,uint16_t method_index);
 
 #endif

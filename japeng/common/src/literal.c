@@ -27,7 +27,7 @@ Value parse_ast_literal(ASTNode* node)
                     return make_obj((Obj*)bi_from_i64(val));
                 }
             }
-            return make_obj((Obj*)new_bi_from_string(raw));
+            return make_obj((Obj*)new_bi_from_string(raw->chars, raw->length));
         }
         case TOKEN_BINARY: {
             int64_t val = strtoll(str + 2, NULL, 2);

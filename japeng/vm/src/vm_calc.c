@@ -3,7 +3,7 @@
 #include "decimal.h"
 #include "object.h"
 #include "gc.h"
-#include "error.h"
+#include "vm-error.h"
 
 // -----------------------------------------------------------------------------
 // 高速パス: 最適化整数演算

@@ -37,6 +37,22 @@ static void pool_collect_type_names(BcdStringPool* pool, TypeInfo* t) {
     }
 }
 
+static void collect_function_strings(ObjFunction* fn, BcdStringPool* pool) {
+    if (!fn || !fn->chunk) return;
+    for (int c = 0; c < fn->chunk->constant_count; c++) {
+        Value cv = fn->chunk->constants[c];
+        if (is_obj_type(cv, OBJ_STRING)) pool_add(pool, (Symbol*)as_obj(cv));
+        if (is_obj_type(cv, OBJ_CLASS))  pool_add(pool, ((ClassDef*)as_obj(cv))->name);
+        if (is_obj_type(cv, OBJ_CALL_SITE)) {
+            ObjCallSite* cs = (ObjCallSite*)as_obj(cv);
+            pool_add(pool, cs->interface_name);
+        }
+        if (is_obj_type(cv, OBJ_FUNCTION)) {
+            collect_function_strings((ObjFunction*)as_obj(cv), pool);
+        }
+    }
+}
+
 static void write_string_pool(FILE* fp, BcdStringPool* pool) {
     uint32_t count = (uint32_t)pool->count;
     fwrite(&count, sizeof(uint32_t), 1, fp);
@@ -117,15 +133,19 @@ static void write_value(FILE* fp, Value val, BcdStringPool* pool) {
             fwrite(&id, sizeof(uint32_t), 1, fp);
         } else if (obj->type == OBJ_BIGINTEGER) {
             uint8_t tag = BCD_VAL_BIGINT;
-            Symbol* s = bi_to_string((BigInteger*)obj);
-            uint32_t id = pool_add(pool, s);
+            size_t s_len = 0;
+            char* s = bi_to_string((BigInteger*)obj, &s_len);
+            uint32_t id = pool_add(pool, intern_string(s, (int)s_len));
+            free(s);
             fwrite(&tag, sizeof(uint8_t), 1, fp);
             fwrite(&id, sizeof(uint32_t), 1, fp);
         } else if (obj->type == OBJ_DECIMAL) {
             uint8_t tag = BCD_VAL_DECIMAL;
             ObjDecimal* dec = (ObjDecimal*)obj;
-            Symbol* ms = bi_to_string(dec->mantissa);
-            uint32_t id = pool_add(pool, ms);
+            size_t s_len = 0;
+            char* s = bi_to_string(dec->mantissa, &s_len);
+            uint32_t id = pool_add(pool, intern_string(s, (int)s_len));
+            free(s);
             int32_t scale = dec->scale;
             fwrite(&tag, sizeof(uint8_t), 1, fp);
             fwrite(&id, sizeof(uint32_t), 1, fp);
@@ -226,15 +246,21 @@ bool write_class_bcd(const char* base_dir, ClassDef* klass, const char* source_f
     for (int i = 0; i < klass->vtable_count; i++) {
         pool_add(&pool, klass->vtable_names[i]);
     }
+    // for (int i = 0; i < klass->vtable_count; i++) {
+    //     Value m = klass->vtable[i];
+    //     if (is_obj_type(m, OBJ_FUNCTION)) {
+    //         ObjFunction* fn = (ObjFunction*)as_obj(m);
+    //         for (int c = 0; c < fn->chunk->constant_count; c++) {
+    //             Value cv = fn->chunk->constants[c];
+    //             if (is_obj_type(cv, OBJ_STRING)) pool_add(&pool, (Symbol*)as_obj(cv));
+    //             if (is_obj_type(cv, OBJ_CLASS)) pool_add(&pool, ((ClassDef*)as_obj(cv))->name);
+    //         }
+    //     }
+    // }
     for (int i = 0; i < klass->vtable_count; i++) {
         Value m = klass->vtable[i];
         if (is_obj_type(m, OBJ_FUNCTION)) {
-            ObjFunction* fn = (ObjFunction*)as_obj(m);
-            for (int c = 0; c < fn->chunk->constant_count; c++) {
-                Value cv = fn->chunk->constants[c];
-                if (is_obj_type(cv, OBJ_STRING)) pool_add(&pool, (Symbol*)as_obj(cv));
-                if (is_obj_type(cv, OBJ_CLASS)) pool_add(&pool, ((ClassDef*)as_obj(cv))->name);
-            }
+            collect_function_strings((ObjFunction*)as_obj(m), &pool);
         }
     }
     pool_collect_type_names(&pool, klass->type);
@@ -345,6 +371,11 @@ bool write_class_bcd(const char* base_dir, ClassDef* klass, const char* source_f
     // フィールド型リスト (個数 + 各型)
     fwrite(&f_count, sizeof(uint16_t), 1, fp);
     for (int i = 0; i < klass->field_count; i++) {
+        uint32_t fn_id = pool_add(&pool, klass->field_infos[i].name);
+        uint8_t flags = 0;
+        if (klass->field_infos[i].is_static) flags |= 0x01;
+        fwrite(&fn_id, sizeof(uint32_t), 1, fp);
+        fwrite(&flags, sizeof(uint8_t), 1, fp);
         write_type_info(fp, klass->field_infos[i].type, &pool);
     }
 
@@ -371,15 +402,15 @@ bool write_class_bcd(const char* base_dir, ClassDef* klass, const char* source_f
     return true;
 }
 
-static void collect_function_strings(ObjFunction* fn, BcdStringPool* pool) {
-    if (!fn || !fn->chunk) return;
-    for (int c = 0; c < fn->chunk->constant_count; c++) {
-        Value cv = fn->chunk->constants[c];
-        if (is_obj_type(cv, OBJ_STRING)) pool_add(pool, (Symbol*)as_obj(cv));
-        if (is_obj_type(cv, OBJ_CLASS)) pool_add(pool, ((ClassDef*)as_obj(cv))->name);
-        if (is_obj_type(cv, OBJ_FUNCTION)) collect_function_strings((ObjFunction*)as_obj(cv), pool);
-    }
-}
+// static void collect_function_strings(ObjFunction* fn, BcdStringPool* pool) {
+//     if (!fn || !fn->chunk) return;
+//     for (int c = 0; c < fn->chunk->constant_count; c++) {
+//         Value cv = fn->chunk->constants[c];
+//         if (is_obj_type(cv, OBJ_STRING)) pool_add(pool, (Symbol*)as_obj(cv));
+//         if (is_obj_type(cv, OBJ_CLASS)) pool_add(pool, ((ClassDef*)as_obj(cv))->name);
+//         if (is_obj_type(cv, OBJ_FUNCTION)) collect_function_strings((ObjFunction*)as_obj(cv), pool);
+//     }
+// }
 
 bool write_script_bje(const char* base_dir, const char* script_name, Chunk* chunk) {
     if (!ensure_cache_dir(base_dir)) return false;
@@ -403,6 +434,19 @@ bool write_script_bje(const char* base_dir, const char* script_name, Chunk* chun
         if (is_obj_type(cv, OBJ_CLASS)) pool_add(&pool, ((ClassDef*)as_obj(cv))->name);
         if (is_obj_type(cv, OBJ_FUNCTION)) collect_function_strings((ObjFunction*)as_obj(cv), &pool);
         if (is_obj_type(cv, OBJ_CALL_SITE)) pool_add(&pool, ((ObjCallSite*)as_obj(cv))->interface_name);
+        if (is_obj_type(cv, OBJ_BIGINTEGER)) {
+            size_t s_len = 0;
+            char* s = bi_to_string((BigInteger*)as_obj(cv), &s_len);
+            pool_add(&pool, intern_string(s, (int)s_len));
+            free(s);
+        }
+        if (is_obj_type(cv, OBJ_DECIMAL)) {
+            ObjDecimal* dec = (ObjDecimal*)as_obj(cv);
+            size_t s_len = 0;
+            char* s = bi_to_string(dec->mantissa, &s_len);
+            pool_add(&pool, intern_string(s, (int)s_len));
+            free(s);
+        }
     }
 
     write_string_pool(fp, &pool);

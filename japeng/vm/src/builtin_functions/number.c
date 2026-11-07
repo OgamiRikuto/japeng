@@ -97,27 +97,29 @@ static bool native_int_gcd(VM* vm, uint8_t arg_count)
 static bool native_int_toString(VM* vm, uint8_t arg_count) 
 {
     Value receiver = pop(vm);
-    char buf[32];
     if (is_int(receiver)) {
-        snprintf(buf, sizeof(buf), "%d", as_int(receiver));
+        char buf[32];
+        int len = snprintf(buf, sizeof(buf), "%d", as_int(receiver));
+        ObjString* str = gc_new_string(&vm->heap, buf, len);
+        push(vm, make_obj((Obj*)str));
+        return true;
     } else {
-        // BigInteger の場合
         BigInteger* bi = (BigInteger*)as_obj(receiver);
-        Symbol* s = bi_to_string(bi);
-        push(vm, make_obj((Obj*)gc_new_string(&vm->heap, s->chars, s->length)));
+        size_t len = 0;
+        char* s = bi_to_string(bi, &len);
+        ObjString* str = gc_new_string(&vm->heap, s, (int)len);
+        free(s);
+        push(vm, make_obj((Obj*)str));
         return true;
     }
-    ObjString* str = gc_new_string(&vm->heap, buf, strlen(buf));
-    push(vm, make_obj((Obj*)str));
-    return true;
 }
 
 static bool native_float_toString(VM* vm, uint8_t arg_count) 
 {
     Value receiver = pop(vm);
     char buf[64];
-    snprintf(buf, sizeof(buf), "%g", as_float(receiver));
-    ObjString* str = gc_new_string(&vm->heap, buf, strlen(buf));
+    int len = snprintf(buf, sizeof(buf), "%g", as_float(receiver));
+    ObjString* str = gc_new_string(&vm->heap, buf, len);
     push(vm, make_obj((Obj*)str));
     return true;
 }
@@ -126,8 +128,11 @@ static bool native_decimal_toString(VM* vm, uint8_t arg_count)
 {
     Value receiver = pop(vm);
     ObjDecimal* dec = (ObjDecimal*)as_obj(receiver);
-    Symbol* s = dec_toString(dec);
-    push(vm, make_obj((Obj*)gc_new_string(&vm->heap, s->chars, s->length)));
+    size_t len = 0;
+    char* s = dec_toString(dec, &len);
+    ObjString* str = gc_new_string(&vm->heap, s, (int)len);
+    free(s);
+    push(vm, make_obj((Obj*)str));
     return true;
 }
 

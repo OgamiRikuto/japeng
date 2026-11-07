@@ -47,13 +47,12 @@ static BigInteger* bi_mul_pow10(BigInteger* a, int32_t n)
 {
     if (n <= 0 || bi_is_zero(a)) return bi_copy(a);
 
-    // 10^n の文字列を生成して BigInteger 化
     char* pow_str = (char*)malloc(n + 2);
     pow_str[0] = '1';
     memset(pow_str + 1, '0', n);
     pow_str[n + 1] = '\0';
 
-    BigInteger* p10 = new_bi_from_string(new_string(pow_str, n + 1));
+    BigInteger* p10 = new_bi_from_string(pow_str, n + 1);
     free(pow_str);
 
     BigInteger* res = bi_mul(a, p10);
@@ -95,17 +94,16 @@ ObjDecimal* new_decimal_from_string(const char* str, int len)
     int dot_pos = -1;
 
     for (int i = 0; i < len; i++) {
-        char c = str[i];
-        if (c == '.') {
+        if (str[i] == '.') {
             dot_pos = i;
-            continue;
+        } else {
+            buf[buf_idx++] = str[i];
         }
-        buf[buf_idx++] = c;
     }
     buf[buf_idx] = '\0';
 
+    BigInteger* mantissa = new_bi_from_string(buf, buf_idx);
     int32_t scale = (dot_pos == -1) ? 0 : (len - 1 - dot_pos);
-    BigInteger* mantissa = new_bi_from_string(new_string(buf, buf_idx));
 
     return new_decimal(mantissa, scale);
 }
@@ -235,49 +233,48 @@ int dec_compare(ObjDecimal* a, ObjDecimal* b) {
     return res;
 }
 
-Symbol* dec_toString(ObjDecimal* dec)
+char* dec_toString(ObjDecimal* dec, size_t* out_len) 
 {
-    Symbol* raw = bi_to_string(dec->mantissa);
+    size_t m_len = 0;
+    char* m_str = bi_to_string(dec->mantissa, &m_len);
+
     if (dec->scale <= 0) {
-        // 小数部がない（またはスケール0）ならそのまま
-        return raw;
+        if (out_len) *out_len = m_len;
+        return m_str;
     }
 
-    int len = raw->length;
-    int scale = dec->scale;
-    bool is_neg = (raw->chars[0] == '-');
-    int digits = is_neg ? (len - 1) : len;
+    bool is_neg = (m_str[0] == '-');
+    const char* digits = is_neg ? (m_str + 1) : m_str;
+    size_t num_digits = is_neg ? (m_len - 1) : m_len;
 
-    // バッファサイズの計算 (符号 + 先頭0 + ドット + 桁数 + 終端NULL)
-    int max_len = len + scale + 4;
-    char* buf = (char*)malloc(max_len);
-    int p = 0;
+    size_t alloc_size = m_len + (size_t)dec->scale + 8;
+    char* buf = (char*)malloc(alloc_size);
+    size_t out_idx = 0;
 
     if (is_neg) {
-        buf[p++] = '-';
+        buf[out_idx++] = '-';
     }
 
-    const char* num_start = is_neg ? (raw->chars + 1) : raw->chars;
-
-    if (digits <= scale) {
-        // "0.00..." のように先頭に 0 が補完されるケース (例: 0.05)
-        buf[p++] = '0';
-        buf[p++] = '.';
-        for (int i = 0; i < scale - digits; i++) {
-            buf[p++] = '0';
-        }
-        memcpy(buf + p, num_start, digits);
-        p += digits;
+    if (num_digits > (size_t)dec->scale) {
+        size_t int_part_len = num_digits - (size_t)dec->scale;
+        memcpy(buf + out_idx, digits, int_part_len);
+        out_idx += int_part_len;
+        buf[out_idx++] = '.';
+        memcpy(buf + out_idx, digits + int_part_len, (size_t)dec->scale);
+        out_idx += (size_t)dec->scale;
     } else {
-        // 途中にドットを挟むケース (例: 100000000000.1)
-        int int_part_len = digits - scale;
-        memcpy(buf + p, num_start, int_part_len);
-        p += int_part_len;
-        buf[p++] = '.';
-        memcpy(buf + p, num_start + int_part_len, scale);
-        p += scale;
+        buf[out_idx++] = '0';
+        buf[out_idx++] = '.';
+        size_t leading_zeros = (size_t)dec->scale - num_digits;
+        memset(buf + out_idx, '0', leading_zeros);
+        out_idx += leading_zeros;
+        memcpy(buf + out_idx, digits, num_digits);
+        out_idx += num_digits;
     }
 
-    buf[p] = '\0';
-    return new_string(buf, p);
+    buf[out_idx] = '\0';
+    free(m_str);
+
+    if (out_len) *out_len = out_idx;
+    return buf;
 }

@@ -355,7 +355,7 @@ Value parse_ast_literal_with_expected(ASTNode* node, TypeInfo* expected_type, Ty
                 }
             }
 
-            BigInteger* bi = new_bi_from_string(raw);
+            BigInteger* bi = new_bi_from_string(raw->chars, raw->length);
             if (out_type) *out_type = new_type_info(sym_Integer, 0);
             return make_obj((Obj*)bi);
         }

@@ -126,8 +126,16 @@ ClassDef* load_class_type_from_bcd(Compiler* c, const char* bcd_path)
     uint16_t f_count = 0;
     fread(&f_count, sizeof(uint16_t), 1, fp);
     for (int i = 0; i < f_count; i++) {
+        uint32_t fn_id = 0;
+        uint8_t flags = 0;
+        fread(&fn_id, sizeof(uint32_t), 1, fp);
+        fread(&flags, sizeof(uint8_t), 1, fp);
         TypeInfo* ft = read_type_info(fp, pool);
-        (void)ft;
+
+        Symbol* fname = pool[fn_id];
+        bool is_static = (flags & 0x01) != 0;
+        FieldInfo fi = new_field_info(fname, ft, NULL, is_static);
+        add_field(klass, fi, make_nil());
     }
 
     // vtable スロット順にメソッドシグネチャを復元 (スロット番号ズレゼロ)

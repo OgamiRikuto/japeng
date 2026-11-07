@@ -37,6 +37,6 @@ ObjDecimal* dec_sub(ObjDecimal* a, ObjDecimal* b);
 ObjDecimal* dec_mul(ObjDecimal* a, ObjDecimal* b);
 ObjDecimal* dec_div(ObjDecimal* a, ObjDecimal* b, int32_t precision);
 int         dec_compare(ObjDecimal* a, ObjDecimal* b); // -1: a < b, 0: a == b, 1: a > b
-Symbol* dec_toString(ObjDecimal* dec);
+char*       dec_toString(ObjDecimal* dec, size_t* out_len);
 
 #endif // DECIMAL_H

@@ -43,6 +43,11 @@ ObjClass* vm_new_class(Symbol* name, ObjClass* superclass)
         klass->vtable          = NULL;
         klass->vtable_names    = NULL;
     }
+    klass->is_interface       = false;
+    klass->interface_count    = 0;
+    klass->interface_table = NULL;
+    klass->interface_capacity = 0;
+    klass->interface_mask = 0;
 
     return klass;
 }
@@ -92,13 +97,13 @@ void vm_free_class(ObjClass* klass)
     if (klass->field_names != NULL)    free(klass->field_names);
     if (klass->vtable != NULL)         free(klass->vtable);
     if (klass->vtable_names != NULL)   free(klass->vtable_names);
-    if (klass->interface_maps != NULL) {
+    if (klass->interface_table != NULL) {
         for (uint16_t i = 0; i < klass->interface_count; i++) {
-            if (klass->interface_maps[i].vtable_slots != NULL) {
-                free(klass->interface_maps[i].vtable_slots);
+            if (klass->interface_table[i].vtable_slots != NULL) {
+                free(klass->interface_table[i].vtable_slots);
             }
         }
-        free(klass->interface_maps);
+        free(klass->interface_table);
     }
     free(klass);
 }

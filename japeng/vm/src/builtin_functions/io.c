@@ -24,12 +24,18 @@ static void print_value(Value value)
             return;
         }
         switch (obj->type) {
-            case OBJ_BIGINTEGER:
-                printf("%s", bi_to_string((BigInteger*)obj)->chars);
+            case OBJ_BIGINTEGER: {
+                char* s = bi_to_string((BigInteger*)obj, NULL);
+                printf("%s", s);
+                free(s);
                 break;
-            case OBJ_DECIMAL:
-                printf("%s", dec_toString((ObjDecimal*)obj)->chars);
+            }
+            case OBJ_DECIMAL: {
+                char* s = dec_toString((ObjDecimal*)obj, NULL);
+                printf("%s", s);
+                free(s);
                 break;
+            }
             case OBJ_STRING: {
                 ObjString* str = (ObjString*)obj;
                 printf("%s", string_chars(str)); // ★ string_chars を使用

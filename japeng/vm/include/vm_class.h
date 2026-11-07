@@ -32,7 +32,9 @@ typedef struct ObjClass {
 
     bool             is_interface;
     uint16_t         interface_count;
-    InterfaceMap*    interface_maps;
+    uint16_t         interface_capacity;
+    uint16_t         interface_mask;
+    InterfaceMap*    interface_table;
 } ObjClass;
 
 // クラス生成 (数値指定なし)

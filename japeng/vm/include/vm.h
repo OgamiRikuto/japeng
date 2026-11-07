@@ -3,6 +3,7 @@
 
 #include "gc.h"
 #include "vm_class.h"
+#include "vm-error.h"
 #include <stdbool.h>
 #include <stdint.h>
 

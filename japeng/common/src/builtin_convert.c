@@ -6,7 +6,7 @@ static const KeywordDef keyword_table[] = {
     // 既存の lex トークンに対応するもの
     { "class ",   "クラス" },
     { "interface ", "インターフェース" },
-    { "implements ", "実装" },
+    { "implements ", "実装元は" },
     //{ "class ",   "型定義" },
     { "based ",   "基は"   },
     { "from ",    "委譲元は" },
@@ -30,7 +30,7 @@ static const KeywordDef keyword_table[] = {
     { "or",        "または"},
     { "true",      "真"},
     { "false",     "偽"},
-    { "null",      "空"},
+    { "null",      "無"},
 
     // プリプロセスで構文展開・正規化される独自予約語
     { " is ",     "は"     },

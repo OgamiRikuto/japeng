@@ -513,126 +513,97 @@ static void mul_add_chunk(BigInteger* bi, uint32_t base_mul, uint32_t chunk)
     }
 }
 
-BigInteger* new_bi_from_string(Symbol* string) 
+BigInteger* new_bi_from_string(const char* str, size_t len) 
 {
-    int start = 0;
+    if (str == NULL || len == 0) {
+        return bi_from_i64(0);
+    }
+
+    size_t start = 0;
     bool sign = true;
-    if (string->length > 0 && (string->chars[0] == '+' || string->chars[0] == '-')) {
-        sign = (string->chars[0] == '+');
+    if (str[0] == '+' || str[0] == '-') {
+        sign = (str[0] == '+');
         start = 1;
     }
 
-    int total_digits = string->length - start;
-    if (total_digits <= 0) {
-        BigInteger* bi = new_BigInteger(1);
-        bi->length = 1;
-        bi->nums[0] = 0;
-        return bi;
-    }
-
-    // 溢れない上限ワード数を事前計算して一括確保
-    size_t init_capa = (size_t)(total_digits / 9) + 2;
-    BigInteger* bi = new_BigInteger(init_capa);
+    BigInteger* bi = new_BigInteger(4);
     bi->sign = sign;
     bi->length = 1;
     bi->nums[0] = 0;
 
-    int first_chunk_len = total_digits % 9;
-    if (first_chunk_len == 0) first_chunk_len = 9;
-
-    int idx = start;
-    bool is_first = true;
-
-    while (idx < string->length) {
-        int chunk_len = is_first ? first_chunk_len : 9;
-        is_first = false;
-
-        uint32_t chunk = 0;
-        uint32_t base_mul = 1;
-
-        for (int i = 0; i < chunk_len; i++) {
-            chunk = chunk * 10 + (string->chars[idx++] - '0');
-            base_mul *= 10;
+    size_t i = start;
+    while (i < len) {
+        size_t chunk_len = 0;
+        uint32_t chunk_val = 0;
+        while (i < len && chunk_len < 9) {
+            char c = str[i++];
+            if (c >= '0' && c <= '9') {
+                chunk_val = chunk_val * 10 + (c - '0');
+                chunk_len++;
+            }
         }
-
-        mul_add_chunk(bi, base_mul, chunk);
+        if (chunk_len > 0) {
+            uint32_t base_mul = 1;
+            for (size_t k = 0; k < chunk_len; k++) base_mul *= 10;
+            mul_add_chunk(bi, base_mul, chunk_val);
+        }
     }
 
     trim(bi);
     return bi;
 }
 
-// 必要な最大文字数を見積もるヘルパー
-// 2^32 ≈ 4.29 * 10^9 なので、1ワードあたり最大 10 桁 + 符号 + 終端ヌル文字
-static size_t estimate_max_decimal_digits(size_t length) {
-    return length * 10 + 2; 
-}
-
-Symbol* bi_to_string(const BigInteger* bi) 
+char* bi_to_string(const BigInteger* bi, size_t* out_len) 
 {
-    // 1. 特殊ケース: 0 の場合
-    if (bi->length == 1 && bi->nums[0] == 0) {
-        return new_string("0", 1);
+    if (bi == NULL || bi_is_zero(bi)) {
+        char* res = (char*)malloc(2);
+        strcpy(res, "0");
+        if (out_len) *out_len = 1;
+        return res;
     }
 
-    // 破壊的除算を避けるため、作業用コピーを作成
     BigInteger* copy = new_BigInteger(bi->length);
     memcpy(copy->nums, bi->nums, sizeof(uint32_t) * bi->length);
     copy->length = bi->length;
     copy->sign = true;
 
-    // 除数 10^9 を表す 1 ワードの BigInteger
     BigInteger* base = new_BigInteger(1);
     base->nums[0] = 1000000000U;
     base->length = 1;
     base->sign = true;
 
-    // 9桁ごとの chunk を格納する一時バッファ（下位 chunk から順に積まれる）
     size_t max_chunks = (bi->length * 10 / 9) + 2;
     uint32_t* chunks = (uint32_t*)malloc(sizeof(uint32_t) * max_chunks);
     size_t chunk_count = 0;
 
-    // 2. 10^9 で繰り返し割り算し、余り（9桁チャンク）を取り出す
     while (!(copy->length == 1 && copy->nums[0] == 0)) {
         BigInteger *q, *r;
         bi_divmod_abs(copy, base, &q, &r);
-
-        chunks[chunk_count++] = r->nums[0]; // 余り (0 〜 999999999)
-
+        chunks[chunk_count++] = r->nums[0];
         free_bi(copy);
         free_bi(r);
-        copy = q; // 商を作業用変数へ更新
+        copy = q;
     }
-
     free_bi(copy);
     free_bi(base);
 
-    // 3. 取り出した chunk を文字列バッファへ逆順（上位桁から）に整形
-    size_t buf_size = estimate_max_decimal_digits(bi->length);
+    size_t buf_size = bi->length * 10 + 4;
     char* buf = (char*)malloc(buf_size);
     size_t out_idx = 0;
 
-    // 負数なら先頭にマイナスを付与
     if (!bi->sign) {
         buf[out_idx++] = '-';
     }
 
-    // 最上位 chunk（先頭の余分な 0 パディングは不要）
     out_idx += sprintf(buf + out_idx, "%u", chunks[chunk_count - 1]);
-
-    // 2番目以降の chunk（9桁に満たない場合は 0 で埋める: "%09u"）
     for (int i = (int)chunk_count - 2; i >= 0; i--) {
         out_idx += sprintf(buf + out_idx, "%09u", chunks[i]);
     }
-
     buf[out_idx] = '\0';
     free(chunks);
 
-    // 言語の Symbol として wrap
-    Symbol* result_str = new_string(buf, (int)out_idx);
-    free(buf);
-
-    return result_str;
+    if (out_len) *out_len = out_idx;
+    return buf;
 }
 
 bool bi_is_zero(const BigInteger* bi) 
