@@ -1,0 +1,10 @@
+[EXIT: OK]
+--- 1-arg each with sum & continue & break ---
+even number: 2, current sum: 2
+even number: 4, current sum: 6
+even number: 6, current sum: 12
+Final Sum: 12
+--- 2-arg each (index & elem) ---
+item[0] = Apple
+item[1] = Banana
+item[2] = Cherry

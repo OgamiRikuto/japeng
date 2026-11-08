@@ -1,0 +1,6 @@
+[EXIT: ERROR]
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_error/case10.je:8:20: [1;31m構文エラー:[0m[1m 構文エラー: 予期しない integer です (';' が必要です)。[0m
+    8 | c: String is s get 99;
+      |                    [1;31m^~[0m
+
+[1;31m1 個の構文エラーが検出されました。[0m

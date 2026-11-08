@@ -1,0 +1,28 @@
+numbers: List Integer are 1, 2, 3, 4, 5, 6, 7, 8, 9, 10;
+sum: Integer is 0;
+
+"--- 1-arg each with sum & continue & break ---" println;
+numbers each [ arg n: Integer;
+    // 奇数はスキップ
+    if (n % 2 != 0) [
+        continue;
+    ];
+
+    // 8 に達したら中断
+    if (n > 6) [
+        break;
+    ];
+
+    sum += n;
+    "even number: {n}, current sum: {sum}" println;
+];
+
+"Final Sum: {sum}" println;
+
+"--- 2-arg each (index & elem) ---" println;
+words: List String are "Apple", "Banana", "Cherry";
+words each [ arg i: Integer, s: String;
+    "item[{i}] = {s}" println;
+];
+
+return 0;

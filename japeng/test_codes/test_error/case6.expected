@@ -1,0 +1,10 @@
+[EXIT: ERROR]
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_error/case6.je:7:4: [1;31mエラー:[0m[1m 複合代入の左辺には識別子を指定してください。[0m
+    7 | 10 += 5;
+      |    [1;31m^~[0m
+
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_error/case6.je:7:4: [1;31mエラー:[0m[1m 型 'Integer' に未定義のメッセージ (メソッド) '+=' が送信されました。[0m
+    7 | 10 += 5;
+      |    [1;31m^~[0m
+
+[1;31m2 個のコンパイルエラーが検出されました。[0m

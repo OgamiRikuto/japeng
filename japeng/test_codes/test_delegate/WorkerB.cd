@@ -1,0 +1,9 @@
+class WorkerB:
+    valB: Integer is 100;
+
+    workB: Function is [
+        arg x: Integer;
+        ret Integer;
+        valB += x;
+        return valB;
+    ];

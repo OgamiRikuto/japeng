@@ -1,0 +1,20 @@
+class Triangle based Shape:
+    p2: Point;
+    p3: Point;
+
+    init: Function is [
+        arg p1: Point, _p2: Point, _p3: Point;
+        super init(p1);
+        p2 is _p2;
+        p3 is _p3;
+    ];
+
+    draw: Function is [
+        "{self toString}" print;
+        super draw;
+    ];
+
+    toString: Function is [
+        ret String;
+        return "頂点1:{p toString}, 頂点2:{p2 toString}, 頂点3:{p3 toString}の三角形";
+    ];

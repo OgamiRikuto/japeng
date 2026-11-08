@@ -1,0 +1,13 @@
+// [C-2] 正常系: リスト型引数に null をデフォルト値として指定
+func_with_null: Function is [
+    arg tag: String, items: List Integer is null;
+    tag println;
+    if (items = null) [
+        "items is null" println;
+    ];
+    return;
+];
+
+self func_with_null("TAG_A"); // 第2引数省略 -> null で補完されること
+
+return 1;

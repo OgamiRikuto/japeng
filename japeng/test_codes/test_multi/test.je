@@ -1,0 +1,60 @@
+// 1. 複数リターン
+f: Function is [
+    ret Integer, String;
+    return 1, "test";
+];
+
+
+// 3. 高階関数シグネチャ
+callback: Function(Integer, String; Boolean);
+multi_ret_fn: Function(Integer; String, Boolean);
+no_arg_fn: Function(; Void);
+
+// 1. 引数不定（可変長）・戻り値は固定
+handler: Function(...; Boolean);
+
+// 2. 引数は固定・戻り値が不定
+generator: Function(Integer; ...);
+
+// 3. 固定引数 + 可変長引数
+printf_like: Function(String, ...; Void);
+
+// 4. 複数リターン & 複数代入
+a, b: Integer are 1, 2;
+f: Function is [
+    ret Integer, String;
+    return a, "OK";
+];
+
+// 1. 既存変数への多値関数の再代入テスト
+c, d: Auto are self f;
+c println;   // 30
+d println;   // OK
+
+// 2. 高階関数のシグネチャ照合テスト
+callback: Function(Integer, String; Boolean) is [
+    arg n: Integer, s: String;
+    ret Boolean;
+    return n > 0;
+];
+
+// 3. 不定引数 (...) を持つハンドラ
+any_fn: Function(...; Void) is [
+    arg x: Integer, y: Integer, z: String;
+    ret Void;
+    return;
+];
+
+// デフォルト値 y = 10, msg = "OK"
+greet: Function(Integer, Integer, String; Void) is [
+    arg x: Integer, y: Integer is 10, msg: String is "OK";
+    ret Void;
+    x println;
+    y println;
+    msg println;
+];
+
+greet(1, 2, "Custom"); // 3引数すべて指定
+greet(1, 2);           // msg が "OK" に自動補完
+greet(1);              // y が 10, msg が "OK" に自動補完
+// self greet;                 // エラー: 引数の個数が一致しません (期待値: 1〜3, 実際: 0)。

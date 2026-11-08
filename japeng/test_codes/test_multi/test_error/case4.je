@@ -1,0 +1,23 @@
+// [A-7] 宣言(2個) > return式(1個)
+fn_short: Function(; Integer, String) is [
+    ret Integer, String;
+    return 10;
+];
+
+// [A-8] 宣言(1個) < return式(2個)
+fn_over: Function(; Integer) is [
+    ret Integer;
+    return 10, "余分";
+];
+
+// [A-9] Void 宣言なのに値を返そうとする
+fn_void_val: Function(; Void) is [
+    ret Void;
+    return 100;
+];
+
+// [A-10] 値あり宣言なのに空リターン
+fn_need_val: Function(; Integer) is [
+    ret Integer;
+    return;
+];

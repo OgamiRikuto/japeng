@@ -1,0 +1,20 @@
+// [B-5] 成功系: 引数が ... で戻り値のみ指定 (任意の引数を受け付ける)
+var_arg_fn: Function(...; Integer) is [
+    arg a: Integer, b: String, c: Boolean;
+    ret Integer;
+    return 42;
+];
+
+// [B-6] 成功系: 戻り値が ... で引数のみ指定 (任意の戻り値を許容)
+var_ret_fn: Function(Integer; ...) is [
+    arg a: Integer;
+    ret String, Boolean;
+    return "OK", true;
+];
+
+// [B-7] エラー系: 引数は ... だが戻り値の型が不一致 (Boolean 期待で Integer)
+bad_var_fn: Function(...; Boolean) is [
+    arg a: Integer, b: String;
+    ret Integer;
+    return 123;
+];

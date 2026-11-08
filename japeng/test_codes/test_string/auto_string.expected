@@ -1,0 +1,8 @@
+[EXIT: OK]
+Welcome to JapEng v2!
+Calc: 15 + 27 = 42
+Array access: first=100, second=200, sum=400
+Types: bool=(true, false), float=3.14, list=[100, 200, 300]
+Escape test: {escaped} and "quoted" and 
+[new line]
+Result: nested

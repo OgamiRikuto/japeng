@@ -1,0 +1,10 @@
+[EXIT: ERROR]
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_multi/test_error/case4.je:16:15: [1;31mエラー:[0m[1m 戻り値型が 'Void' (無型) の関数内では値を返せません ('Integer' が返されました)。[0m
+   16 |     return 100;
+      |               [1;31m^[0m
+
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_multi/test_error/case4.je:22:11: [1;31mエラー:[0m[1m 戻り値型 'Integer' が宣言されている関数では値を返す必要がありますが、値が指定されていません。[0m
+   22 |     return;
+      |           [1;31m^[0m
+
+[1;31m2 個のコンパイルエラーが検出されました。[0m

@@ -1,0 +1,9 @@
+// case7.je
+// 実行時のテスト1
+/**
+ * 期待される出力
+ * 実行時エラー: ゼロ除算エラー: 0 で割ることはできません。
+ */
+a: Integer is 10;
+b: Integer is 0;
+c: Integer is a / b;

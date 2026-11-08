@@ -1,0 +1,17 @@
+class Robot implements Speaker, Calculator:
+    model: String;
+
+    init: Function is [
+        arg m: String;
+        model is m;
+    ];
+
+    speak: Function is [
+        "ピピピッ！ ロボット起動。" println;
+    ];
+
+    calc: Function is [
+        arg a: Integer, b: Integer;
+        ret Integer;
+        return a * b + 10;
+    ];

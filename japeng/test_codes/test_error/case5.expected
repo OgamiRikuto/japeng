@@ -1,0 +1,6 @@
+[EXIT: ERROR]
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_error/case5.je:7:6: [1;31mエラー:[0m[1m ループ外で 'break' を使用することはできません。[0m
+    7 | break;
+      |      [1;31m^[0m
+
+[1;31m1 個のコンパイルエラーが検出されました。[0m

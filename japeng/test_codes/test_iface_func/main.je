@@ -1,0 +1,30 @@
+// 【検証 A】インターフェースを引数に取る関数 (戻り値なし)
+make_it_speak: Function(Speaker;) is [
+    arg s: Speaker;
+    "--- 引数渡しテスト ---" println;
+    s speak;
+];
+
+// 【検証 B】インターフェースを戻り値にする関数
+get_announcer: Function(; Announcer) is [
+    ret Announcer;
+    return Robot("ロボ1号");
+];
+
+// --- 実行 1: 具体インスタンスを直接インターフェース引数に渡す ---
+bot: Robot is Robot("ロボ2号");
+make_it_speak(bot);
+
+// --- 実行 2: インターフェース戻り値を受け取って呼ぶ ---
+a: Announcer is get_announcer();
+"--- 戻り値テスト ---" println;
+a shout;
+
+// --- 実行 3: 同名メソッド共有 (Announcer 型変数から speak を呼ぶ) ---
+"--- 同名メソッド共有テスト ---" println;
+a speak;
+
+// --- 実行 4: 戻り値で得た Announcer を Speaker 引数へ渡す (インターフェース間の互換) ---
+make_it_speak(a);
+
+return 0;

@@ -1,0 +1,8 @@
+f: Fibo;
+// ("再帰でフィボナッチ   : ") print; f run1(30) . println;
+// ("末尾再帰でフィボナッチ: ") print; f run2(30, 0, 1) . println;
+("配列でフィボナッチ   :") print; f run3(30) . println;
+// ("配列でフィボナッチ   :") print; f run4(30) . println;
+
+
+return 0;

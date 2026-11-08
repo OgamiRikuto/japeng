@@ -1,0 +1,15 @@
+class Test:
+    sum: Integer is 0;
+    a: Integer;
+
+    init: Function is [
+        arg _a: Integer;
+        a is _a;
+    ];
+
+    test:Function is [
+        arg x: Integer;
+        ret Integer;
+        sum is sum + x;
+        return sum;
+    ];

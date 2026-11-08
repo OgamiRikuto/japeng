@@ -1,0 +1,33 @@
+x: Integer is 100;
+x println;
+
+p: Point is 42, 50;
+p println;
+(p x) println;
+(p y) println;
+
+arr: List Integer are 0, 1, 2;
+
+arr_print: Function is [
+    arg n: Integer;
+    n repeat [ arg i: Integer;
+        arr get(i) println;
+        arr push(8);
+        n is 1;
+    ];
+];
+
+arr println;
+
+arr_print (arr length);
+
+arr push(10);
+
+arr println;
+
+arr_print (arr length);
+
+arr set(2, 5);
+
+arr println;
+return 0;

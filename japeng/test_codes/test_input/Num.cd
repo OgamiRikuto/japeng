@@ -1,0 +1,14 @@
+class Num:
+    n: Integer is 0;
+
+    add_mul: Function is [
+        arg x: Integer, y: Integer;
+
+        mul: Function is [
+            arg z: Integer;
+            n *= z;
+        ];
+
+        n += x;
+        self mul(y);
+    ];

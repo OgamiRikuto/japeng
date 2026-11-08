@@ -1,0 +1,11 @@
+// 1. 基底クラスのインスタンス
+a: Animal is Animal("なにか");
+s1: Speaker is a;
+s1 speak; // -> "動物の鳴き声"
+
+// 2. 派生クラスのインスタンスを親のインターフェース型に代入
+d: Dog is Dog("ポチ");
+s2: Speaker is d;
+s2 speak; // itable 経由でオーバーライドされた "わんわん！ (オーバーライド)" が呼ばれる
+
+return 0;

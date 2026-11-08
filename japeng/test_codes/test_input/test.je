@@ -1,0 +1,35 @@
+string: String is input("前後に空白込みで入力：") . trim;
+string println;
+list: List String is input("カンマ区切りで入力：") . split(",");
+list println;
+
+arr: List String is input("カンマ区切りで入力") . split (",").map [ arg s: String; ret String; return s trim;];
+arr println;
+
+a: Integer is 0;
+add: Function is [
+    arg n: Integer;
+    ret Integer;
+    a is 1;
+    a println;
+    a += 1;
+    a  println;
+
+    return n + 1;
+];
+a println;
+
+add2: Function is [
+    arg n: Integer, f: Function(Integer; Integer);
+    ret Integer;
+    return self f(n);
+];
+
+self add2(10, add);
+a println;
+
+num: Num;
+num add_mul(1, 10);
+num n . println;
+
+return 0;

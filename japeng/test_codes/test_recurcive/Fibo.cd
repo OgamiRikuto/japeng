@@ -1,0 +1,43 @@
+class Fibo:
+
+    run1: Function is [
+        arg n: Integer;
+        ret Integer;
+        if (n = 0) [return 0;];
+        if (n = 1) [return 1;];
+        return self run1(n - 1) + self run1(n - 2);
+    ];
+
+    run2: Function is [
+        arg n: Integer, acc1: Integer, acc2: Integer;
+        ret Integer;
+        if (n = 0) [return acc1;];
+        if (n = 1) [return acc2;];
+        return self run2(n - 1, acc2, acc1 + acc2);
+    ];
+
+    run3: Function is [
+        arg n: Integer;
+        ret Integer;
+        arr: List Integer are 0, 1;
+        n repeat [
+            arg i: Integer;
+            n1: Integer is arr[i];
+            n2: Integer is arr[i+1];
+            arr push(n1 + n2);
+        ];
+        return arr get(n);
+    ];
+
+    run4: Function is [
+        arg n: Integer;
+        ret Integer;
+        arr: List Integer are 0, 1;
+        n repeat [
+            arg i: Integer;
+            n1: Integer is arr get(i);
+            n2: Integer is arr get(i+1);
+            arr push(n1 + n2);
+        ];
+        return arr get(n);
+    ];

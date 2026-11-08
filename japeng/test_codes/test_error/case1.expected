@@ -1,0 +1,6 @@
+[EXIT: ERROR]
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_error/case1.je:8:2: [1;31m構文エラー:[0m[1m 構文エラー: 予期しない ':' です (';' が必要です)。[0m
+    8 | b: Integer is 20;
+      |  [1;31m^[0m
+
+[1;31m1 個の構文エラーが検出されました。[0m

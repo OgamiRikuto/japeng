@@ -1,0 +1,25 @@
+// [OK] ローカルの通常定義: 素の Function で問題なく通る（右辺ブロックから型が決定）
+f: Function is [
+    arg x: Integer;
+    ret Integer;
+    return x * 2;
+];
+
+// [NG] 引数宣言でシグネチャを省略した場合:
+// -> コンパイルエラー: 'cb' の関数型宣言にはシグネチャの指定が必要です
+test_fail: Function is [
+    arg cb: Function;
+];
+
+// [OK] 引数宣言でシグネチャを指定した場合:
+test_pass1: Function is [
+    arg cb: Function(;); // 引数なし・戻り値なし
+];
+test_pass2: Function is [
+    arg cb: Function(Integer;); // 引数あり・戻り値なし
+];
+test_pass3: Function is [
+    arg cb: Function(; Integer); // 引数なし・戻り値あり
+];
+
+

@@ -1,0 +1,3 @@
+Math sqrt (2) . println;
+
+return 0;

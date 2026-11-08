@@ -1,0 +1,3 @@
+interface Announcer:
+    speak: Function(;);
+    shout: Function(;);

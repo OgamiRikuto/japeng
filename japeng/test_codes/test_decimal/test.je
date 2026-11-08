@@ -1,0 +1,46 @@
+// --- Float の場合 ---
+f: Float is 0.0;
+10 repeat [
+    f is f + 0.1;
+];
+f println;
+(f = 1.0)  println;   // ★ なんと false になる！！
+
+// --- Decimal の場合 ---
+d: Decimal is 0.0;
+10 repeat [
+    d is d + 0.1;
+];
+d println;             // 1.0
+(d = 1.0)  println;   // ★ 完全に true！
+
+// 100兆（14桁）に 0.00000001 を足してみる
+
+// --- Float の場合 ---
+big_f: Float is 100000000000000.0;
+f_result: Float is big_f + 0.00000001;
+
+(f_result = big_f)  println; 
+// ★ なんと true（足したはずの 0.00000001 が完全に消滅した！）
+
+// --- Decimal の場合 ---
+big_d: Decimal is 100000000000000.0;
+d_result: Decimal is big_d + 0.00000001;
+
+d_result println;
+// 100000000000000.00000001 と 1 桁も漏らさず完璧に残る！
+(d_result = big_d)  println; // 当然 false！
+
+// 元金 1000 億円
+balance: Decimal is 100000000000.0;
+
+// 日利 0.00001% = 0.0000001 倍
+rate: Decimal is 1.0000001;
+
+1000 repeat [
+    balance is balance * rate;
+];
+
+balance println;
+
+return 0;

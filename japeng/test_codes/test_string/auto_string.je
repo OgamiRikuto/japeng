@@ -1,0 +1,29 @@
+// 1. 基本的な変数展開
+name: String is "JapEng";
+version: Integer is 2;
+s1: String is "Welcome to {name} v{version}!";
+s1 println;
+
+// 2. 式のインライン計算
+a: Integer is 15;
+b: Integer is 27;
+"Calc: {a} + {b} = {a + b}" println;
+
+// 3. 配列添字アクセスとの組み合わせ
+list: List Integer are 100, 200, 300;
+"Array access: first={list[0]}, second={list[1]}, sum={list[0] + list[2]}" println;
+
+// 4. 各種ビルトイン型の toString 挙動
+flag_t: Boolean is true;
+flag_f: Boolean is false;
+f_val: Float is 3.14;
+"Types: bool=({flag_t}, {flag_f}), float={f_val}, list={list}" println;
+
+// 5. エスケープシーケンス (\{, \", \n)
+"Escape test: \{escaped\} and \"quoted\" and \n[new line]" println;
+
+// 6. ネストした文字列表現
+msg: String is "Result: {"nested" toString}";
+msg println;
+
+return 0;

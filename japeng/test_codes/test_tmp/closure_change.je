@@ -1,0 +1,22 @@
+list: List Integer;
+list println;
+
+
+add: Function is [
+    10 repeat [ arg i: Integer;
+        list push(i);
+        "int add: {list}" println;
+    ];
+];
+
+self add;
+list println;
+
+10 repeat [ arg i:Integer;
+    list push(i);
+    "out add: {list}" println;
+];
+
+list println;
+
+return 0;

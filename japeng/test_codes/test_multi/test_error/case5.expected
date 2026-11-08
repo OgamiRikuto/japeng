@@ -1,0 +1,18 @@
+[EXIT: ERROR]
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_multi/test_error/case5.je:6:1: [1;31mエラー:[0m[1m 型 'Function(Integer, String; Boolean)' の変数 'bad_argc' に型 'Function(Integer; Boolean)' の値を代入することはできません。[0m
+    6 | ];
+      | [1;31m^[0m
+
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_multi/test_error/case5.je:13:1: [1;31mエラー:[0m[1m 型 'Function(Integer, String; Boolean)' の変数 'bad_arg_type' に型 'Function(Integer, Integer; Boolean)' の値を代入することはできません。[0m
+   13 | ];
+      | [1;31m^[0m
+
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_multi/test_error/case5.je:20:1: [1;31mエラー:[0m[1m 型 'Function(Integer; Boolean)' の変数 'bad_ret_type' に型 'Function(Integer; Integer)' の値を代入することはできません。[0m
+   20 | ];
+      | [1;31m^[0m
+
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_multi/test_error/case5.je:27:1: [1;31mエラー:[0m[1m 型 'Function(Integer; Boolean)' の変数 'bad_ret_count' に型 'Function(Integer; Boolean, String)' の値を代入することはできません。[0m
+   27 | ];
+      | [1;31m^[0m
+
+[1;31m4 個のコンパイルエラーが検出されました。[0m

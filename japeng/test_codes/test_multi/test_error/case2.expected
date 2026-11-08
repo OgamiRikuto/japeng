@@ -1,0 +1,10 @@
+[EXIT: ERROR]
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_multi/test_error/case2.je:4:13: [1;31mエラー:[0m[1m 複数代入の要素数が一致しません (左辺: 2 個の変数, 右辺: 1 個の値)。[0m
+    4 | x, y are 100;
+      |             [1;31m^[0m
+
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_multi/test_error/case2.je:7:23: [1;31mエラー:[0m[1m 複数代入の要素数が一致しません (左辺: 2 個の変数, 右辺: 3 個の値)。[0m
+    7 | x, y are 100, 200, 300;
+      |                       [1;31m^[0m
+
+[1;31m2 個のコンパイルエラーが検出されました。[0m

@@ -1,0 +1,20 @@
+// test_bench.je
+size: Integer is 10000;
+arr: List Integer is 0;
+
+// 1. 10000 要素の配列を準備
+size repeat [
+    arg i: Integer;
+    arr push(i);
+];
+
+// 2. 10000 要素を合計するテスト（10000 回連続アクセス）
+sum: Integer is 0;
+size repeat [
+    arg i: Integer;
+    // ★ ここを arr[i] と arr get i で切り替えて計測！
+    sum += arr get(i);
+];
+
+sum println;
+return 0;

@@ -1,0 +1,29 @@
+// [B-1] 引数の個数不一致 (期待: 2個, 実際: 1個)
+bad_argc: Function(Integer, String; Boolean) is [
+    arg x: Integer;
+    ret Boolean;
+    return true;
+];
+
+// [B-2] 引数の型不一致 (第2引数が String 期待なのに Integer)
+bad_arg_type: Function(Integer, String; Boolean) is [
+    arg x: Integer, s: Integer;
+    ret Boolean;
+    return true;
+];
+
+// [B-3] 戻り値の型不一致 (Boolean 期待なのに Integer を返す)
+bad_ret_type: Function(Integer; Boolean) is [
+    arg x: Integer;
+    ret Integer;
+    return x;
+];
+
+// [B-4] 戻り値の個数不一致 (1個期待なのに 2個返す)
+bad_ret_count: Function(Integer; Boolean) is [
+    arg x: Integer;
+    ret Boolean, String;
+    return true, "NG";
+];
+
+return 1;

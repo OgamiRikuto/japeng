@@ -1,0 +1,46 @@
+a: Integer is 10;
+
+// if (a > 1) [ "aは1より大きい" println;
+// ] elif (a > 0)[ "aは0より小さい" println;
+// ]else ["aは0" println;];
+
+a repeat [ 
+    arg i: Integer;
+    if (i > 5) [ "iは5より大きい" println; ]
+    elif (i < 5) [ "iは5より小さい" println;]
+    else ["iはなんだ" println;];
+
+    if (i = 5) [ "iは5だ" println;];
+];
+
+b: Integer is 10;
+b repeat [
+    arg i: Integer;
+    if (i = 3) [ continue; ]; // 3 だけスキップされるか
+    if (i = 7) [ break; ];    // 7 で即脱出できるか
+    i println;
+];
+
+c: Integer is 10;
+if (c > 0) [
+    if (c = 10) [
+        "10です" println;
+    ];
+];
+
+check: Function is [
+    arg n: Integer;
+    ret String;
+    if (n < 0) [ return "負の数"; ];
+    return "正の数";
+];
+check(5);
+
+d: Integer is 0;
+if (d > 100) [
+    "ここは通らない" println;
+];
+d println; // 正しく 0 が表示されるか
+
+return 0;
+

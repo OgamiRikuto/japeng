@@ -1,0 +1,6 @@
+[EXIT: ERROR]
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_error/case4.je:7:1: [1;31mエラー:[0m[1m 未定義の変数 'y' への代入です。[0m
+    7 | y is 100;
+      | [1;31m^[0m
+
+[1;31m1 個のコンパイルエラーが検出されました。[0m

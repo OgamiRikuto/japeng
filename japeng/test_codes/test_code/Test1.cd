@@ -1,0 +1,4 @@
+class Test1 from Test:
+    sum: Integer;
+
+    test: Function from Test;

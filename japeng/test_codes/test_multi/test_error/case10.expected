@@ -1,0 +1,10 @@
+[EXIT: ERROR]
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_multi/test_error/case10.je:3:25: [1;31mエラー:[0m[1m 引数 'x' のデフォルト値にはリテラルを指定してください。[0m
+    3 |     arg x: Integer is 1 + 2;
+      |                         [1;31m^[0m
+
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_multi/test_error/case10.je:10:28: [1;31mエラー:[0m[1m 型の不一致です (期待される型: 'List Integer', 実際の型: 'Integer')。[0m
+   10 |     arg l: List Integer is 1;
+      |                            [1;31m^[0m
+
+[1;31m2 個のコンパイルエラーが検出されました。[0m

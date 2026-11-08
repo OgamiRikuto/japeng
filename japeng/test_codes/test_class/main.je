@@ -1,0 +1,6 @@
+pochi: Dog is Dog("ポチ", 10);
+
+pochi bark;
+pochi name . println;
+pochi println;
+return 0;

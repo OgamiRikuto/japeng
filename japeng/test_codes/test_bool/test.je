@@ -1,0 +1,41 @@
+side_effect: Function is [
+    ret Boolean;
+    "副作用が発生しました！" println;
+    return true;
+];
+
+// 1. AND の短絡: 左が false なら右は実行されない
+"--- test AND short-circuit ---" println;
+r1: Boolean is (1 = 2) and self side_effect;
+r1 println; // false のみ表示（"副作用が発生しました！" は出ない）
+
+// 2. AND の非短絡: 左が true なら右も実行される
+"--- test AND evaluate rhs ---" println;
+r2: Boolean is (1 = 1) and self side_effect;
+r2 println; // "副作用が発生しました！" と true が表示
+
+// 3. OR の短絡: 左が true なら右は実行されない
+"--- test OR short-circuit ---" println;
+r3: Boolean is (1 = 1) or self side_effect;
+r3 println; // true のみ表示（"副作用が発生しました！" は出ない）
+
+// 4. OR の非短絡: 左が false なら右も実行される
+"--- test OR evaluate rhs ---" println;
+r4: Boolean is (1 = 2) or self side_effect;
+r4 println; // "副作用が発生しました！" と true が表示
+
+t: Boolean is true;
+f: Boolean is false;
+
+// 1. 基本的な否定
+(!t) println; // 期待値: false
+(!f) println; // 期待値: true
+
+// 2. 二重否定
+(!!t) println; // 期待値: true
+
+// 3. 比較式や論理演算との組み合わせ
+(!(1 = 2)) println; // 期待値: true
+(!t and f) println; // 期待値: false
+
+return 0;

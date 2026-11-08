@@ -1,0 +1,20 @@
+// test_index.je
+list: List Integer is 10, 20, 30;
+arr: List (List Integer) are list;
+
+arr[0][1] println;
+
+// 1. 配列読み取り
+list[0] println; // 10
+list[1] println; // 20
+
+// 2. 配列書き換え
+list[1] is 99;
+list[1] println; // 99
+
+// 3. 文字列インデックスアクセス
+text: String is "JapEng";
+text[0] println; // J
+text[3] println; // E
+
+return 0;

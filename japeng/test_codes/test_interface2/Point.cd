@@ -1,0 +1,14 @@
+class Point:
+    x: Integer;
+    y: Integer;
+
+    init: Function is [
+        arg _x: Integer, _y: Integer;
+        x is _x;
+        y is _y;
+    ];
+
+    toString: Function is [
+        ret String;
+        return "({x}, {y})";
+    ];

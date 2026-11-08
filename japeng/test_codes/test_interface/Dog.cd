@@ -1,0 +1,11 @@
+class Dog based Animal:
+    name: String;
+
+    init: Function is [
+        arg n: String;
+        super init(n);
+    ];
+
+    speak: Function is [
+        "わんわん！" println;
+    ];

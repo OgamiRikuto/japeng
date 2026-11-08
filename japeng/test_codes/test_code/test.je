@@ -1,0 +1,13 @@
+t: Test is 100;
+t println;
+"tのaは " print; (t a) println;
+"tのsumは" print ; (t sum) println;
+t test(10);
+x: Integer is t sum;
+
+t2: Test2;
+(t2 sum) println;
+t2 test(10);
+(t2 sum) println;
+
+return 0;

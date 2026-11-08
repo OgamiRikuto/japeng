@@ -1,0 +1,37 @@
+"=== 1. クラスからの静的メソッド呼び出し ===" println;
+Base s_touch_static . println;  // 100
+Base s_touch_neither . println; // 777
+
+"=== 2. 静的メソッドのオーバーライド確認 ===" println;
+Sub s_touch_neither . println;  // 888 (子クラス側の定義)
+Base s_touch_neither . println; // 777 (親クラス側の定義が維持されている)
+
+"=== 3. 親子の静的フィールド合算 ===" println;
+Sub s_touch_sub_and_parent . println; // 200 + 100 = 300
+
+"=== 4. 静的フィールドの外部直接アクセス ===" println;
+Base.base_s_val println; // 100
+Sub.sub_s_val println;   // 200
+
+"=== 5. インスタンスメソッドからの各フィールドアクセス ===" println;
+b: Base is Base();
+b touch_static . println;   // 100
+b touch_instance . println; // 10
+b touch_both . println;     // 110
+b touch_neither . println;  // 42
+
+"=== 6. 子クラスインスタンスからの全階層アクセス ===" println;
+s: Sub is Sub();
+s touch_parent_static . println; // 100
+s touch_all . println;           // 10 + 20 + 100 + 200 = 330
+
+/* =========================================================================
+ * ★ 不穏コード（クラスからのインスタンスメソッド直接呼び出し撃墜確認用）
+ *   コメントを外すと ERR_UNDEFINED_CLASS_METHOD でコンパイルが停止する
+ * =========================================================================
+ */
+// Base touch_instance;
+// Sub touch_all;
+
+
+return 0;

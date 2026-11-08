@@ -1,0 +1,7 @@
+class MultiTest from WorkerA, WorkerB:
+    // WorkerA から委譲
+    workA: Function(Integer; Integer) from WorkerA;
+    info: Function(; String) from WorkerA;
+
+    // WorkerB から委譲
+    workB: Function(Integer; Integer) from WorkerB;

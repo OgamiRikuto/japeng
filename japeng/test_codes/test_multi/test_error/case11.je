@@ -1,0 +1,11 @@
+greet: Function(Integer, Integer, String; Void) is [
+    arg x: Integer, y: Integer is 10, msg: String is "OK";
+    ret Void;
+    return;
+];
+
+// [C-5] 引数が少なすぎる (必須引数 x すら渡していない)
+self greet; // 0個 (期待値: 1〜3)
+
+// [C-6] 引数が多すぎる
+greet(1, 2, "A", "余分"); // 4個 (期待値: 1〜3)

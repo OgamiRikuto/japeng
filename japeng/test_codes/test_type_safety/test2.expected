@@ -1,0 +1,26 @@
+[EXIT: ERROR]
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_type_safety/test2.je:7:2: [1;31mエラー:[0m[1m 回数指定ループ 'repeat' (繰り返す) の回数には整数型 (Integer) が必要ですが、'String' が渡されました。[0m
+    7 | "五回" repeat [
+      |  [1;31m^~~~~~[0m
+
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_type_safety/test2.je:13:24: [1;31mエラー:[0m[1m 'each' (各々) の第 1 引数 (添字) には 'Integer' (整数型) が必要ですが、'String' が指定されました。[0m
+   13 | num_list each [ arg i: String, n: String;
+      |                        [1;31m^~~~~~[0m
+
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_type_safety/test2.je:18:24: [1;31mエラー:[0m[1m ビット演算子 '&' には整数型 (Integer) が必要ですが、'String' が渡されました。[0m
+   18 | bad_bit: Integer is 10 & "text";
+      |                        [1;31m^[0m
+
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_type_safety/test2.je:21:8: [1;31mエラー:[0m[1m 演算子 '=' の両辺の型が一致しません (左辺: 'Integer', 右辺: 'String')。[0m
+   21 | if (10 = "10") [
+      |        [1;31m^[0m
+
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_type_safety/test2.je:26:4: [1;31mエラー:[0m[1m メソッド 'println' に渡された引数の個数が一致しません (期待値: 0 個, 実際: 2 個)。[0m
+   26 | 10 println("余計な引数1", "余計な引数2");
+      |    [1;31m^~~~~~~[0m
+
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_type_safety/test2.je:30:17: [1;31mエラー:[0m[1m 戻り値型が 'Void' (無型) の関数内では値を返せません ('Integer' が返されました)。[0m
+   30 |     return 12345;
+      |                 [1;31m^[0m
+
+[1;31m6 個のコンパイルエラーが検出されました。[0m

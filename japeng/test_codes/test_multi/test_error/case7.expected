@@ -1,0 +1,10 @@
+[EXIT: ERROR]
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_multi/test_error/case7.je:22:8: [1;31mエラー:[0m[1m 関数 'runner' の第 1 引数の型が一致しません (期待される型: 'Function(Integer; String)', 実際の型: 'Function(String; String)')。[0m
+   22 | runner(bad_arg_cb, 10); // エラー！
+      |        [1;31m^~~~~~~~~~[0m
+
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_multi/test_error/case7.je:30:8: [1;31mエラー:[0m[1m 関数 'runner' の第 1 引数の型が一致しません (期待される型: 'Function(Integer; String)', 実際の型: 'Function(Integer; Boolean)')。[0m
+   30 | runner(bad_ret_cb, 10); // エラー！
+      |        [1;31m^~~~~~~~~~[0m
+
+[1;31m2 個のコンパイルエラーが検出されました。[0m

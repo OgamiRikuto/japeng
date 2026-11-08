@@ -1,0 +1,16 @@
+[EXIT: OK]
+--- test AND short-circuit ---
+false
+--- test AND evaluate rhs ---
+副作用が発生しました！
+true
+--- test OR short-circuit ---
+true
+--- test OR evaluate rhs ---
+副作用が発生しました！
+true
+false
+true
+true
+true
+false

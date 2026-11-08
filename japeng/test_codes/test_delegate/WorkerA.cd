@@ -1,0 +1,14 @@
+class WorkerA:
+    valA: Integer is 10;
+
+    workA: Function is [
+        arg x: Integer;
+        ret Integer;
+        valA += x;
+        return valA;
+    ];
+
+    info: Function is [
+        ret String;
+        return "WorkerA";
+    ];

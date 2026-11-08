@@ -1,0 +1,6 @@
+[EXIT: ERROR]
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_constructer/test.je:3:15: [1;31mエラー:[0m[1m メソッド 'init' の第 1 引数の型が一致しません (期待される型: 'Integer', 実際の型: 'String')。[0m
+    3 | List Integer("a", 2, 3) println;
+      |               [1;31m^[0m
+
+[1;31m1 個のコンパイルエラーが検出されました。[0m

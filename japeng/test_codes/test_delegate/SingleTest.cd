@@ -1,0 +1,9 @@
+class SingleTest from WorkerA:
+    // 1. workA は WorkerA にそのまま委譲 (ラッパーが自動生成される)
+    workA: Function from WorkerA;
+
+    // 2. info は自前ブロックでオーバーライド！
+    info: Function is [
+        ret String;
+        return "Overridden in SingleTest";
+    ] from WorkerA;

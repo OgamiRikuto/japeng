@@ -1,0 +1,88 @@
+// ==========================================
+// 1. 正常系テスト（エラーが出ずに完走するはず）
+// ==========================================
+
+// auto の型推論テスト (Integer として推論される)
+x: Auto is 10;
+x println;
+
+// //関数の正常呼び出しテスト (引数・戻り値とも一致)
+add: Function is [
+    arg a: Integer, b: Integer;
+    ret Integer;
+    return a + b;
+];
+
+add (1, 2) . println;
+
+// test_fn: Function is [
+//     ret Integer;
+//     return 10;
+// ];
+// test_fn() println;
+
+
+// ==========================================
+// 2. 異常系テスト
+// （1つずつコメントを外して、期待通りのエラーが出るか確認！）
+// ==========================================
+
+// 【TEST A】代入の型エラー (ERR_TYPE_MISMATCH)
+// 期待値: 型の不一致です (期待される型: 'Integer', 実際の型: 'String')。
+// y: Integer is "文字列";
+
+
+// 【TEST B】auto 推論後の再代入エラー (ERR_TYPE_MISMATCH)
+// 期待値: x は Integer なので String 代入でエラー
+// x is "文字列";
+
+
+// 【TEST C】関数の引数個数エラー (ERR_ARITY_MISMATCH)
+// 期待値: 引数の個数が一致しません (期待値: 2, 実際: 1)。
+add(10);
+
+// 【TEST D】関数の引数型エラー (ERR_ARG_TYPE_MISMATCH)
+// 期待値: 第 2 引数の型が一致しません (期待される型: 'Integer', 実際の型: 'String')。
+add(10, "二十");
+
+
+// 【TEST E】戻り値の型エラー (ERR_RETURN_TYPE_MISMATCH)
+// 期待値: 戻り値の型が一致しません (期待される型: 'Integer', 実際の型: 'String')。
+// bad_fn: Function is [
+//     ret Integer;
+//     return "文字";
+// ];
+
+
+
+// ==========================================
+// 正常系テスト
+// ==========================================
+
+// Integer を入れる Box を作成
+int_box: Box Integer;
+int_box set(100);
+
+// auto 型推論テスト (get の戻り値 T が Integer に置換され、val は Integer になる！)
+val: Auto is int_box get;
+val println; // => 100 が出力される！
+
+
+// ==========================================
+// 異常系テスト（1つずつコメントを外して確認！）
+// ==========================================
+
+// 【TEST 1】ジェネリクス引数の型エラー！
+// T は Integer なのに String を渡しているのでコンパイルエラーになる
+int_box set ("文字列");
+// => エラー: 第 1 引数の型が一致しません (期待される型: 'Integer', 実際の型: 'String')。
+
+// 【TEST 2】auto 推論後の代入エラー！
+// val は Integer と推論されているため、String を代入すると弾かれる
+val is "文字列";
+// => エラー: 型の不一致です (期待される型: 'Integer', 実際の型: 'String')。
+
+// 【TEST 3】未定義メソッドの検出！
+// int_box に存在しないメソッドを呼ぶとコンパイルエラーになる
+int_box not_exist_method(10);
+// => エラー: 型 'Box' に未定義のメッセージ (メソッド) 'not_exist_method' が送信されました。

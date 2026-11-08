@@ -1,0 +1,14 @@
+// 1. ジェネリックな Box クラスの定義
+class Box T:
+    value: T;
+
+    set: Function is [
+        arg v: T;
+        ret Void;
+        value is v;
+    ];
+
+    get: Function is [
+        ret T;
+        return value;
+    ];
