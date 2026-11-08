@@ -318,6 +318,14 @@ static const char* const error_table[ERR_COUNT][LANG_COUNT] = {
         [LANG_EN] = "Cannot instantiate interface '%s'.",
         [LANG_JA] = "インターフェース '%s' を直接インスタンス化することはできません。"
     },
+    [ERR_WITH_REQUIRES_CLOSE] = {
+        [LANG_EN] = "'with' target must implement 'Close' interface (missing 'close' method).",
+        [LANG_JA] = "'with' の対象には 'Close' インターフェースの実装が必要です ('close' メソッドがありません)。"
+    },
+    [ERR_WITH_SYNTAX] = {
+        [LANG_EN] = "'with' requires a resource expression and a block.",
+        [LANG_JA] = "'with' にはリソース式と実行ブロックが必要です。"
+    },
 
     // // --- 実行時エラー ---
     // [ERR_UNDEFINED_GLOBAL] = {

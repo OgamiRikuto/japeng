@@ -476,7 +476,7 @@ static bool is_control_stmt_node(ASTNode* node) {
         Symbol* msg = node->send.message->identifier.name;
         if (msg == sym_if || msg == sym_repeat || sym_switch ||
             msg == sym_elif || msg == sym_else || msg == sym_each ||
-            msg == sym_case) {
+            msg == sym_case || msg == sym_with) {
             return true;
         }
     }
@@ -644,8 +644,17 @@ ASTNode* parse_message(Parser* p)
     // 1. 制御構文チェーンの判定: if(c)[...] や repeat[...]
     if (check(p, IDENTIFIER) && peek_type(p, 1) == L_PAR) {
         int d = 2;
-        while (peek_type(p, d) != TOK_EOF && peek_type(p, d) != R_PAR) d++;
-        if (peek_type(p, d) == R_PAR && peek_type(p, d + 1) == L_BLACKET) {
+        int paren_depth = 1;
+        while (peek_type(p, d) != TOK_EOF) {
+            if (peek_type(p, d) == L_PAR) paren_depth++;
+            else if (peek_type(p, d) == R_PAR) {
+                paren_depth--;
+                if (paren_depth == 0) break; 
+            }
+            d++;
+        }
+
+        if (paren_depth == 0 && peek_type(p, d + 1) == L_BLACKET) {
             return parse_control_chain(p);
         }
     }

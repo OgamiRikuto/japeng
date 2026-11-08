@@ -10,6 +10,7 @@
 
 #define MAX_TYPE_PARAMS 8
 #define MAX_LOCALS 256
+#define MAX_WITH_DEPTH 16
 
 typedef struct loop {
     struct loop* enclosing;
@@ -56,6 +57,8 @@ typedef struct compiler {
     Loop* current_loop;
     ClassDef* current_class;
     Table* defined_class;
+    int with_slots[MAX_WITH_DEPTH];
+    int with_depth;
 } Compiler;
 
 void init_compiler_symbols(void);

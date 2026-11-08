@@ -38,6 +38,13 @@ static bool is_if_chain(ASTNode* node)
     return false;
 }
 
+static void emit_with_cleanup(Compiler* c) 
+{
+    for (int i = c->with_depth - 1; i >= 0; i--) {
+        emit_close_resource(c, c->with_slots[i]);
+    }
+}
+
 void compile_statement_node(Compiler* c, ASTNode* node) 
 {
     if (node == NULL) return;
@@ -66,7 +73,8 @@ void compile_statement_node(Compiler* c, ASTNode* node)
 
         // 3. 制御構文は自前でスタックを整合させているので POP しない
         if (msg == sym_if || msg == sym_repeat || 
-            msg == sym_switch || msg == sym_each) {
+            msg == sym_switch || msg == sym_each ||
+            msg == sym_with) {
             return;
         }
 
@@ -145,6 +153,11 @@ void compile(Compiler* c, ASTNode* node)
                 break;
             }
 
+            if (msg_sym == sym_with) {
+                compile_with(c, node);
+                break;
+            }
+
             // ★ 通常のメッセージ送信（メソッド呼び出し、演算子、ローカル関数）
             compile_mesage_send(c, node, msg_sym);
             break;
@@ -167,12 +180,12 @@ void compile(Compiler* c, ASTNode* node)
             }
 
             // =========================================================
-            // ★ トップレベル (main.je 直下) の return: プロセスの終了コードを返す
+            // トップレベル (main.je 直下) の return: プロセスの終了コードを返す
             // =========================================================
             if (c->enclosing == NULL) {
                 if (expr_count > 1) {
                     error_compile(node, ERR_ARITY_MISMATCH, 1, expr_count);
-                    return;
+                    break;
                 }
 
                 if (expr_count == 1) {
@@ -188,29 +201,37 @@ void compile(Compiler* c, ASTNode* node)
                     emit_constant(c, make_int(0));
                 }
 
+                // トップレベル脱出前の with クリーンアップ
+                emit_with_cleanup(c);
+
                 emit_inst(c, OP_RETURN, 1);
                 break;
             }
 
             // =========================================================
-            // ブロック (関数) 内の厳格チェック (既存コード)
+            // ブロック (関数) 内の厳格チェック
             // =========================================================
             if (c->expected_ret_count == 1 && c->expected_ret_types[0]->name == sym_Void) {
                 if (expr_count > 0) {
                     TypeInfo* actual = compile_expression(c, exprs[0]);
                     error_compile(node, ERR_RETURN_VALUE_IN_VOID_FUNC, actual->name->chars);
+                    emit_with_cleanup(c); // エラー時もスタック整合のためクリーンアップ
                     emit_inst(c, OP_RETURN, 0);
                     break;
                 }
             } else if (c->expected_ret_count > 0 && expr_count == 0) {
                 error_compile(node, ERR_RETURN_EMPTY_IN_VALUE_FUNC, c->expected_ret_types[0]->name->chars);
+                emit_with_cleanup(c);
                 emit_inst(c, OP_RETURN, 0);
                 break;
             }
 
             if (expr_count == 0) {
+                // 式なし return; (Void 関数)
+                emit_with_cleanup(c); // 脱出前に close
                 emit_inst(c, OP_RETURN, 0);
             } else {
+                // 戻り値式（1個または多値）をスタックに評価
                 for (int i = 0; i < expr_count; i++) {
                     TypeInfo* actual_type = compile_expression(c, exprs[i]);
                     if (i < c->expected_ret_count) {
@@ -222,6 +243,10 @@ void compile(Compiler* c, ASTNode* node)
                         }
                     }
                 }
+
+                // 戻り値をスタックに積んだ状態で with クリーンアップを実行
+                emit_with_cleanup(c);
+
                 emit_inst(c, OP_RETURN, (uint32_t)expr_count);
             }
             break;

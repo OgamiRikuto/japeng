@@ -652,3 +652,123 @@ void compile_each(Compiler* c, ASTNode* node)
 
     end_loop(c, &loop); // break はここへ脱出パッチされる
 }
+
+// ヘルパー: 指定スロットのリソースに対して close() 呼び出し命令を発行
+void emit_close_resource(Compiler* c, int slot) 
+{
+    // 1. レシーバ (リソース) をスタックに乗せる
+    emit_inst(c, OP_GET_LOCAL, (uint32_t)slot);
+
+    TypeInfo* t = (slot < c->local_count) ? c->locals[slot].type : NULL;
+    ClassDef* klass = t ? resolve_class(c, t->name) : NULL;
+
+    // パターン A: 具象クラスが分かっている場合は最速の vtable 直接呼び出し
+    if (klass != NULL && !klass->is_interface) {
+        int vtable_idx = get_vtable_index(klass, sym_close);
+        if (vtable_idx != -1) {
+            emit_inst(c, OP_INVOKE_VIRTUAL, make_call_operand(0, (uint16_t)vtable_idx));
+            emit_inst(c, OP_POP, 0); // close() の戻り値 (Void) を破棄
+            return;
+        }
+    }
+
+    // パターン B: インターフェース型などの場合は Close インターフェース経由で呼ぶ
+    ClassDef* close_iface = resolve_class(c, sym_Close);
+    int iface_midx = close_iface ? get_vtable_index(close_iface, sym_close) : 0;
+    if (iface_midx == -1) iface_midx = 0;
+
+    ObjCallSite* cs = new_call_site(sym_Close, (uint16_t)iface_midx);
+    uint32_t cs_idx = add_constant(c->chunk, make_obj((Obj*)cs));
+
+    emit_inst(c, OP_IMPL_SEND, make_call_operand(0, (uint16_t)cs_idx));
+    emit_inst(c, OP_POP, 0); // close() の戻り値 (Void) を破棄
+}
+
+void compile_with(Compiler* c, ASTNode* node) 
+{
+    if (node->send.args == NULL || node->send.args->kind != AST_STMT) {
+        error_compile(node, ERR_WITH_SYNTAX);
+        return;
+    }
+
+    ASTNode* res_node   = node->send.args->stmt.left;
+    ASTNode* block_node = node->send.args->stmt.right;
+
+    if (block_node == NULL || block_node->kind != AST_BLOCK) {
+        error_compile(node, ERR_WITH_SYNTAX);
+        return;
+    }
+
+    // 1. 括弧内のリソース式を収集 (1個でも複数でも対応)
+    ASTNode* res_exprs[MAX_ARGS];
+    int res_count = 0;
+    collect_args(res_node, res_exprs, &res_count, MAX_ARGS);
+
+    // 2. ブロック引数の宣言ノードを収集
+    ASTNode* arg_decls[MAX_ARGS];
+    int arg_count = 0;
+
+    if (block_node->block.args != NULL) {
+        collect_clauses(block_node->block.args, arg_decls, &arg_count, MAX_ARGS);
+
+        // 個数チェック
+        if (res_count != arg_count) {
+            error_compile(block_node->block.args, ERR_MULTI_ASSIGN_COUNT_MISMATCH, arg_count, res_count);
+            return;
+        }
+    }
+
+    ClassDef* close_iface = resolve_class(c, sym_Close);
+    TypeInfo* close_type = close_iface ? close_iface->type : new_type_info(sym_Close, 0);
+
+    int allocated_slots[MAX_ARGS];
+    int start_with_depth = c->with_depth;
+
+    // 3. 各リソースを順番に評価・型チェック・変数束縛
+    for (int i = 0; i < res_count; i++) {
+        TypeInfo* res_type = compile_expression(c, res_exprs[i]);
+
+        // Close インターフェース実装チェック
+        if (res_type == NULL || !is_assignable(c, close_type, res_type)) {
+            emit_inst(c, OP_POP, 0);
+            error_compile(res_exprs[i], ERR_WITH_REQUIRES_CLOSE);
+            return;
+        }
+
+        // 変数スロットの確保と型チェック
+        int slot = -1;
+        if (arg_count > 0) {
+            ASTNode* decl = arg_decls[i];
+            Symbol* var_name = decl->var_decl.identifier->identifier.name;
+            TypeInfo* decl_type = build_type_info(decl->var_decl.type);
+
+            // 引数ごとの個別型チェック
+            if (decl_type != NULL && !is_assignable(c, decl_type, res_type)) {
+                error_compile(decl, ERR_ASSIGN_TYPE_MISMATCH,
+                              type_to_string(res_type),
+                              var_name->chars,
+                              type_to_string(decl_type));
+            }
+            slot = add_local(c, var_name, res_type);
+        } else {
+            slot = add_anonymous_local(c);
+        }
+
+        emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
+        allocated_slots[i] = slot;
+
+        if (c->with_depth < MAX_WITH_DEPTH) {
+            c->with_slots[c->with_depth++] = slot;
+        }
+    }
+
+    // 4. ブロック本体のインラインコンパイル
+    compile_statement_node(c, block_node->block.body);
+
+    // 5. 正常終了時の自動 close (生成と逆順 LIFO で呼び出し)
+    for (int i = res_count - 1; i >= 0; i--) {
+        emit_close_resource(c, allocated_slots[i]);
+    }
+
+    c->with_depth = start_with_depth;
+}

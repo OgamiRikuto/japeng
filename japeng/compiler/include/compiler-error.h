@@ -99,6 +99,8 @@ typedef enum {
     ERR_INTERFACE_METHOD_CONFLICT,
     ERR_CANNOT_INSTANTIATE_INTERFACE,
     ERR_UNDEFINED_MESSAGE,
+    ERR_WITH_REQUIRES_CLOSE,        // Close インターフェース未実装
+    ERR_WITH_SYNTAX,                // 式またはブロックの不足
 
     // // --- 実行時エラー ---
     // ERR_UNDEFINED_GLOBAL,

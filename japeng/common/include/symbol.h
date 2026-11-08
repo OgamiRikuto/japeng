@@ -27,6 +27,7 @@ typedef struct symbol {
     X(case,         "case") \
     X(default,      "default") \
     X(each,         "each") \
+    X(with,         "with") \
     X(init,         "init") \
     X(destroy,      "destroy") \
     X(push,         "push") \
@@ -71,6 +72,8 @@ typedef struct symbol {
     X(String,       "String") \
     X(List,         "List") \
     X(Boolean,      "Boolean") \
+    X(Close,        "Close") \
+    X(close,        "close") \
     X(Null,         "Null") \
     X(__multi__,    "__multi__") \
     X(Void,         "Void") \
