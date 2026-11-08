@@ -74,6 +74,19 @@ typedef struct classDef {
     FieldInfo* field_infos;
     Value* default_values;
 
+    // 静的フィールド情報
+    int static_field_count;
+    int static_field_capacity;
+    FieldInfo* static_field_infos;
+    Value* static_default_values;
+
+    // 静的メソッド情報
+    int static_method_count;
+    int static_method_capacity;
+    Value* static_methods;               // ObjFunction* の配列
+    Symbol** static_method_names;        // メソッド名配列
+    Table* static_method_indexes;        // メソッド名 -> スロット番号 (int) の逆引きマップ
+
     ClassState state;
 } ClassDef;
 
@@ -121,6 +134,12 @@ int add_or_override_vtable_slot(ClassDef* klass, Symbol* name, Value method);
 void build_class_vtable(ClassDef* klass);
 void init_class_vtable_from_super(ClassDef* klass);
 int get_vtable_index(ClassDef* klass, Symbol* name);
+
+void add_static_field(ClassDef* klass, FieldInfo field_info, Value default_value);
+int  find_static_field_index(ClassDef* klass, Symbol* name);
+int  add_static_method(ClassDef* klass, Symbol* name, Value method);
+int  get_static_method_index(ClassDef* klass, Symbol* name);
+bool is_static_method(ClassDef* klass, Symbol* name);
 
 
 #endif

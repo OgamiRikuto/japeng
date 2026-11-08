@@ -168,6 +168,7 @@ void compile_repeat(Compiler* c, ASTNode* node)
     
         emit_loop(c, loop_start);
         patch_jump(c, exit_jump);
+        c->stack_depth++;
         emit_inst(c, OP_POP, 0);
     
         end_loop(c, &loop);
@@ -258,7 +259,7 @@ void compile_break(Compiler* c, ASTNode* node)
 {
     if (c->current_loop == NULL) {
         error_compile(node, ERR_BREAK_OUTSIDE_LOOP);
-        
+        return;
     }
     int jump = emit_jump(c, OP_JUMP);
     uint32_t prev = (c->current_loop->break_jump == -1) 
@@ -272,7 +273,7 @@ void compile_continue(Compiler* c, ASTNode* node)
 {
     if (c->current_loop == NULL) {
         error_compile(node, ERR_CONTINUE_OUTSIDE_LOOP);
-        
+        return;
     }
 
     // 回数指定ループ等で continue_jump による遅延解決が必要な場合
@@ -311,6 +312,7 @@ ObjFunction* compile_block(Compiler* parent, ASTNode* block_node)
     block_compiler.enclosing = parent;
     block_compiler.current_class = parent->current_class;
     block_compiler.defined_class = parent->defined_class;
+    block_compiler.is_static_method = parent ? parent->is_static_method : false;
 
     block_compiler.expected_ret_count = 0;
     if (block_node->block.rets != NULL) {

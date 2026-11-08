@@ -22,10 +22,13 @@ const char* op_kind[OP_MAX] = {
     [OP_SET_GLOBAL]    = "OP_SET_GLOBAL",
     [OP_GET_FIELD]     = "OP_GET_FIELD",
     [OP_SET_FIELD]    = "OP_SET_FIELD",
+    [OP_GET_STATIC]    = "OP_GET_STATIC",
+    [OP_SET_STATIC]    = "OP_SET_STATIC",
     [OP_SEND]          = "OP_SEND",
     [OP_INVOKE_VIRTUAL]= "OP_INVOKE_VIRTUAL",
     [OP_IMPL_SEND]     = "OP_IMPL_SEND",
     [OP_SUPER_CALL]    = "OP_SUPER_CALL",
+    [OP_STATIC_CALL]   = "OP_STATIC_CALL",
     [OP_CALL]          = "OP_CALL",
     [OP_POP]           = "OP_POP",
     [OP_DUP]           = "OP_DUP",
@@ -326,6 +329,36 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 push(vm, value);
                 break;
             }
+            case OP_GET_STATIC: {
+                uint32_t slot = get_operand(instruction);
+                Value receiver = pop(vm);
+
+                if (!is_obj_type(receiver, OBJ_CLASS)) {
+                    error_runtime(ERR_CANNOT_ACCESS_FIELD_ON_CLASS);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                ObjClass* klass = (ObjClass*)as_obj(receiver);
+                push(vm, klass->static_fields[slot]);
+                break;
+            }
+
+            case OP_SET_STATIC: {
+                uint32_t slot = get_operand(instruction);
+                Value value = pop(vm);
+                Value receiver = pop(vm);
+
+                if (!is_obj_type(receiver, OBJ_CLASS)) {
+                    error_runtime(ERR_CANNOT_ACCESS_FIELD_ON_CLASS);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                ObjClass* klass = (ObjClass*)as_obj(receiver);
+                klass->static_fields[slot] = value;
+                gc_write_barrier(&vm->heap, klass, value);
+                push(vm, value);
+                break;
+            }
             case OP_NEW_INSTANCE: {
                 Value class_val = pop(vm);
                 if (!is_obj(class_val) || ((Obj*)as_obj(class_val))->type != OBJ_CLASS) {
@@ -593,6 +626,58 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 }
 
                 // JapEng の関数 (ObjFunction) の場合
+                ObjFunction* func = (ObjFunction*)as_obj(method_val);
+
+                if (vm->frame_count >= FRAME_MAX) {
+                    error_runtime(ERR_STACK_OVERFLOW);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                frame = setup_call_frame(vm, func, NULL, arg_count);
+                if (frame == NULL) return INTERPRET_RUNTIME_ERROR;
+                break;
+            }
+            case OP_STATIC_CALL: {
+                uint8_t arg_count = get_send_args(instruction);
+                uint16_t slot = get_send_index(instruction);
+
+                // 1. スタックからレシーバーのクラスオブジェクトを取得
+                Value receiver = peek(vm, arg_count);
+                if (!is_obj_type(receiver, OBJ_CLASS)) {
+                    error_runtime(ERR_CANNOT_ACCESS_FIELD_ON_CLASS);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                ObjClass* klass = (ObjClass*)as_obj(receiver);
+
+                // 2. スロットの範囲チェック
+                if (klass->static_methods == NULL || slot >= klass->static_method_count) {
+                    error_runtime(ERR_UNIMPLEMENTED_VIRTUAL_METHOD, slot);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                // 3. クラスの static_methods 配列から関数実体を取得
+                Value method_val = klass->static_methods[slot];
+                if (is_nil(method_val)) {
+                    error_runtime(ERR_UNIMPLEMENTED_VIRTUAL_METHOD, slot);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                // ネイティブメソッドの場合
+                if (is_obj_type(method_val, OBJ_NATIVE)) {
+                    ObjNative* native = (ObjNative*)as_obj(method_val);
+                    if (!native->function(vm, arg_count)) {
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    break;
+                }
+
+                // JapEng の関数 (ObjFunction) の場合
+                if (!is_obj_type(method_val, OBJ_FUNCTION)) {
+                    error_runtime(ERR_NOT_CALLABLE);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
                 ObjFunction* func = (ObjFunction*)as_obj(method_val);
 
                 if (vm->frame_count >= FRAME_MAX) {
@@ -1228,6 +1313,12 @@ static void print_instruction(CallFrame* frame, uint32_t instruction, uint32_t c
             uint8_t argc = get_send_args(instruction);
             uint16_t fn_idx = get_send_index(instruction);
             fprintf(stderr, "argc: %u, fn_idx: %u\n", argc, fn_idx);
+            break;
+        }
+        case OP_STATIC_CALL: {
+            uint8_t argc = get_send_args(instruction);
+            uint16_t slot = get_send_index(instruction);
+            fprintf(stderr, "argc: %u, static_slot: %u\n", argc, slot);
             break;
         }
         case OP_CONSTANT: {

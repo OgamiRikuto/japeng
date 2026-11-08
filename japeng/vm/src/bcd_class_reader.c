@@ -281,6 +281,52 @@ ObjClass* vm_load_class_bcd(VM* vm, const char* bcd_path)
             klass->interface_table[idx].vtable_slots = slots;
         }
     }
+    
+    uint16_t sf_count = 0;
+    if (fread(&sf_count, sizeof(uint16_t), 1, fp) == 1 && sf_count > 0) {
+        klass->static_field_count = sf_count;
+        klass->static_fields      = (Value*)malloc(sizeof(Value) * sf_count);
+        klass->static_field_names = (Symbol**)malloc(sizeof(Symbol*) * sf_count);
+
+        for (int i = 0; i < sf_count; i++) {
+            uint32_t sfn_id;
+            fread(&sfn_id, sizeof(uint32_t), 1, fp);
+            klass->static_field_names[i] = pool[sfn_id];
+            klass->static_fields[i]      = vm_read_value(fp, pool, vm);
+        }
+    } else {
+        klass->static_field_count = 0;
+        klass->static_fields      = NULL;
+        klass->static_field_names = NULL;
+    }
+
+    uint16_t sm_count = 0;
+    if (fread(&sm_count, sizeof(uint16_t), 1, fp) == 1 && sm_count > 0) {
+        klass->static_method_count    = sm_count;
+        klass->static_method_capacity = sm_count;
+        klass->static_methods         = (Value*)malloc(sizeof(Value) * sm_count);
+        klass->static_method_names    = (Symbol**)malloc(sizeof(Symbol*) * sm_count);
+
+        for (int i = 0; i < sm_count; i++) {
+            uint32_t smname_id;
+            uint8_t kind;
+            fread(&smname_id, sizeof(uint32_t), 1, fp);
+            fread(&kind, sizeof(uint8_t), 1, fp);
+
+            klass->static_method_names[i] = pool[smname_id];
+            if (kind == 1) {
+                ObjFunction* fn = read_function(fp, pool, vm);
+                klass->static_methods[i] = make_obj((Obj*)fn);
+            } else {
+                klass->static_methods[i] = make_nil();
+            }
+        }
+    } else {
+        klass->static_method_count    = 0;
+        klass->static_method_capacity = 0;
+        klass->static_methods         = NULL;
+        klass->static_method_names    = NULL;
+    }
 
     free(pool);
     fclose(fp);

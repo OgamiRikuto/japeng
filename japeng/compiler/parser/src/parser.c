@@ -3,6 +3,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "defs.h"
+// Flex 側のシンボル
+extern int yylex(void);
+YYSTYPE yylval;
+YYLTYPE yylloc;
+Location current_ast_loc = {0};
+
+const char* current_filename = "";
+
 // =============================================================================
 // 動的トークン配列の管理 (Flex から全トークンを一括で受け取る用)
 // =============================================================================
@@ -40,6 +49,9 @@ void parser_init(Parser* p, Token* tokens, int count, const char* filename) {
     p->filename   = filename;
     p->had_error  = false;
     p->panic_mode = false;
+    if (count > 0) {
+        current_ast_loc = tokens[0].loc;
+    }
 }
 
 // 現在位置から distance 個先のトークンを取得 (範囲外なら末尾の EOF トークンを返す)
@@ -59,6 +71,7 @@ int peek_type(Parser* p, int distance) {
 // 現在のトークンを消費して 1 つ進める
 Token advance(Parser* p) {
     Token current = peek(p, 0);
+    current_ast_loc = current.loc;
     if (p->pos < p->count - 1) {
         p->pos++;
     }
@@ -139,6 +152,11 @@ void synchronize(Parser* p) {
 // ==================
 // パーサー本体
 // ==================
+static inline ASTNode* with_loc(ASTNode* node, Location loc) {
+    if (node) node->loc = loc;
+    return node;
+}
+
 ASTNode* parse_program(Parser* p)
 {
     ASTNode* import_stmt = parse_import_stmt_list(p);
@@ -544,6 +562,7 @@ ASTNode* parse_statement(Parser* p)
         ASTNode* vals = parse_expr_list(p);
         ASTNode* msg  = create_identifier_node(op_tok.symbol);
         stmt = create_send_node(expr, msg, vals);
+        stmt->loc = expr->loc;
     } 
     // B. なければ通常の式文
     else stmt = expr;
@@ -599,8 +618,14 @@ ASTNode* parse_expression(Parser* p)
     // 二項演算子 (+, -, *, /, ==, !=, and, or など)
     while (check(p, SP_IDENTIFIER)) {
         Token op_tok = consume(p, SP_IDENTIFIER);
+        ASTNode* op_node = create_identifier_node(op_tok.symbol);
+        op_node->loc = op_tok.loc;
+
         ASTNode* right = parse_message(p);
-        left = create_send_node(left, create_identifier_node(op_tok.symbol), right);
+        
+        ASTNode* send = create_send_node(left, op_node, right);
+        send->loc = op_tok.loc;
+        left = send;
     }
 
     return left;
@@ -629,6 +654,7 @@ ASTNode* parse_message(Parser* p)
     ASTNode* node = NULL;
     if (check(p, IDENTIFIER) && peek_type(p, 1) == L_PAR) {
         Token msg_tok = consume(p, IDENTIFIER);
+        Location call_loc = msg_tok.loc;
         consume(p, L_PAR);
         ASTNode* args = NULL;
         if (!check(p, R_PAR)) {
@@ -637,8 +663,11 @@ ASTNode* parse_message(Parser* p)
         consume(p, R_PAR);
 
         ASTNode* self_node = create_identifier_node(sym_self);
+        self_node->loc = call_loc;
         ASTNode* msg = create_identifier_node(msg_tok.symbol);
+        msg->loc = call_loc;
         node = create_send_node(self_node, msg, args);
+        node->loc = call_loc;
     } else {
         // 3. 通常のレシーバー取得
         node = parse_receiver(p);
@@ -650,6 +679,9 @@ ASTNode* parse_message(Parser* p)
         if (match(p, DOT)) {
             if (check(p, IDENTIFIER)) {
                 Token msg_tok = consume(p, IDENTIFIER);
+                ASTNode* msg_node = create_identifier_node(msg_tok.symbol);
+                msg_node->loc = msg_tok.loc;
+
                 ASTNode* args = NULL;
                 if (match(p, L_PAR)) {
                     if (!check(p, R_PAR)) args = parse_expr_list(p);
@@ -659,29 +691,43 @@ ASTNode* parse_message(Parser* p)
                     ASTNode* blk = parse_block(p);
                     args = (args == NULL) ? blk : create_stmt_node(args, blk);
                 }
-                node = create_send_node(node, create_identifier_node(msg_tok.symbol), args);
+                ASTNode* send = create_send_node(node, msg_node, args);
+                send->loc = msg_tok.loc;
+                node = send;
             } else if (check(p, SP_IDENTIFIER)) {
                 Token op_tok = consume(p, SP_IDENTIFIER);
+                ASTNode* op_node = create_identifier_node(op_tok.symbol);
+                op_node->loc = op_tok.loc;
+
                 ASTNode* right = parse_expression(p);
-                node = create_send_node(node, create_identifier_node(op_tok.symbol), right);
+                ASTNode* send = create_send_node(node, op_node, right);
+                send->loc = op_tok.loc;
+                node = send;
             }
             continue;
         }
         // B. ドットなしメソッド呼出: node method(...) または node method [block]
         if (check(p, IDENTIFIER)) {
             Token msg_tok = consume(p, IDENTIFIER);
-            ASTNode* args = NULL;
+            ASTNode* msg_node = create_identifier_node(msg_tok.symbol);
+            msg_node->loc = msg_tok.loc;
 
+            ASTNode* args = NULL;
             if (match(p, L_PAR)) {
                 if (!check(p, R_PAR)) args = parse_expr_list(p);
                 consume(p, R_PAR);
-                node = create_send_node(node, create_identifier_node(msg_tok.symbol), args);
+                ASTNode* send = create_send_node(node, msg_node, args);
+                send->loc = msg_tok.loc; // ★
+                node = send;
             } else if (check(p, L_BLACKET)) {
                 args = parse_block(p);
-                node = create_send_node(node, create_identifier_node(msg_tok.symbol), args);
+                ASTNode* send = create_send_node(node, msg_node, args);
+                send->loc = msg_tok.loc; // ★
+                node = send;
             } else {
-                // 引数なしメッセージ送信: node method
-                node = create_send_node(node, create_identifier_node(msg_tok.symbol), NULL);
+                ASTNode* send = create_send_node(node, msg_node, NULL);
+                send->loc = msg_tok.loc; // ★
+                node = send;
             }
             continue;
         }
@@ -994,16 +1040,6 @@ ASTNode* parse_statement_list_opt(Parser* p)
     if (check(p, R_BLACKET) || check(p, TOK_EOF)) return NULL;
     return parse_statement_list(p);
 }
-
-#include "defs.h"
-
-// Flex 側のシンボル
-extern int yylex(void);
-YYSTYPE yylval;
-YYLTYPE yylloc;
-Location current_ast_loc = {0};
-
-const char* current_filename = "";
 
 // Bison 互換エントリポイント (parse.c からそのまま呼ばれる)
 int yyparse(void) {

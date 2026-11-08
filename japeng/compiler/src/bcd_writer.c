@@ -32,6 +32,12 @@ static uint32_t pool_add(BcdStringPool* pool, Symbol* str) {
 static void pool_collect_type_names(BcdStringPool* pool, TypeInfo* t) {
     if (t == NULL) return;
     pool_add(pool, t->name);
+    for (int i = 0; i < t->param_count; i++) {
+        Value val = t->default_values[i];
+        if (is_obj_type(val, OBJ_STRING)) {
+            pool_add(pool, (Symbol*)as_obj(val));
+        }
+    }
     for (int i = 0; i < t->type_arg_count; i++) {
         pool_collect_type_names(pool, t->type_args[i]);
     }
@@ -218,14 +224,14 @@ bool write_class_bcd(const char* base_dir, ClassDef* klass, const char* source_f
     if (!ensure_cache_dir(base_dir)) return false;
 
     char filename[1024];
-    // ★ 修正 1: get_cache_filepath を使用して安全なエンコード名で保存
+    // get_cache_filepath を使用して安全なエンコード名で保存
     get_cache_filepath(base_dir, klass->name->chars, "bcd", filename, sizeof(filename));
 
     FILE* fp = fopen(filename, "wb");
     if (!fp) return false;
 
     BcdHeader header = { {'J', 'P', 'E', 'N'}, BCD_VERSION, BCD_TYPE_CLASS, 0, 0, 0, {0} };
-    // ★ 修正 2: 親ソースファイル名をヘッダに正しく記録
+    // 親ソースファイル名をヘッダに正しく記録
     if (source_filename != NULL) {
         strncpy(header.source_file, source_filename, BCD_MAX_SOURCE_NAME - 1);
     }
@@ -262,6 +268,18 @@ bool write_class_bcd(const char* base_dir, ClassDef* klass, const char* source_f
         if (is_obj_type(m, OBJ_FUNCTION)) {
             collect_function_strings((ObjFunction*)as_obj(m), &pool);
         }
+    }
+    for (int i = 0; i < klass->static_field_count; i++) {
+        pool_add(&pool, klass->static_field_infos[i].name);
+        pool_collect_type_names(&pool, klass->static_field_infos[i].type);
+    }
+    for (int i = 0; i < klass->static_method_count; i++) {
+        pool_add(&pool, klass->static_method_names[i]);
+        Value m = klass->static_methods[i];
+        if (is_obj_type(m, OBJ_FUNCTION)) {
+            collect_function_strings((ObjFunction*)as_obj(m), &pool);
+        }
+        pool_collect_type_names(&pool, find_method_type(klass, klass->static_method_names[i]));
     }
     pool_collect_type_names(&pool, klass->type);
     pool_collect_type_names(&pool, klass->superclass_type);
@@ -345,6 +363,30 @@ bool write_class_bcd(const char* base_dir, ClassDef* klass, const char* source_f
             fwrite(&s, sizeof(uint16_t), 1, fp);
         }
     }
+    uint16_t sf_count = (uint16_t)klass->static_field_count;
+    fwrite(&sf_count, sizeof(uint16_t), 1, fp);
+    for (int i = 0; i < klass->static_field_count; i++) {
+        uint32_t sfn_id = pool_add(&pool, klass->static_field_infos[i].name);
+        fwrite(&sfn_id, sizeof(uint32_t), 1, fp);
+        write_value(fp, klass->static_default_values[i], &pool);
+    }
+
+    uint16_t sm_count = (uint16_t)klass->static_method_count;
+    fwrite(&sm_count, sizeof(uint16_t), 1, fp);
+    for (int i = 0; i < klass->static_method_count; i++) {
+        uint32_t smname_id = pool_add(&pool, klass->static_method_names[i]);
+        fwrite(&smname_id, sizeof(uint32_t), 1, fp);
+
+        Value m = klass->static_methods[i];
+        if (is_obj_type(m, OBJ_FUNCTION)) {
+            uint8_t kind = 1;
+            fwrite(&kind, sizeof(uint8_t), 1, fp);
+            write_function(fp, (ObjFunction*)as_obj(m), &pool);
+        } else {
+            uint8_t kind = 0;
+            fwrite(&kind, sizeof(uint8_t), 1, fp);
+        }
+    }
 
     // =========================================================================
     // ★★★ 3. 型メタデータセクション ★★★
@@ -387,6 +429,23 @@ bool write_class_bcd(const char* base_dir, ClassDef* klass, const char* source_f
         fwrite(&mid, sizeof(uint32_t), 1, fp);
 
         TypeInfo* mt = find_method_type(klass, mname);
+        write_type_info(fp, mt, &pool);
+    }
+
+    fwrite(&sf_count, sizeof(uint16_t), 1, fp);
+    for (int i = 0; i < klass->static_field_count; i++) {
+        uint32_t sfn_id = pool_add(&pool, klass->static_field_infos[i].name);
+        fwrite(&sfn_id, sizeof(uint32_t), 1, fp);
+        write_type_info(fp, klass->static_field_infos[i].type, &pool);
+    }
+
+    fwrite(&sm_count, sizeof(uint16_t), 1, fp);
+    for (int i = 0; i < klass->static_method_count; i++) {
+        Symbol* smname = klass->static_method_names[i];
+        uint32_t smid = pool_add(&pool, smname);
+        fwrite(&smid, sizeof(uint32_t), 1, fp);
+
+        TypeInfo* mt = find_method_type(klass, smname);
         write_type_info(fp, mt, &pool);
     }
 

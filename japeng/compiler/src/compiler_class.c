@@ -445,12 +445,13 @@ static void reserve_class_vtable_slots(ClassDef* klass, ASTNode* node)
         ASTNode* receiver = node->send.receiver;
         ASTNode* args = node->send.args;
         Symbol* target_name = NULL;
+        bool is_static = false; // ★ 追加
         if (receiver->kind == AST_IDENTIFIER) target_name = receiver->identifier.name;
         else if (receiver->kind == AST_FIELD_DECL || receiver->kind == AST_VAR_DECL) {
             target_name = receiver->var_decl.identifier->identifier.name;
+            is_static = receiver->var_decl.is_static; // ★ static フラグを取得
         }
-
-        if (target_name && args && args->kind == AST_BLOCK) {
+        if (!is_static && target_name && args && args->kind == AST_BLOCK) {
             add_or_override_vtable_slot(klass, target_name, make_nil());
         }
         return;
@@ -458,6 +459,7 @@ static void reserve_class_vtable_slots(ClassDef* klass, ASTNode* node)
 
     // パターン B: field_decl 形式 (name: Function is [...]; または name: Function from X;)
     if (node->kind == AST_FIELD_DECL) {
+        if (node->field_decl.is_static) return;
         Symbol* member_name = node->field_decl.identifier->identifier.name;
         TypeInfo*  member_type = build_type_info(node->field_decl.type);
         if (member_type && member_type->name == sym_Function) {
@@ -529,10 +531,20 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
                 if (send_node->send.args && send_node->send.args->kind == AST_BLOCK) {
                     c->current_class = klass;
                     c->is_method = true;
+                    c->is_static_method = is_static;
                     ObjFunction* method_fn = compile_block(c, send_node->send.args);
                     c->current_class = NULL;
                     c->is_method = false;
+                    c->is_static_method = false; // ★ 復帰
     
+                    // 静的メソッドの場合は static テーブルに登録
+                    if (is_static) {
+                        add_static_method(klass, member_name, make_obj((Obj*)method_fn));
+                        add_method_type(klass, member_name, build_function_type_from_block(c, send_node->send.args));
+                        return;
+                    }
+
+                    // 通常インスタンスメソッド
                     add_method(klass, member_name, make_obj((Obj*)method_fn));
                     add_method_type(klass, member_name, build_function_type_from_block(c, send_node->send.args));
                     if (from_class != NULL) {
@@ -546,7 +558,6 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
             if (from_class != NULL) {
                 Value method_val;
                 if (find_method(from_class, member_name, &method_val)) {
-                    // ★★★ 実体を直入れする代わりに、ラッパー関数を合成して登録 ★★★
                     TypeInfo* m_type = find_method_type(from_class, member_name);
                     ObjFunction* wrapper = create_forwarding_wrapper(c, klass, from_class, member_name, m_type, node);
                     if (wrapper != NULL) {
@@ -558,14 +569,12 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
                         add_or_override_vtable_slot(klass, member_name, make_obj((Obj*)wrapper));
                     }
                     return;
-                    // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-                }else {
+                } else {
                     error_compile(node, ERR_DELEGATE_METHOD_NOT_FOUND, 
                             member_name->chars, from_class->name->chars);
                 }
             } else {
-                error_compile(node, ERR_METHOD_NO_IMPL,
-                        member_name->chars);
+                error_compile(node, ERR_METHOD_NO_IMPL, member_name->chars);
             }
         }
 
@@ -578,14 +587,14 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
                 TypeInfo* actual_type = NULL;
                 init_val = parse_ast_literal_with_expected(node->field_decl.default_data, member_type, &actual_type);
                 
-                // ★ フィールド宣言型と初期値リテラルの型チェック！
+                // フィールド宣言型と初期値リテラルの型チェック
                 if (!is_assignable(c, member_type, actual_type)) {
                     error_compile(node, ERR_TYPE_MISMATCH,
                                   member_type ? member_type->name->chars : "unknown",
                                   actual_type ? actual_type->name->chars : "nil");
                 }
             } else {
-                // リテラル以外の式（1 + 2 など）は現仕様で非対応ならエラーにする
+                // リテラル以外の式（1 + 2 など）はエラーにする
                 error_compile(node, ERR_FIELD_INIT_MUST_BE_LITERAL, member_name->chars);
                 init_val = get_implicit_default_value(member_type ? member_type->name : NULL);
             }
@@ -593,7 +602,12 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
             init_val = get_implicit_default_value(member_type ? member_type->name : NULL);
         }
 
-        add_field(klass, f_info, init_val);
+        // is_static の有無で登録先テーブルを分岐
+        if (is_static) {
+            add_static_field(klass, f_info, init_val);
+        } else {
+            add_field(klass, f_info, init_val);
+        }
     }
 
     if (node->kind == AST_SEND) {
@@ -642,30 +656,38 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
         }
 
         if (args && args->kind == AST_BLOCK) {
-            // 1. 型シグネチャを登録
             add_method_type(klass, target_name, build_function_type_from_block(c, args));
 
             if (args->block.body != NULL) {
-                // 通常の JapEng 実装メソッド
                 c->current_class = klass;
+                c->is_method = true;
+                c->is_static_method = is_static; // ★ 静的メソッドフラグ
                 ObjFunction* method_fn = compile_block(c, args);
                 c->current_class = NULL;
+                c->is_method = false;
+                c->is_static_method = false; // ★ 復帰
                 
-                // methods テーブルに登録
+                // 静的メソッドの場合は static テーブルに登録して終了
+                if (is_static) {
+                    add_static_method(klass, target_name, make_obj((Obj*)method_fn));
+                    return;
+                }
+
+                // 通常インスタンスメソッド
                 add_method(klass, target_name, make_obj((Obj*)method_fn));
                 if (from_class != NULL) {
                     add_method_from(klass, target_name, from_class);
                 }
-                // 宣言順に vtable スロットへ実体を登録！
                 add_or_override_vtable_slot(klass, target_name, make_obj((Obj*)method_fn));
             } else {
-                // body == NULL の場合、実体は登録しない（VMネイティブと競合させない！）
-                // しかし、vtable のスロット枠（インデックス）だけは宣言順に確実に確保する！
-                add_or_override_vtable_slot(klass, target_name, make_nil());
+                if (!is_static) {
+                    add_or_override_vtable_slot(klass, target_name, make_nil());
+                }
             }
             return;
         }
     
+        // --- フィールド代入形式の場合 (既存の型チェックを完全維持) ---
         TypeInfo* t_info = build_type_info(type_node);
         FieldInfo f_info = new_field_info(target_name, t_info, from_class, is_static);
     
@@ -675,7 +697,7 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
                 TypeInfo* actual_type = NULL;
                 init_val = parse_ast_literal_with_expected(args, t_info, &actual_type);
 
-                // ★ フィールド宣言型と初期値リテラルの型チェック！
+                // フィールド宣言型と初期値リテラルの型チェック
                 if (!is_assignable(c, t_info, actual_type)) {
                     error_compile(node, ERR_TYPE_MISMATCH,
                                   t_info ? t_info->name->chars : "unknown",
@@ -689,7 +711,12 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
             init_val = get_implicit_default_value(t_info ? t_info->name : NULL);
         }
     
-        add_field(klass, f_info, init_val);
+        // is_static の有無で登録先テーブルを分岐
+        if (is_static) {
+            add_static_field(klass, f_info, init_val);
+        } else {
+            add_field(klass, f_info, init_val);
+        }
         return;
     }
 }

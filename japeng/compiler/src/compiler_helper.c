@@ -10,6 +10,7 @@ void init_compiler(Compiler* compiler, Chunk* chunk)
     compiler->chunk = chunk;
     compiler->output_dir = ".";
     compiler->is_method = false;
+    compiler->is_static_method = false;
     compiler->stack_depth = 0;
     memset(compiler->expected_ret_types, 0, sizeof(compiler->expected_ret_types));
     compiler->expected_ret_count = 0;
@@ -73,7 +74,8 @@ void emit_inst(Compiler* c, Opcode op, uint32_t operand) {
         case OP_BAND:
         case OP_BOR:
         case OP_BXOR:
-        case OP_SET_FIELD: // receiver と value を pop して value を push
+        case OP_SET_FIELD:
+        case OP_SET_STATIC:
         case OP_INDEX_GET:
             c->stack_depth--;
             break;
@@ -82,6 +84,7 @@ void emit_inst(Compiler* c, Opcode op, uint32_t operand) {
         case OP_BNOT:
         case OP_NOT:
         case OP_GET_FIELD:     // receiver を pop して field を push
+        case OP_GET_STATIC:
         case OP_NEW_INSTANCE:  // class を pop して instance を push
         case OP_SET_LOCAL:     // peek して代入
         case OP_SET_GLOBAL:    // peek して代入
@@ -96,6 +99,7 @@ void emit_inst(Compiler* c, Opcode op, uint32_t operand) {
         case OP_INVOKE_VIRTUAL:
         case OP_IMPL_SEND:
         case OP_SUPER_CALL:
+        case OP_STATIC_CALL:
             // レシーバ(1) + 引数(argc) を消費して結果(1) を残す
             c->stack_depth -= get_send_args(operand);
             break;

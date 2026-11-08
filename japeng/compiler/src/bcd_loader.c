@@ -147,11 +147,40 @@ ClassDef* load_class_type_from_bcd(Compiler* c, const char* bcd_path)
         TypeInfo* fn_type = read_type_info(fp, pool);
 
         Symbol* mname = pool[mid];
+        
         if (fn_type != NULL) {
             add_method_type(klass, mname, fn_type);
         }
         // スロット番号を書き込まれた通りの順序で確定確保
         add_or_override_vtable_slot(klass, mname, make_nil());
+    }
+
+    uint16_t sf_count = 0;
+    if (fread(&sf_count, sizeof(uint16_t), 1, fp) == 1 && sf_count > 0) {
+        for (int i = 0; i < sf_count; i++) {
+            uint32_t sfn_id = 0;
+            fread(&sfn_id, sizeof(uint32_t), 1, fp);
+            TypeInfo* sft = read_type_info(fp, pool);
+
+            Symbol* sfname = pool[sfn_id];
+            FieldInfo fi = new_field_info(sfname, sft, NULL, true);
+            add_static_field(klass, fi, make_nil());
+        }
+    }
+
+    uint16_t sm_count = 0;
+    if (fread(&sm_count, sizeof(uint16_t), 1, fp) == 1 && sm_count > 0) {
+        for (int i = 0; i < sm_count; i++) {
+            uint32_t smid = 0;
+            fread(&smid, sizeof(uint32_t), 1, fp);
+            TypeInfo* sm_type = read_type_info(fp, pool);
+
+            Symbol* smname = pool[smid];
+            if (sm_type != NULL) {
+                add_method_type(klass, smname, sm_type);
+            }
+            add_static_method(klass, smname, make_nil());
+        }
     }
 
     klass->state = CLASS_STATE_COMPILED;

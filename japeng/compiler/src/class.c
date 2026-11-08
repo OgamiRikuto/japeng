@@ -142,30 +142,6 @@ void print_class(ClassDef* klass)
     }
 }
 
-// void print_instance(ObjInstance* inst)
-// {
-//     if (inst == NULL) {
-//         fprintf(stderr, "<instance (null)>\n");
-//         return;
-//     }
-
-//     fprintf(stderr, "<instance of %s @%p>\n", 
-//            inst->klass && inst->klass->name ? inst->klass->name->chars : "Unknown", 
-//            (void*)inst);
-//     fprintf(stderr, "instance fields:\n");
-
-//     if (inst->klass == NULL || inst->klass->field_count == 0) {
-//         fprintf(stderr, "  (none)\n");
-//     } else {
-//         for (int i = 0; i < inst->klass->field_count; i++) {
-//             FieldInfo* f = &inst->klass->field_infos[i];
-//             fprintf(stderr, "  - %s = ", f->name ? f->name->chars : "(unnamed)");
-//             print_value_repr(inst->fields[i]);
-//             fprintf(stderr, "\n");
-//         }
-//     }
-// }
-
 #endif
 TypeInfo* new_type_info(Symbol* name, int type_arg_count) {
     TypeInfo* t = (TypeInfo*)malloc(sizeof(TypeInfo) + sizeof(TypeInfo*) * type_arg_count);
@@ -258,6 +234,17 @@ ClassDef* new_class(Symbol* name, TypeInfo* type,
     klass->field_capacity = 0;
     klass->field_infos = NULL;
     klass->default_values = NULL;
+    
+    klass->static_field_count = 0;
+    klass->static_field_capacity = 0;
+    klass->static_field_infos = NULL;
+    klass->static_default_values = NULL;
+
+    klass->static_method_count = 0;
+    klass->static_method_capacity = 0;
+    klass->static_methods = NULL;
+    klass->static_method_names = NULL;
+    klass->static_method_indexes = new_table(8);
 
     if (superclass != NULL && superclass->field_count > 0) {
         for (int i = 0; i < superclass->field_count; i++) {
@@ -304,6 +291,17 @@ void free_class(ClassDef* klass)
     }
     if (klass->vtable_indexes != NULL) {
         table_free(klass->vtable_indexes);
+    }
+    if (klass->static_field_infos != NULL) {
+        free(klass->static_field_infos);
+        free(klass->static_default_values);
+    }
+    if (klass->static_methods != NULL) {
+        free(klass->static_methods);
+        free(klass->static_method_names);
+    }
+    if (klass->static_method_indexes != NULL) {
+        table_free(klass->static_method_indexes);
     }
 
     free(klass);
@@ -546,4 +544,80 @@ int get_vtable_index(ClassDef* klass, Symbol* name)
         return as_int(slot_val);
     }
     return -1;
+}
+
+// 静的フィールドの追加
+void add_static_field(ClassDef* klass, FieldInfo field_info, Value default_value) 
+{
+    if (klass->static_field_count + 1 > klass->static_field_capacity) {
+        klass->static_field_capacity = klass->static_field_capacity < 8 ? 8 : klass->static_field_capacity * 2;
+        klass->static_field_infos = (FieldInfo*)realloc(
+            klass->static_field_infos, sizeof(FieldInfo) * klass->static_field_capacity
+        );
+        klass->static_default_values = (Value*)realloc(
+            klass->static_default_values, sizeof(Value) * klass->static_field_capacity
+        );
+    }
+    int idx = klass->static_field_count++;
+    klass->static_field_infos[idx] = field_info;
+    klass->static_default_values[idx] = default_value;
+}
+
+// 静的フィールドのインデックス検索
+int find_static_field_index(ClassDef* klass, Symbol* name) 
+{
+    if (klass == NULL) return -1;
+    for (int i = 0; i < klass->static_field_count; i++) {
+        if (klass->static_field_infos[i].name == name) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+int add_static_method(ClassDef* klass, Symbol* name, Value method) 
+{
+    if (klass->static_method_indexes == NULL) {
+        klass->static_method_indexes = new_table(8);
+    }
+
+    Value existing_slot;
+    if (table_get(klass->static_method_indexes, name, &existing_slot)) {
+        int slot = as_int(existing_slot);
+        if (!is_nil(method)) {
+            klass->static_methods[slot] = method;
+        }
+        return slot;
+    }
+
+    if (klass->static_method_count >= klass->static_method_capacity) {
+        klass->static_method_capacity = klass->static_method_capacity < 8 ? 8 : klass->static_method_capacity * 2;
+        klass->static_methods = (Value*)realloc(
+            klass->static_methods, sizeof(Value) * klass->static_method_capacity
+        );
+        klass->static_method_names = (Symbol**)realloc(
+            klass->static_method_names, sizeof(Symbol*) * klass->static_method_capacity
+        );
+    }
+
+    int slot = klass->static_method_count++;
+    klass->static_methods[slot] = method;
+    klass->static_method_names[slot] = name;
+    table_set(klass->static_method_indexes, name, make_int(slot));
+    return slot;
+}
+
+int get_static_method_index(ClassDef* klass, Symbol* name) 
+{
+    if (klass == NULL || klass->static_method_indexes == NULL) return -1;
+    Value slot_val;
+    if (table_get(klass->static_method_indexes, name, &slot_val)) {
+        return as_int(slot_val);
+    }
+    return -1;
+}
+
+bool is_static_method(ClassDef* klass, Symbol* name) 
+{
+    return get_static_method_index(klass, name) != -1;
 }

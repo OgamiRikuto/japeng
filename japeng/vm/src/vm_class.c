@@ -26,6 +26,11 @@ ObjClass* vm_new_class(Symbol* name, ObjClass* superclass)
         klass->field_names    = NULL;
     }
 
+    // 静的フィールドのゼロ初期化
+    klass->static_field_count = 0;
+    klass->static_fields      = NULL;
+    klass->static_field_names = NULL;
+
     // 2. 親クラスの vtable を継承
     if (superclass != NULL && superclass->vtable_count > 0) {
         klass->vtable_count    = superclass->vtable_count;
@@ -43,6 +48,13 @@ ObjClass* vm_new_class(Symbol* name, ObjClass* superclass)
         klass->vtable          = NULL;
         klass->vtable_names    = NULL;
     }
+
+    // 静的メソッドのゼロ初期化
+    klass->static_method_count    = 0;
+    klass->static_method_capacity = 0;
+    klass->static_methods         = NULL;
+    klass->static_method_names    = NULL;
+
     klass->is_interface       = false;
     klass->interface_count    = 0;
     klass->interface_table = NULL;
@@ -95,8 +107,12 @@ void vm_free_class(ObjClass* klass)
     if (klass == NULL) return;
     if (klass->default_values != NULL) free(klass->default_values);
     if (klass->field_names != NULL)    free(klass->field_names);
+    if (klass->static_fields != NULL)      free(klass->static_fields);
+    if (klass->static_field_names != NULL) free(klass->static_field_names);
     if (klass->vtable != NULL)         free(klass->vtable);
     if (klass->vtable_names != NULL)   free(klass->vtable_names);
+    if (klass->static_methods != NULL)      free(klass->static_methods);
+    if (klass->static_method_names != NULL) free(klass->static_method_names);
     if (klass->interface_table != NULL) {
         for (uint16_t i = 0; i < klass->interface_count; i++) {
             if (klass->interface_table[i].vtable_slots != NULL) {

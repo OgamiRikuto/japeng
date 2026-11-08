@@ -24,11 +24,22 @@ typedef struct ObjClass {
     Value*           default_values;
     Symbol**         field_names;
 
+    // 静的フィールド実体
+    uint32_t         static_field_count;
+    Value*           static_fields;
+    Symbol**         static_field_names;
+
     // メソッドディスパッチ用
     uint16_t         vtable_count;
     uint16_t         vtable_capacity;
     Value*           vtable;
     Symbol**         vtable_names;
+
+    // 静的メソッドディスパッチ用
+    uint16_t         static_method_count;
+    uint16_t         static_method_capacity;
+    Value*           static_methods;
+    Symbol**         static_method_names;
 
     bool             is_interface;
     uint16_t         interface_count;

@@ -388,10 +388,10 @@ static const char* const error_table[ERR_COUNT][LANG_COUNT] = {
     //     [LANG_EN] = "'println' expects 0 or 1 argument.",
     //     [LANG_JA] = "'println' に渡せる引数は 0 個または 1 個のみです。"
     // },
-    // [ERR_CANNOT_ACCESS_FIELD_ON_CLASS] = {
-    //     [LANG_EN] = "Cannot access instance field from an uninstantiated class.",
-    //     [LANG_JA] = "インスタンス化されていないクラスからフィールドにアクセスすることはできません。"
-    // },
+    [ERR_CANNOT_ACCESS_FIELD_ON_CLASS] = {
+        [LANG_EN] = "Cannot access instance field from an uninstantiated class.",
+        [LANG_JA] = "インスタンス化されていないクラスからフィールドにアクセスすることはできません。"
+    },
     // [ERR_NULL_REFERENCE] = {
     //     [LANG_EN] = "Null reference error: Attempted to access '%s' on null.",
     //     [LANG_JA] = "Null参照エラー: null に対する '%s' のアクセスまたは呼び出しです。"
@@ -478,148 +478,148 @@ void report_system_error(ErrorCode code, ...) {
 // =============================================================================
 // 3. スニペット描画 & 構文・コンパイルエラー
 // =============================================================================
-typedef struct {
-    const char* raw;
-    const char* en;
-    const char* ja;
-} TokenNameMap;
+// typedef struct {
+//     const char* raw;
+//     const char* en;
+//     const char* ja;
+// } TokenNameMap;
 
-static const TokenNameMap token_names[] = {
-    { "identifier",   "identifier",       "識別子" },
-    { "operator",     "operator",         "演算子" },
-    { "class name",   "class name",       "クラス名" },
-    { "integer",      "integer literal",  "整数リテラル" },
-    { "float",        "float literal",    "小数リテラル" },
-    { "fraction",     "fraction literal", "分数リテラル" },
-    { "string",       "string literal",   "文字列リテラル" },
-    { "self",         "'self'",           "'自身' (self)" },
-    { "class",        "'class'",          "'クラス' (class)" },
-    { "based",        "'based'",          "'基底' (based)" },
-    { "from",         "'from'",           "'委譲' (from)" },
-    { "arg",          "'arg'",            "'引数' (arg)" },
-    { "ret",          "'ret'",            "'返す型' (ret)" },
-    { "return",       "'return'",         "'返値は' (return)" },
-    { "break",        "'break'",          "'中断' (break)" },
-    { "continue",     "'continue'",       "'再開' (continue)" },
-    { "$end",         "end of file",      "ファイルの終端" },
-    { "end of file",  "end of file",      "ファイルの終端" },
-    { "$undefined",   "invalid token",    "無効なトークン" },
-    { ",",            "','",              "',' (読点)" },
-    { ".",            "'.'",              "'.' (中黒)" },
-    { ":",            "':'",              "':' (コロン)" },
-    { ";",            "';'",              "';' (句点)" },
-    { "(",            "'('",              "'(' (丸括弧)" },
-    { ")",            "')'",              "')' (丸括弧閉)" },
-    { "[",            "'['",              "'[' (括弧)" },
-    { "]",            "']'",              "']' (括弧閉)" },
-    { NULL, NULL, NULL }
-};
+// static const TokenNameMap token_names[] = {
+//     { "identifier",   "identifier",       "識別子" },
+//     { "operator",     "operator",         "演算子" },
+//     { "class name",   "class name",       "クラス名" },
+//     { "integer",      "integer literal",  "整数リテラル" },
+//     { "float",        "float literal",    "小数リテラル" },
+//     { "fraction",     "fraction literal", "分数リテラル" },
+//     { "string",       "string literal",   "文字列リテラル" },
+//     { "self",         "'self'",           "'自身' (self)" },
+//     { "class",        "'class'",          "'クラス' (class)" },
+//     { "based",        "'based'",          "'基底' (based)" },
+//     { "from",         "'from'",           "'委譲' (from)" },
+//     { "arg",          "'arg'",            "'引数' (arg)" },
+//     { "ret",          "'ret'",            "'返す型' (ret)" },
+//     { "return",       "'return'",         "'返値は' (return)" },
+//     { "break",        "'break'",          "'中断' (break)" },
+//     { "continue",     "'continue'",       "'再開' (continue)" },
+//     { "$end",         "end of file",      "ファイルの終端" },
+//     { "end of file",  "end of file",      "ファイルの終端" },
+//     { "$undefined",   "invalid token",    "無効なトークン" },
+//     { ",",            "','",              "',' (読点)" },
+//     { ".",            "'.'",              "'.' (中黒)" },
+//     { ":",            "':'",              "':' (コロン)" },
+//     { ";",            "';'",              "';' (句点)" },
+//     { "(",            "'('",              "'(' (丸括弧)" },
+//     { ")",            "')'",              "')' (丸括弧閉)" },
+//     { "[",            "'['",              "'[' (括弧)" },
+//     { "]",            "']'",              "']' (括弧閉)" },
+//     { NULL, NULL, NULL }
+// };
 
-static bool is_ignorable_line(const char* s) {
-    while (*s == ' ' || *s == '\t' || *s == '\r' || *s == '\n') s++;
-    if (*s == '\0') return true;
-    if (s[0] == '/' && s[1] == '/') return true;
-    return false;
-}
+// static bool is_ignorable_line(const char* s) {
+//     while (*s == ' ' || *s == '\t' || *s == '\r' || *s == '\n') s++;
+//     if (*s == '\0') return true;
+//     if (s[0] == '/' && s[1] == '/') return true;
+//     return false;
+// }
 
-static const char* translate_token(const char* raw, OutputLang lang) {
-    if (!raw) return "";
-    for (int i = 0; token_names[i].raw != NULL; i++) {
-        if (strcmp(raw, token_names[i].raw) == 0) {
-            return (lang == LANG_JA) ? token_names[i].ja : token_names[i].en;
-        }
-    }
-    return raw;
-}
+// static const char* translate_token(const char* raw, OutputLang lang) {
+//     if (!raw) return "";
+//     for (int i = 0; token_names[i].raw != NULL; i++) {
+//         if (strcmp(raw, token_names[i].raw) == 0) {
+//             return (lang == LANG_JA) ? token_names[i].ja : token_names[i].en;
+//         }
+//     }
+//     return raw;
+// }
 
-static void translate_expecting_list(const char* raw_expecting, char* out_buf, size_t out_size, OutputLang lang) {
-    char temp[512];
-    strncpy(temp, raw_expecting, sizeof(temp) - 1);
-    temp[sizeof(temp) - 1] = '\0';
+// static void translate_expecting_list(const char* raw_expecting, char* out_buf, size_t out_size, OutputLang lang) {
+//     char temp[512];
+//     strncpy(temp, raw_expecting, sizeof(temp) - 1);
+//     temp[sizeof(temp) - 1] = '\0';
 
-    out_buf[0] = '\0';
-    char* token = strtok(temp, " ");
-    bool first = true;
+//     out_buf[0] = '\0';
+//     char* token = strtok(temp, " ");
+//     bool first = true;
 
-    while (token != NULL) {
-        if (strcmp(token, "or") == 0) {
-            token = strtok(NULL, " ");
-            continue;
-        }
-        const char* trans = translate_token(token, lang);
-        if (!first) {
-            strncat(out_buf, (lang == LANG_JA) ? " または " : " or ", out_size - strlen(out_buf) - 1);
-        }
-        strncat(out_buf, trans, out_size - strlen(out_buf) - 1);
-        first = false;
-        token = strtok(NULL, " ");
-    }
-}
+//     while (token != NULL) {
+//         if (strcmp(token, "or") == 0) {
+//             token = strtok(NULL, " ");
+//             continue;
+//         }
+//         const char* trans = translate_token(token, lang);
+//         if (!first) {
+//             strncat(out_buf, (lang == LANG_JA) ? " または " : " or ", out_size - strlen(out_buf) - 1);
+//         }
+//         strncat(out_buf, trans, out_size - strlen(out_buf) - 1);
+//         first = false;
+//         token = strtok(NULL, " ");
+//     }
+// }
 
-static bool print_previous_line_missing_semicolon(const char* filename, int current_err_line) {
-    FILE* fp = fopen(filename, "r");
-    if (!fp) return false;
+// static bool print_previous_line_missing_semicolon(const char* filename, int current_err_line) {
+//     FILE* fp = fopen(filename, "r");
+//     if (!fp) return false;
 
-    char lines[512][1024];
-    int line_count = 0;
-    while (line_count < 512 && fgets(lines[line_count], sizeof(lines[line_count]), fp)) {
-        line_count++;
-    }
-    fclose(fp);
+//     char lines[512][1024];
+//     int line_count = 0;
+//     while (line_count < 512 && fgets(lines[line_count], sizeof(lines[line_count]), fp)) {
+//         line_count++;
+//     }
+//     fclose(fp);
 
-    for (int l = current_err_line - 1; l >= 1; l--) {
-        if (l <= line_count && !is_ignorable_line(lines[l - 1])) {
-            char* buf = lines[l - 1];
-            buf[strcspn(buf, "\r\n")] = '\0';
+//     for (int l = current_err_line - 1; l >= 1; l--) {
+//         if (l <= line_count && !is_ignorable_line(lines[l - 1])) {
+//             char* buf = lines[l - 1];
+//             buf[strcspn(buf, "\r\n")] = '\0';
 
-            // ★ バイト数ではなく、表示幅で末尾カラムを計算する
-            int display_col = 1;
-            int last_non_space_col = 1;
-            int p = 0;
-            char last_char = '\0';
+//             // ★ バイト数ではなく、表示幅で末尾カラムを計算する
+//             int display_col = 1;
+//             int last_non_space_col = 1;
+//             int p = 0;
+//             char last_char = '\0';
 
-            while (buf[p] != '\0') {
-                if (buf[p] == '\t') {
-                    display_col += 4;
-                    last_non_space_col = display_col;
-                    p++;
-                } else if (buf[p] == ' ') {
-                    display_col += 1;
-                    p++;
-                } else {
-                    last_char = buf[p];
-                    unsigned char c = (unsigned char)buf[p];
-                    int w = (c < 0x80) ? 1 : 2;
-                    int clen = utf8_char_len(c);
-                    display_col += w;
-                    last_non_space_col = display_col;
-                    p += clen;
-                }
-            }
+//             while (buf[p] != '\0') {
+//                 if (buf[p] == '\t') {
+//                     display_col += 4;
+//                     last_non_space_col = display_col;
+//                     p++;
+//                 } else if (buf[p] == ' ') {
+//                     display_col += 1;
+//                     p++;
+//                 } else {
+//                     last_char = buf[p];
+//                     unsigned char c = (unsigned char)buf[p];
+//                     int w = (c < 0x80) ? 1 : 2;
+//                     int clen = utf8_char_len(c);
+//                     display_col += w;
+//                     last_non_space_col = display_col;
+//                     p += clen;
+//                 }
+//             }
 
-            if (last_char == ';' || last_char == '{' || last_char == '}' || 
-                last_char == '[' || last_char == ']' || last_char == ':') {
-                return false;
-            }
+//             if (last_char == ';' || last_char == '{' || last_char == '}' || 
+//                 last_char == '[' || last_char == ']' || last_char == ':') {
+//                 return false;
+//             }
 
-            int caret_col = last_non_space_col;
-            const char* label = get_label(LABEL_SYNTAX_ERROR, current_lang);
-            const char* msg   = get_msg(ERR_EXPECTED_SEMICOLON, current_lang);
+//             int caret_col = last_non_space_col;
+//             const char* label = get_label(LABEL_SYNTAX_ERROR, current_lang);
+//             const char* msg   = get_msg(ERR_EXPECTED_SEMICOLON, current_lang);
 
-            fprintf(stderr, "\033[1m%s:%d:%d: \033[1;31m%s:\033[0m\033[1m %s\033[0m\n",
-                    filename, l, caret_col, label, msg);
+//             fprintf(stderr, "\033[1m%s:%d:%d: \033[1;31m%s:\033[0m\033[1m %s\033[0m\n",
+//                     filename, l, caret_col, label, msg);
 
-            fprintf(stderr, " %4d | %s\n", l, buf);
-            fprintf(stderr, "      | ");
-            for (int i = 1; i < caret_col; i++) {
-                fputc(' ', stderr);
-            }
-            fprintf(stderr, "\033[1;32m^\033[0m\n\n");
-            return true;
-        }
-    }
-    return false;
-}
+//             fprintf(stderr, " %4d | %s\n", l, buf);
+//             fprintf(stderr, "      | ");
+//             for (int i = 1; i < caret_col; i++) {
+//                 fputc(' ', stderr);
+//             }
+//             fprintf(stderr, "\033[1;32m^\033[0m\n\n");
+//             return true;
+//         }
+//     }
+//     return false;
+// }
 
 static void print_snippet(const char* filename, int line, int col_start, int col_end) {
     if (!filename || filename[0] == '\0') return;
@@ -649,68 +649,68 @@ static void print_snippet(const char* filename, int line, int col_start, int col
     fclose(f);
 }
 
-void error_syntax(const char* filename, int line, int col_start, int col_end, const char* bison_msg) {
-    const char* fn = (filename && filename[0] != '\0') ? filename : "input";
+// void error_syntax(const char* filename, int line, int col_start, int col_end, const char* bison_msg) {
+//     const char* fn = (filename && filename[0] != '\0') ? filename : "input";
 
-    int orig_line = line;
-    int orig_col_start = col_start;
-    int orig_col_end = col_end;
-    int dummy_l;
-    frontend_map_loc(line, col_start, &orig_line, &orig_col_start);
-    frontend_map_loc(line, col_end, &dummy_l, &orig_col_end);
+//     int orig_line = line;
+//     int orig_col_start = col_start;
+//     int orig_col_end = col_end;
+//     int dummy_l;
+//     frontend_map_loc(line, col_start, &orig_line, &orig_col_start);
+//     frontend_map_loc(line, col_end, &dummy_l, &orig_col_end);
 
-    bool is_semicolon_related = (strstr(bison_msg, "expecting ;") != NULL ||
-                                 strstr(bison_msg, "expecting . or ;") != NULL);
-    if (is_semicolon_related) {
-        if (print_previous_line_missing_semicolon(fn, orig_line)) {
-            return;
-        }
-    }
+//     bool is_semicolon_related = (strstr(bison_msg, "expecting ;") != NULL ||
+//                                  strstr(bison_msg, "expecting . or ;") != NULL);
+//     if (is_semicolon_related) {
+//         if (print_previous_line_missing_semicolon(fn, orig_line)) {
+//             return;
+//         }
+//     }
 
-    const char* label = get_label(LABEL_SYNTAX_ERROR, current_lang);
-    char formatted_msg[1024];
+//     const char* label = get_label(LABEL_SYNTAX_ERROR, current_lang);
+//     char formatted_msg[1024];
 
-    const char* unexpected_prefix = "unexpected ";
-    const char* expecting_prefix  = ", expecting ";
-    const char* unexp_pos = strstr(bison_msg, unexpected_prefix);
+//     const char* unexpected_prefix = "unexpected ";
+//     const char* expecting_prefix  = ", expecting ";
+//     const char* unexp_pos = strstr(bison_msg, unexpected_prefix);
 
-    if (unexp_pos != NULL) {
-        unexp_pos += strlen(unexpected_prefix);
-        const char* exp_pos = strstr(unexp_pos, expecting_prefix);
+//     if (unexp_pos != NULL) {
+//         unexp_pos += strlen(unexpected_prefix);
+//         const char* exp_pos = strstr(unexp_pos, expecting_prefix);
 
-        char unexp_tok[128];
-        if (exp_pos != NULL) {
-            size_t len = exp_pos - unexp_pos;
-            if (len >= sizeof(unexp_tok)) len = sizeof(unexp_tok) - 1;
-            strncpy(unexp_tok, unexp_pos, len);
-            unexp_tok[len] = '\0';
+//         char unexp_tok[128];
+//         if (exp_pos != NULL) {
+//             size_t len = exp_pos - unexp_pos;
+//             if (len >= sizeof(unexp_tok)) len = sizeof(unexp_tok) - 1;
+//             strncpy(unexp_tok, unexp_pos, len);
+//             unexp_tok[len] = '\0';
 
-            const char* exp_tokens_raw = exp_pos + strlen(expecting_prefix);
-            char translated_exp[512];
-            translate_expecting_list(exp_tokens_raw, translated_exp, sizeof(translated_exp), current_lang);
-            const char* translated_unexp = translate_token(unexp_tok, current_lang);
+//             const char* exp_tokens_raw = exp_pos + strlen(expecting_prefix);
+//             char translated_exp[512];
+//             translate_expecting_list(exp_tokens_raw, translated_exp, sizeof(translated_exp), current_lang);
+//             const char* translated_unexp = translate_token(unexp_tok, current_lang);
 
-            snprintf(formatted_msg, sizeof(formatted_msg),
-                     get_msg(ERR_SYNTAX_UNEXPECTED_EXPECTING, current_lang),
-                     translated_unexp, translated_exp);
-        } else {
-            strncpy(unexp_tok, unexp_pos, sizeof(unexp_tok) - 1);
-            unexp_tok[sizeof(unexp_tok) - 1] = '\0';
-            const char* translated_unexp = translate_token(unexp_tok, current_lang);
+//             snprintf(formatted_msg, sizeof(formatted_msg),
+//                      get_msg(ERR_SYNTAX_UNEXPECTED_EXPECTING, current_lang),
+//                      translated_unexp, translated_exp);
+//         } else {
+//             strncpy(unexp_tok, unexp_pos, sizeof(unexp_tok) - 1);
+//             unexp_tok[sizeof(unexp_tok) - 1] = '\0';
+//             const char* translated_unexp = translate_token(unexp_tok, current_lang);
 
-            snprintf(formatted_msg, sizeof(formatted_msg),
-                     get_msg(ERR_SYNTAX_UNEXPECTED, current_lang),
-                     translated_unexp);
-        }
-    } else {
-        snprintf(formatted_msg, sizeof(formatted_msg), "%s", bison_msg);
-    }
+//             snprintf(formatted_msg, sizeof(formatted_msg),
+//                      get_msg(ERR_SYNTAX_UNEXPECTED, current_lang),
+//                      translated_unexp);
+//         }
+//     } else {
+//         snprintf(formatted_msg, sizeof(formatted_msg), "%s", bison_msg);
+//     }
 
-    fprintf(stderr, "\033[1m%s:%d:%d: \033[1;31m%s:\033[0m\033[1m %s\033[0m\n", 
-            fn, orig_line, orig_col_start, label, formatted_msg);
+//     fprintf(stderr, "\033[1m%s:%d:%d: \033[1;31m%s:\033[0m\033[1m %s\033[0m\n", 
+//             fn, orig_line, orig_col_start, label, formatted_msg);
 
-    print_snippet(fn, orig_line, orig_col_start, orig_col_end);
-}
+//     print_snippet(fn, orig_line, orig_col_start, orig_col_end);
+// }
 
 int syntax_error_count = 0;
 
@@ -729,8 +729,8 @@ void error_syntax_at(Location loc, ErrorCode code, ...) {
     }
 
     const char* fn    = (loc.filename && loc.filename[0] != '\0') ? loc.filename : "input";
-    const char* label = get_label(LABEL_SYNTAX_ERROR, compile_lang); // ★ "構文エラー" (syntax error)
-    const char* fmt   = get_msg(code, compile_lang);
+    const char* label = get_label(LABEL_SYNTAX_ERROR, current_lang);
+    const char* fmt   = get_msg(code, current_lang);
 
     fprintf(stderr, "\033[1m%s:%d:%d: \033[1;31m%s:\033[0m\033[1m ", fn, orig_line, orig_col_start, label);
 

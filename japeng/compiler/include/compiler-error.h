@@ -117,7 +117,7 @@ typedef enum {
     // ERR_STACK_OVERFLOW,
     // ERR_INDEX_OUT_OF_BOUNDS,
     // ERR_PRINTLN_ARG_COUNT,
-    // ERR_CANNOT_ACCESS_FIELD_ON_CLASS,
+    ERR_CANNOT_ACCESS_FIELD_ON_CLASS,
     // ERR_NULL_REFERENCE,
     // ERR_INVALID_VTABLE_ACCESS,
     // ERR_UNIMPLEMENTED_VIRTUAL_METHOD,
@@ -134,10 +134,10 @@ void report_info(ErrorCode code, ...);
 void report_warning(ErrorCode code, ...);
 void report_system_error(ErrorCode code, ...);
 
+// パーサー構文エラー用
 void error_syntax_at(Location loc, ErrorCode code, ...);
 
-// パーサー構文エラー用
-void error_syntax(const char* filename, int line, int col_start, int col_end, const char* bison_msg);
+// void error_syntax(const char* filename, int line, int col_start, int col_end, const char* bison_msg);
 
 // コンパイルエラー用
 void error_at(Location loc, ErrorCode code, ...);

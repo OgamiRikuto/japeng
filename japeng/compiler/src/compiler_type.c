@@ -71,6 +71,9 @@ static TypeInfo* peek_identifier_type(Compiler* c, ASTNode* node) {
     if (upval != -1) return resolve_upvalue_type(c, node->identifier.name);
 
     if (c->current_class != NULL) {
+        int static_idx = find_static_field_index(c->current_class, node->identifier.name);
+        if (static_idx != -1) return c->current_class->static_field_infos[static_idx].type;
+
         int field_idx = find_field_index(c->current_class, node->identifier.name);
         if (field_idx != -1) return c->current_class->field_infos[field_idx].type;
     }
@@ -406,6 +409,8 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
 {
     if (send_node == NULL || rec_type == NULL) return new_type_info(sym_Error, 0);
 
+    Symbol* msg = send_node->send.message->identifier.name;
+
     // 1. すでにエラーが出ている場合は、連鎖エラーを出さずに黙って Error を返す
     if (rec_type->name == sym_Error) {
         return new_type_info(sym_Error, 0);
@@ -426,7 +431,6 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
         return new_type_info(sym_Error, 0);
     }
 
-    Symbol* msg = send_node->send.message->identifier.name;
 
     // 1. クラスの取得
     ClassDef* klass = resolve_class(c, rec_type->name);
@@ -435,11 +439,47 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
         return new_type_info(sym_Error, 0);
     }
 
+    bool is_class_receiver = false;
+    if (send_node->send.receiver->kind == AST_IDENTIFIER) {
+        Symbol* rec_sym = send_node->send.receiver->identifier.name;
+        if (rec_sym == sym_self && c->is_static_method) {
+            is_class_receiver = true;
+        } else if (resolve_local(c, rec_sym) == -1 && 
+                   resolve_upvalue(c, rec_sym) == -1 && 
+                   resolve_class(c, rec_sym) != NULL) {
+            is_class_receiver = true;
+        }
+    }
     if (send_node->send.args == NULL) {
-        int field_idx = find_field_index(klass, msg);
-        if (field_idx != -1) {
-            emit_inst(c, OP_GET_FIELD, (uint32_t)field_idx);
-            return klass->field_infos[field_idx].type;
+        // クラスからの静的フィールドアクセス
+        if (is_class_receiver) {
+            int static_idx = find_static_field_index(klass, msg);
+            if (static_idx != -1) {
+                emit_inst(c, OP_GET_STATIC, (uint32_t)static_idx);
+                return klass->static_field_infos[static_idx].type;
+            }
+            if (find_field_index(klass, msg) != -1) {
+                error_compile(send_node, ERR_CANNOT_ACCESS_FIELD_ON_CLASS);
+                return new_type_info(sym_Error, 0);
+            }
+        } else {
+            // 通常のインスタンスフィールド
+            int field_idx = find_field_index(klass, msg);
+            if (field_idx != -1) {
+                emit_inst(c, OP_GET_FIELD, (uint32_t)field_idx);
+                return klass->field_infos[field_idx].type;
+            }
+        }
+    }
+
+    if (is_class_receiver) {
+        if (!is_static_method(klass, msg)) {
+            if (find_method(klass, msg, &(Value){0})) {
+                error_compile(send_node, ERR_UNDEFINED_CLASS_METHOD, msg->chars, klass->name->chars);
+            } else {
+                error_compile(send_node, ERR_UNDEFINED_MESSAGE, msg->chars, klass->name->chars);
+            }
+            return new_type_info(sym_Error, 0);
         }
     }
 
@@ -464,7 +504,7 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
     // 4. シグネチャの完全置換
     TypeInfo* concrete_fn_type = substitute_type(formal_fn_type, &env);
 
-    // ★ 5. 引数の個数チェック（デフォルト引数 min_param_count 〜 param_count に対応）
+    // 5. 引数の個数チェック
     int min_argc = concrete_fn_type->min_param_count;
     int max_argc = concrete_fn_type->param_count;
 
@@ -493,7 +533,7 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
         }
     }
 
-    // ★ 6. 省略されたデフォルト引数をスタックに補完する！
+    // 6. 省略されたデフォルト引数をスタックに補完する！
     for (int i = actual_argc; i < max_argc; i++) {
         emit_constant(c, concrete_fn_type->default_values[i]);
     }
@@ -501,7 +541,17 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
     // 7. 最大引数数 (max_argc) で OP_SEND 発行！
     ClassDef* rec_class = resolve_class(c, rec_type->name);
 
-    if (rec_class != NULL && rec_class->is_interface) {
+    if (is_class_receiver) {
+       int static_slot = get_static_method_index(klass, msg);
+        if (static_slot == -1) {
+            error_compile(send_node, ERR_UNDEFINED_CLASS_METHOD, msg->chars, klass->name->chars);
+            return new_type_info(sym_Error, 0);
+        }
+
+        uint32_t operand = make_call_operand((uint8_t)max_argc, (uint16_t)static_slot);
+        emit_inst(c, OP_STATIC_CALL, operand);
+
+    } else if (rec_class != NULL && rec_class->is_interface) {
         // 1. インターフェース内でのメソッド番号を取得 (0, 1, 2...)
         int iface_method_idx = get_vtable_index(rec_class, msg);
         if (iface_method_idx == -1) {
@@ -518,7 +568,7 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
         emit_inst(c, OP_IMPL_SEND, operand);
 
     } else {
-        // 通常のクラス呼び出し (既存の処理)
+        // 通常のクラス呼び出し
         int vtable_idx = get_vtable_index(rec_class, msg);
         if (vtable_idx == -1) {
             error_compile(send_node, ERR_UNDEFINED_MESSAGE, msg->chars, rec_class ? rec_class->name->chars : "unknown");
@@ -614,8 +664,24 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                 return resolve_upvalue_type(c, node->identifier.name);
             }
             if (c->current_class != NULL) {
+                // 1. 静的フィールドを優先検索 
+                int static_idx = find_static_field_index(c->current_class, node->identifier.name);
+                if (static_idx != -1) {
+                    uint32_t class_sym_idx = add_constant(c->chunk, make_obj((Obj*)c->current_class->name));
+                    emit_inst(c, OP_GET_GLOBAL, class_sym_idx);
+                    emit_inst(c, OP_GET_STATIC, (uint32_t)static_idx);
+                    return c->current_class->static_field_infos[static_idx].type;
+                }
+
+                // 2. 通常のインスタンスフィールド
                 int field_idx = find_field_index(c->current_class, node->identifier.name);
                 if (field_idx != -1) {
+                    if (c->is_static_method) {
+                        error_compile(node, ERR_CANNOT_ACCESS_FIELD_ON_CLASS);
+                        emit_constant(c, make_nil());
+                        return new_type_info(sym_Error, 0);
+                    }
+
                     emit_load_self(c);
                     emit_inst(c, OP_GET_FIELD, (uint32_t)field_idx);
                     return c->current_class->field_infos[field_idx].type;

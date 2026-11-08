@@ -659,6 +659,11 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
         if (lhs_send->send.receiver->kind == AST_IDENTIFIER) {
             Symbol* rec_name = lhs_send->send.receiver->identifier.name;
             if (rec_name == sym_self) {
+                if (c->is_static_method) {
+                    error_compile(node, ERR_CANNOT_ACCESS_FIELD_ON_CLASS);
+                    return new_type_info(sym_Error, 0);
+                }
+
                 Symbol* field_name = lhs_send->send.message->identifier.name;
                 if (c->current_class != NULL) {
                     int field_idx = find_field_index(c->current_class, field_name);
@@ -720,8 +725,32 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
 
         // 3-C. self 省略のフィールドの場合
         if (c->current_class != NULL) {
+            int static_idx = find_static_field_index(c->current_class, target_name);
+            if (static_idx != -1) {
+                FieldInfo f_info = c->current_class->static_field_infos[static_idx];
+
+                // クラスオブジェクトをスタックに積む -> 右辺値を積む -> OP_SET_STATIC
+                uint32_t class_sym_idx = add_constant(c->chunk, make_obj((Obj*)c->current_class->name));
+                emit_inst(c, OP_GET_GLOBAL, class_sym_idx);
+
+                TypeInfo* val_type = compile_expression(c, node->send.args);
+                if (!is_assignable(c, f_info.type, val_type)) {
+                    error_compile(node->send.args, ERR_ASSIGN_TYPE_MISMATCH,
+                                  type_to_string(val_type), target_name->chars, type_to_string(f_info.type));
+                }
+
+                emit_inst(c, OP_SET_STATIC, (uint32_t)static_idx);
+                return val_type;
+            }
+
+            // 2. 通常のインスタンスフィールド
             int field_idx = find_field_index(c->current_class, target_name);
             if (field_idx != -1) {
+                if (c->is_static_method) {
+                    error_compile(node, ERR_CANNOT_ACCESS_FIELD_ON_CLASS);
+                    return new_type_info(sym_Error, 0);
+                }
+
                 FieldInfo f_info = c->current_class->field_infos[field_idx];
                 emit_load_self(c);
                 TypeInfo* field_type = compile_expression(c, node->send.args);

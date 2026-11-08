@@ -40,6 +40,7 @@ typedef struct compiler {
     Chunk* chunk;
     const char* output_dir;
     bool is_method;
+    bool is_static_method;
     int stack_depth;
 
     TypeInfo* expected_ret_types[16];
