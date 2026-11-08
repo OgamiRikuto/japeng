@@ -6,7 +6,7 @@ class Fraction based Object:
         arg _num: Integer, _den: Integer;
 
         // 1. 最大公約数で約分
-        g: Integer is _num gcd _den;
+        g: Integer is _num gcd(_den);
         n: Integer is _num / g;
         d: Integer is _den / g;
 
@@ -39,7 +39,7 @@ class Fraction based Object:
     *: Function is [
         arg other: Fraction;
         ret Fraction;
-        return Fraction((num * other num), (den * other den));
+        return Fraction(num * other num, den * other den);
     ];
 
     /: Function is [
@@ -114,7 +114,7 @@ class Fraction based Object:
     pow: Function is [
         arg n: Integer;
         ret Fraction;
-        return Fraction((num pow n), (den pow n));
+        return Fraction(num pow(n), den pow(n));
     ];
 
     toString: Function is [
