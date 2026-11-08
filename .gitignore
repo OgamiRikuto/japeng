@@ -19,3 +19,9 @@ jpen
 lex.yy.c
 y.tab.c
 y.tab.h
+
+# キャッシュ
+.je_cache/
+*.bje
+*.bcd
+__pycache__/
