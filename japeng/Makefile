@@ -1,135 +1,164 @@
 CC      = clang
-CFLAGS  = -Wall -O3 -flto -g -Icommon/include -Iparser/include -Iparser/src -Icompiler/include -Ivm/include
+CFLAGS  = -Wall -O3 -flto -g \
+          -Icommon/include \
+          -Icompiler/include \
+          -Icompiler/parser/include \
+          -Icompiler/parser/src \
+          -Icompiler/src \
+          -Ivm/include
 LD      = clang
 LDFLAGS = -Wall -O3 -flto
 
-# CFLAGS = -Wall -g -O0 -Icommon/include -Iparser/include -Iparser/src -Icompiler/include -Ivm/include
+# CFLAGS = -Wall -g -O0 
+#           -Icommon/include \
+#           -Icompiler/include \
+#           -Icompiler/parser/include \
+#           -Icompiler/parser/src \
+#           -Icompiler/src \
+#           -Ivm/include
 # LDFLAGS = -Wall -g -O0
 
 LEX     = flex
 YAC     = bison -d -v
 
 # 生成するバイナリ
-TARGET_PARSE = jpen-parse       # 既存: パーサー単体用
-TARGET_COMPILER = jpenc
-TARGET_RUN   = jpen   # 新規: AST -> Compiler -> VM 統合実行用
+TARGET_COMPILER = jpenc         # コンパイラ本体
+TARGET_RUN      = jpen          # VM ランタイム
+TARGET_PARSE    = jpen-parse    # パーサー単体テスト
 
 BUILTIN_CD      = lib/
 
-# インストール先設定
 PREFIX  ?= /usr/local
 BINDIR  ?= $(PREFIX)/bin
 LIBDIR  ?= $(PREFIX)/lib/japeng
 
-# ----------------------------------------------------
-# 各ディレクトリのソースとオブジェクト
-# ----------------------------------------------------
+# ==============================================================================
+# 1. ソースコードの収集
+# ==============================================================================
 
-# parser
-PARSER_SRCS = $(filter-out parser/src/y.tab.c parser/src/lex.yy.c, $(wildcard parser/src/*.c))
-PARSER_OBJS = $(PARSER_SRCS:.c=.o) parser/src/y.tab.o
-
-# common (全ソース)
+# common (共通基盤)
 COMMON_SRCS = $(wildcard common/src/*.c)
 COMMON_OBJS = $(COMMON_SRCS:.c=.o)
 
-# compiler
+# vm (純粋な実行エンジン)
+VM_SRCS     = $(wildcard vm/src/*.c) $(wildcard vm/src/builtin_functions/*.c)
+VM_OBJS     = $(VM_SRCS:.c=.o)
+
+# compiler コア
 COMPILER_SRCS = $(wildcard compiler/src/*.c)
 COMPILER_OBJS = $(COMPILER_SRCS:.c=.o)
 
-COMPILER_MAIN = compile-main.o
-COMPILER_BIN_OBJS = $(COMPILER_MAIN) $(PARSER_OBJS) $(COMPILER_OBJS) $(COMMON_OBJS)
+# parser 共通基盤 (前処理・整形・AST構築補助)
+PARSER_BASE_SRCS = \
+	compiler/parser/src/ast.c \
+    compiler/parser/src/parse.c \
+    compiler/parser/src/ja_preprocessor.c \
+    compiler/parser/src/preprocessor.c \
+    compiler/parser/src/formatter.c \
+    compiler/parser/src/refine.c
+PARSER_BASE_OBJS = $(PARSER_BASE_SRCS:.c=.o)
 
-VM_MAIN     = vm-main.o
-VM_BIN_OBJS = $(VM_MAIN) $(VM_OBJS) $(COMMON_OBJS)
+# Flex (字句解析器)
+LEX_GEN_C   = compiler/parser/src/lex.yy.c
+LEX_OBJS    = $(LEX_GEN_C:.c=.o)
 
-# vm (dispatch サブディレクトリも含む)
-VM_SRCS = $(wildcard vm/src/*.c) $(wildcard vm/src/builtin_functions/*.c)
-VM_OBJS = $(VM_SRCS:.c=.o)
+# ==============================================================================
+# 2. パーサー実装の切り替え (手書き vs Bison)
+# ==============================================================================
+# デフォルトは手書きパーサー (hand)
+PARSER_TYPE ?= hand
 
-# ----------------------------------------------------
-# リンク対象の振り分け
-# ----------------------------------------------------
+# A. 手書き再帰下降パーサー (デフォルト)
+HAND_PARSER_SRCS = \
+    compiler/parser/src/parser.c \
+    compiler/parser/src/parser-dict.c
+HAND_PARSER_OBJS = $(HAND_PARSER_SRCS:.c=.o)
 
-# 1. 既存パーサーテスト (parser/parser-main.c + symbol.c のみ)
-PARSER_MAIN      = parser/parser-main.o
-PARSER_ONLY_OBJS = $(PARSER_MAIN) $(PARSER_OBJS) common/src/symbol.o common/src/object.o common/src/error.o common/src/builtin_convert.o common/src/bigint.o common/src/literal.o
+# B. Bison レガシーパーサー (いつでも削除可能)
+BISON_GEN_C = compiler/parser/src/y.tab.c
+BISON_GEN_H = compiler/parser/src/y.tab.h
+BISON_OBJS  = compiler/parser/src/y.tab.o
 
-# 2. 統合テスト (test_cat.c + 全モジュール)
-RUN_MAIN = main.o
-RUN_OBJS = $(RUN_MAIN) $(PARSER_OBJS) $(COMPILER_OBJS) $(VM_OBJS) $(COMMON_OBJS)
+# 切り替えロジック
+ifeq ($(PARSER_TYPE), bison)
+    PARSER_IMPL_OBJS = $(BISON_OBJS)
+else
+    PARSER_IMPL_OBJS = $(HAND_PARSER_OBJS)
+endif
 
-# ----------------------------------------------------
-# ビルドターゲット
-# ----------------------------------------------------
+PARSER_OBJS = $(PARSER_BASE_OBJS) $(PARSER_IMPL_OBJS) $(LEX_OBJS)
 
-all: $(TARGET_PARSE) $(TARGET_COMPILER) $(TARGET_RUN) builtins
+# ==============================================================================
+# 3. 実行バイナリのリンク構成
+# ==============================================================================
+COMPILER_MAIN_OBJ = compiler-main.o
+COMPILER_BIN_OBJS = $(COMPILER_MAIN_OBJ) $(COMPILER_OBJS) $(PARSER_OBJS) $(COMMON_OBJS)
 
-debug: 
+VM_MAIN_OBJ       = vm-main.o
+VM_BIN_OBJS       = $(VM_MAIN_OBJ) $(VM_OBJS) $(COMMON_OBJS)
 
-# 既存のパーサー単体バイナリ
-$(TARGET_PARSE): $(PARSER_ONLY_OBJS)
-	@$(LD) $(LDFLAGS) -o $@ $^
+PARSER_MAIN_OBJ   = compiler/parser/src/parser-main.o
+PARSER_BIN_OBJS   = $(PARSER_MAIN_OBJ) $(COMPILER_OBJS) $(PARSER_OBJS) $(COMMON_OBJS)
 
-# コンパイラ単体ビルド
+# ==============================================================================
+# 4. ビルドターゲット
+# ==============================================================================
+
+# 通常ビルド (手書きパーサー)
+all: $(TARGET_COMPILER) $(TARGET_RUN) builtins
+
+# パーサー単体テスト (jpen-parse)
+parse: $(TARGET_PARSE)
+
+# Bison版でビルドしたい場合はこれを叩く
+bison:
+	@$(MAKE) PARSER_TYPE=bison all
+
+bison-parse:
+	@$(MAKE) PARSER_TYPE=bison parse
+
+# リンク
 $(TARGET_COMPILER): $(COMPILER_BIN_OBJS)
 	@$(LD) $(LDFLAGS) -o $@ $^
-
-# # 今回の AST -> Compiler -> VM 統合バイナリ
-# $(TARGET_RUN): $(RUN_OBJS)
-# 	@$(LD) $(LDFLAGS) -o $@ $^
 
 $(TARGET_RUN): $(VM_BIN_OBJS)
 	@$(LD) $(LDFLAGS) -o $@ $^
 
-# 1. Bison: parser.y -> y.tab.c, y.tab.h
-parser/src/y.tab.c parser/src/y.tab.h: parser/src/parser.y
-	@$(YAC) -o parser/src/y.tab.c $<
+$(TARGET_PARSE): $(PARSER_BIN_OBJS)
+	@$(LD) $(LDFLAGS) -o $@ $^
 
-# 2. Flex: rex.l -> lex.yy.c (y.tab.h の生成後に実行)
-parser/src/lex.yy.c: parser/src/rex.l parser/src/y.tab.h
+# ==============================================================================
+# 5. 生成・コンパイルルール
+# ==============================================================================
+
+# Flex 生成
+$(LEX_GEN_C): compiler/parser/src/rex.l
 	@$(LEX) -o $@ $<
 
-# 3. parser.y が "lex.yy.c" を include しているため、コンパイル前に生成を保証
-parser/src/y.tab.o: parser/src/y.tab.c parser/src/lex.yy.c
-	@$(CC) $(CFLAGS) -c $< -o $@
+# ------------------------------------------------------------------------------
+# [Bison セクション] 
+# ------------------------------------------------------------------------------
+# $(BISON_GEN_C) $(BISON_GEN_H): compiler/parser/src/parser.y
+# 	@$(YAC) -o $(BISON_GEN_C) $<
 
-# 汎用コンパイルルール
+# compiler/parser/src/y.tab.o: $(BISON_GEN_C)
+# 	@$(CC) $(CFLAGS) -c $< -o $@
+# ------------------------------------------------------------------------------
+
+# 汎用ルール
 %.o: %.c
 	@$(CC) $(CFLAGS) -c $< -o $@
 
-# 統合テストのワンアクション実行
-run: $(TARGET_RUN)
-	@./$(TARGET_RUN) test_code/test.je
-
+# 組み込みクラスのコンパイル
 builtins: $(TARGET_COMPILER) $(BUILTIN_CD)
 	@echo "Compiling built-in classes to .bcd..."
 	@./$(TARGET_COMPILER) -d lib/
 
-install: all
-	@echo "Installing JapEng to $(PREFIX)..."
-	@mkdir -p $(DESTDIR)$(BINDIR)
-	@mkdir -p $(DESTDIR)$(LIBDIR)
-	@install -m 755 $(TARGET_COMPILER) $(DESTDIR)$(BINDIR)/$(TARGET_COMPILER)
-	@install -m 755 $(TARGET_RUN)      $(DESTDIR)$(BINDIR)/$(TARGET_RUN)
-	@install -m 644 lib/.je_cache/*.bcd $(DESTDIR)$(LIBDIR)/
-	@echo "Installation complete."
-
-uninstall:
-	@echo "Uninstalling JapEng from $(PREFIX)..."
-	@rm -f $(DESTDIR)$(BINDIR)/$(TARGET_COMPILER)
-	@rm -f $(DESTDIR)$(BINDIR)/$(TARGET_RUN)
-	@rm -rf $(DESTDIR)$(LIBDIR)
-	@echo "Uninstall complete."
-
 clean:
 	@rm -f $(TARGET_PARSE) $(TARGET_COMPILER) $(TARGET_RUN)
-	@rm -f parser/src/y.tab.c parser/src/y.tab.h parser/src/y.output
-	@rm -f parser/src/lex.yy.c
-	@rm -f main.o compile-main.o vm-main.o parser/*.o parser/src/*.o
-	@rm -f common/src/*.o
-	@rm -f compiler/src/*.o
-	@rm -f vm/src/*.o vm/src/builtin_functions/*.o
+	@rm -f compiler/parser/src/y.tab.c compiler/parser/src/y.tab.h compiler/parser/src/y.output
+	@rm -f compiler/parser/src/lex.yy.c
+	@rm -f *.o compiler/parser/src/*.o compiler/src/*.o vm/src/*.o vm/src/builtin_functions/*.o common/src/*.o
 	@rm -rf .je_cache */.je_cache */*/.je_cache
 
-.PHONY: all clean run
+.PHONY: all clean parse bison bison-parse builtins
