@@ -101,6 +101,8 @@ typedef enum {
     ERR_UNDEFINED_MESSAGE,
     ERR_WITH_REQUIRES_CLOSE,        // Close インターフェース未実装
     ERR_WITH_SYNTAX,                // 式またはブロックの不足
+    ERR_MODULE_NOT_FOUND,
+    
 
     // // --- 実行時エラー ---
     // ERR_UNDEFINED_GLOBAL,

@@ -208,7 +208,7 @@ void compile_repeat(Compiler* c, ASTNode* node)
         int counter_slot;
         if (block_node->block.args != NULL) {
             ASTNode* id_node = block_node->block.args->var_decl.identifier;
-            TypeInfo* t_info = build_type_info(block_node->block.args->var_decl.type);
+            TypeInfo* t_info = build_type_info(c, block_node->block.args->var_decl.type);
             if (t_info == NULL) {
                 t_info = new_type_info(sym_Integer, 0);
             }
@@ -296,7 +296,7 @@ static void compile_block_args(Compiler* c, ASTNode* args_node, int* arity)
     }
     if (args_node->kind == AST_VAR_DECL) {
         Symbol* arg_name = args_node->var_decl.identifier->identifier.name;
-        TypeInfo* t_info = build_type_info(args_node->var_decl.type);
+        TypeInfo* t_info = build_type_info(c, args_node->var_decl.type);
         add_local(c, arg_name, t_info);
         (*arity)++;
     }
@@ -310,6 +310,9 @@ ObjFunction* compile_block(Compiler* parent, ASTNode* block_node)
     Compiler block_compiler;
     init_compiler(&block_compiler, fn_chunk);
     block_compiler.enclosing = parent;
+    block_compiler.filename = parent ? parent->filename : NULL;
+    block_compiler.imported_classes = parent ? parent->imported_classes : NULL;
+    block_compiler.dict_aliases = parent ? parent->dict_aliases : NULL;
     block_compiler.current_class = parent->current_class;
     block_compiler.defined_class = parent->defined_class;
     block_compiler.is_static_method = parent ? parent->is_static_method : false;
@@ -317,7 +320,7 @@ ObjFunction* compile_block(Compiler* parent, ASTNode* block_node)
     block_compiler.expected_ret_count = 0;
     if (block_node->block.rets != NULL) {
         // AST_STMT で並んでいる ret の型ツリーをフラットに集める
-        collect_ret_types_from_ast(block_node->block.rets, 
+        collect_ret_types_from_ast(parent, block_node->block.rets, 
                                    block_compiler.expected_ret_types, 
                                    &block_compiler.expected_ret_count);
     } else {
@@ -554,7 +557,7 @@ void compile_each(Compiler* c, ASTNode* node)
         // [ arg n: Type; ] ➜ 要素のみ (スタック: +1)
         ASTNode* decl = arg_decls[0];
         Symbol* name = decl->var_decl.identifier->identifier.name;
-        TypeInfo* declared_type = build_type_info(decl->var_decl.type);
+        TypeInfo* declared_type = build_type_info(c, decl->var_decl.type);
 
         if (declared_type != NULL && elem_type != NULL && elem_type->name != sym_Auto) {
             if (!is_assignable(c, declared_type, elem_type)) {
@@ -573,7 +576,7 @@ void compile_each(Compiler* c, ASTNode* node)
         // [ arg i: Integer, n: Type; ] ➜ 添字と要素 (スタック: +2)
         ASTNode* decl_i = arg_decls[0];
         Symbol* name_i = decl_i->var_decl.identifier->identifier.name;
-        TypeInfo* idx_type = build_type_info(decl_i->var_decl.type);
+        TypeInfo* idx_type = build_type_info(c, decl_i->var_decl.type);
 
         if (idx_type != NULL && !is_integer_type(idx_type->name) && idx_type->name != sym_Auto) {
             error_compile(decl_i, ERR_EACH_INDEX_TYPE, idx_type->name->chars);
@@ -586,7 +589,7 @@ void compile_each(Compiler* c, ASTNode* node)
 
         ASTNode* decl_n = arg_decls[1];
         Symbol* name_n = decl_n->var_decl.identifier->identifier.name;
-        TypeInfo* declared_elem_type = build_type_info(decl_n->var_decl.type);
+        TypeInfo* declared_elem_type = build_type_info(c, decl_n->var_decl.type);
 
         if (declared_elem_type != NULL && elem_type != NULL && elem_type->name != sym_Auto) {
             if (!is_assignable(c, declared_elem_type, elem_type)) {
@@ -740,7 +743,7 @@ void compile_with(Compiler* c, ASTNode* node)
         if (arg_count > 0) {
             ASTNode* decl = arg_decls[i];
             Symbol* var_name = decl->var_decl.identifier->identifier.name;
-            TypeInfo* decl_type = build_type_info(decl->var_decl.type);
+            TypeInfo* decl_type = build_type_info(c, decl->var_decl.type);
 
             // 引数ごとの個別型チェック
             if (decl_type != NULL && !is_assignable(c, decl_type, res_type)) {

@@ -61,5 +61,6 @@ ObjClass* get_class_for_value(VM* vm, Value val);
 static inline Value peek(VM* vm, int distance) {
     return vm->stack_top[-1 - distance];
 }
+void bind_native_class_if_needed(ObjClass* klass);
 
 #endif

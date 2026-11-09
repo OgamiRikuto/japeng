@@ -25,7 +25,7 @@ static const TokenNameEntry token_dict[TOKEN_COUNT] = {
     [CONTINUE] = {"continue", "ループ再開"},
     [STATIC] = {"static", "静的な"},
     [IMPORT] = {"import", "導入"},
-    [AS] = {"as", "次の名で"},
+    [AS] = {"as", "アズ"},
     [ELLIPSIS] = {"...", "・・・"},
 
     // 記号

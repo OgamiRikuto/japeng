@@ -7,7 +7,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-void define_native(ObjClass* klass, const char* name, NativeFn func);
+// void define_native(ObjClass* klass, const char* name, NativeFn func);
 void init_builtin_classes(VM* vm);
 
 void setup_print(VM* vm, ObjClass* klass);
@@ -16,4 +16,7 @@ void setup_boolean(VM* vm);
 void list_append(VM* vm, ObjList* list, Value val);
 void setup_list(VM* vm);
 void setup_string(VM* vm);
+
+
+void register_file_natives(ObjClass* klass);
 #endif

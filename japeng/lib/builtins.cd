@@ -34,39 +34,6 @@ class List Type based Object:
     swap: Function is [ arg index1:Integer, index2: Integer; ];
     map: Function is [ arg lambda: Function(Type; Auto); ret List Auto; ];
     toString: Function is [ ret String; ];
-// class Object:
-//     toString: Function(; String) is [];
-//     print: Function(;) is [];
-//     println: Function(;) is [];
-//     input: Function is [ arg prompt: String is ""; ret String; ];
 
-// class Integer based Object:
-//     pow: Function(Integer; Integer) is [];
-//     gcd: Function(Integer; Integer) is [];
-//     toString: Function(;String) is [];
-
-// class Float based Object:
-//     toString: Function(; String) is [];
-
-// class Decimal based Object:
-//     toString: Function(; String) is [];
-
-// class String based Object:
-//     get: Function(Integer; String) is [];
-//     length: Function(; Integer) is [];
-//     split: Function is [ arg seq: String is " "; ret List String; ];
-//     trim: Function(; String) is [];
-//     toString: Function(; String) is [];
-
-// class Boolean based Object:
-//     toString: Function(; String) is [];
-
-// class List Type based Object:
-//     init: Function(...;) is [];
-//     push: Function(Type;) is [];
-//     get: Function(Integer; Type) is [];
-//     set: Function(Integer; Type) is [];
-//     length: Function(; Integer) is [];
-//     swap: Function(Integer, Integer;) is [];
-//     map: Function(Function(Type; Auto); List Auto) is [];
-//     toString: Function(; String) is [];
+interface Close:
+    close: Function(;);

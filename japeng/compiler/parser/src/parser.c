@@ -190,15 +190,23 @@ ASTNode* parse_import_stmt(Parser* p)
     Symbol* path = NULL;
     ASTNode* class_name = NULL;
     ASTNode* alias = NULL;
+
     if (match(p, IMPORT)) {
-        if (check(p, STRING)) path = (consume(p, STRING)).symbol;
+        if (check(p, STR_OPEN)) {
+            consume(p, STR_OPEN);
+            Token text_tok = consume(p, STR_TEXT);
+            path = text_tok.symbol;
+            consume(p, STR_CLOSE);
+        }
         else if (check(p, CLASS_NAME)) {
             Token klass = consume(p, CLASS_NAME);
             class_name = create_identifier_node(klass.symbol);
-        } else {
-            consume(p, STRING);
-             return NULL;
+        } 
+        else {
+            consume(p, STR_OPEN);
+            return NULL;
         }
+
         if (match(p, AS)) {
             Token klass = consume(p, CLASS_NAME);
             alias = create_identifier_node(klass.symbol);
@@ -206,11 +214,22 @@ ASTNode* parse_import_stmt(Parser* p)
         consume(p, SEMICOLON);
         if (p->panic_mode) return NULL;
         return create_import_node(path, class_name, alias);
-    } else if (match(p, FROM)) {
-        path = (consume(p, STRING)).symbol;
+    } 
+    else if (match(p, FROM)) {
+        if (check(p, STR_OPEN)) {
+            consume(p, STR_OPEN);
+            Token text_tok = consume(p, STR_TEXT);
+            path = text_tok.symbol;
+            consume(p, STR_CLOSE);
+        } else {
+            consume(p, STR_OPEN);
+            return NULL;
+        }
+
         consume(p, IMPORT);
         Token klass = consume(p, CLASS_NAME);
         class_name = create_identifier_node(klass.symbol);
+
         if (match(p, AS)) {
             Token klass = consume(p, CLASS_NAME);
             alias = create_identifier_node(klass.symbol);
@@ -218,7 +237,8 @@ ASTNode* parse_import_stmt(Parser* p)
         consume(p, SEMICOLON);
         if (p->panic_mode) return NULL;
         return create_import_node(path, class_name, alias);
-    } else return NULL;
+    } 
+    return NULL;
 }
 
 ASTNode* parse_type_def_list(Parser* p)

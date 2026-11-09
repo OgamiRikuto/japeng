@@ -19,7 +19,25 @@ static void get_basename_without_ext(const char* filepath, char* out, size_t max
     out[max_len - 1] = '\0';
 
     char* dot = strrchr(out, '.');
-    if (dot) *dot = '\0'; // .je や .jje を削る
+    if (dot) *dot = '\0';
+}
+
+static void get_dir_from_filename(const char* filepath, char* out_dir, size_t max_len) {
+    if (!filepath || filepath[0] == '\0') {
+        strncpy(out_dir, ".", max_len - 1);
+        out_dir[max_len - 1] = '\0';
+        return;
+    }
+    const char* slash = strrchr(filepath, '/');
+    if (slash) {
+        size_t len = slash - filepath;
+        if (len >= max_len) len = max_len - 1;
+        strncpy(out_dir, filepath, len);
+        out_dir[len] = '\0';
+    } else {
+        strncpy(out_dir, ".", max_len - 1);
+        out_dir[max_len - 1] = '\0';
+    }
 }
 
 static void print_usage(const char* prog) {
@@ -57,6 +75,33 @@ static bool remove_dir_recursive(const char* path) {
     return (rmdir(path) == 0);
 }
 
+// ★ 指定ディレクトリ配下にあるすべての .je_cache を再帰的に探して削除
+static void clean_all_caches_under(const char* dir_path, bool* removed_any) {
+    DIR* d = opendir(dir_path);
+    if (!d) return;
+
+    struct dirent* p;
+    char sub_path[1024];
+
+    while ((p = readdir(d)) != NULL) {
+        if (strcmp(p->d_name, ".") == 0 || strcmp(p->d_name, "..") == 0) continue;
+
+        snprintf(sub_path, sizeof(sub_path), "%s/%s", dir_path, p->d_name);
+        struct stat st;
+        if (stat(sub_path, &st) == 0 && S_ISDIR(st.st_mode)) {
+            if (strcmp(p->d_name, ".je_cache") == 0) {
+                if (remove_dir_recursive(sub_path)) {
+                    printf("キャッシュを削除しました: %s\n", sub_path);
+                    *removed_any = true;
+                }
+            } else {
+                clean_all_caches_under(sub_path, removed_any);
+            }
+        }
+    }
+    closedir(d);
+}
+
 // =============================================================================
 // キャッシュクリーン処理
 // =============================================================================
@@ -80,7 +125,6 @@ static int handle_clean_command(int argc, char** argv) {
 
     // 1. 標準ライブラリのキャッシュ削除 (all 指定時)
     if (clean_all) {
-        // ★ 場所探索関数を使って lib の真の位置を取得！
         const char* lib_dir = get_japeng_lib_dir();
         snprintf(cache_path, sizeof(cache_path), "%s/.je_cache", lib_dir);
 
@@ -90,9 +134,10 @@ static int handle_clean_command(int argc, char** argv) {
                 removed_any = true;
             }
         }
+        clean_all_caches_under(lib_dir, &removed_any);
     }
 
-    // 2. プロジェクト（指定パス、またはカレント）のキャッシュ削除
+    // 2. プロジェクト（指定パス、またはカレント）配下の全 .je_cache を再帰削除
     const char* proj_dir = (!target || clean_all) ? "." : target;
     snprintf(cache_path, sizeof(cache_path), "%s/.je_cache", proj_dir);
 
@@ -102,6 +147,7 @@ static int handle_clean_command(int argc, char** argv) {
             removed_any = true;
         }
     }
+    clean_all_caches_under(proj_dir, &removed_any);
 
     if (!removed_any) {
         printf("削除対象のキャッシュは見つかりませんでした。\n");
@@ -110,13 +156,13 @@ static int handle_clean_command(int argc, char** argv) {
     return 0;
 }
 
-// ★ AST_STMT で複数クラスが繋がっていても安全に再帰して差分チェックを行うヘルパー
-static void collect_freshness_targets(ASTNode* node, const char* project_dir, ASTNode** targets, int* target_count) {
+// ★ 各ファイル自身のディレクトリに基づいて差分判定
+static void collect_freshness_targets(ASTNode* node, ASTNode** targets, int* target_count) {
     if (!node) return;
 
     if (node->kind == AST_STMT) {
-        collect_freshness_targets(node->stmt.left, project_dir, targets, target_count);
-        collect_freshness_targets(node->stmt.right, project_dir, targets, target_count);
+        collect_freshness_targets(node->stmt.left, targets, target_count);
+        collect_freshness_targets(node->stmt.right, targets, target_count);
         return;
     }
 
@@ -124,23 +170,26 @@ static void collect_freshness_targets(ASTNode* node, const char* project_dir, AS
         ASTNode* cnode = node->class_def.klass;
         if (cnode && cnode->kind == AST_CLASS && cnode->klass.classname) {
             Symbol* cname = cnode->klass.classname->identifier.name;
-            char bcd_path[1024];
-            get_cache_filepath(project_dir, cname->chars, "bcd", bcd_path, sizeof(bcd_path));
 
-            // .bcd が存在しない、または .cd の方が新しい場合のみ再コンパイル対象へ
-            if (!is_cache_fresh(bcd_path, project_dir)) {
+            char file_dir[1024];
+            get_dir_from_filename(node->loc.filename, file_dir, sizeof(file_dir));
+
+            char bcd_path[1024];
+            get_cache_filepath(file_dir, cname->chars, "bcd", bcd_path, sizeof(bcd_path));
+
+            if (!is_cache_fresh(bcd_path, file_dir)) {
                 targets[(*target_count)++] = node;
             }
         }
     }
 }
 
-static void prepare_classes(Compiler* c, ASTNode* node, const char* project_dir, ASTNode** targets, int* target_count) {
+static void prepare_classes(Compiler* c, ASTNode* node, ASTNode** targets, int* target_count) {
     if (!node) return;
 
     if (node->kind == AST_STMT) {
-        prepare_classes(c, node->stmt.left, project_dir, targets, target_count);
-        prepare_classes(c, node->stmt.right, project_dir, targets, target_count);
+        prepare_classes(c, node->stmt.left, targets, target_count);
+        prepare_classes(c, node->stmt.right, targets, target_count);
         return;
     }
 
@@ -148,14 +197,16 @@ static void prepare_classes(Compiler* c, ASTNode* node, const char* project_dir,
         ASTNode* cnode = node->class_def.klass;
         if (cnode && cnode->kind == AST_CLASS && cnode->klass.classname) {
             Symbol* cname = cnode->klass.classname->identifier.name;
-            char bcd_path[1024];
-            get_cache_filepath(project_dir, cname->chars, "bcd", bcd_path, sizeof(bcd_path));
 
-            if (is_cache_fresh(bcd_path, project_dir)) {
-                // キャッシュが新鮮なら .bcd から完全な型・vtable を復元して共有テーブルに登録！
+            char file_dir[1024];
+            get_dir_from_filename(node->loc.filename, file_dir, sizeof(file_dir));
+
+            char bcd_path[1024];
+            get_cache_filepath(file_dir, cname->chars, "bcd", bcd_path, sizeof(bcd_path));
+
+            if (is_cache_fresh(bcd_path, file_dir)) {
                 load_class_type_from_bcd(c, bcd_path);
             } else {
-                // キャッシュが無い、またはソースの方が新しい場合は再コンパイル対象へ
                 targets[(*target_count)++] = node;
             }
         }
@@ -203,7 +254,6 @@ int main(int argc, char** argv) {
     }
 
     init_symbols();
-    // ★ builtins.cd の直接パースは完全撤廃（resolve_class の自動ロードに一本化）
 
     char project_dir_buf[1024] = ".";
     const char* project_dir = project_dir_buf;
@@ -252,12 +302,10 @@ int main(int argc, char** argv) {
         ASTNode* compile_targets[MAX_FILES];
         int target_count = 0;
 
-        // ★ AST_STMT に対応した安全な再帰で再コンパイル対象を抽出
         for (int i = 0; i < parsed_cd_count; i++) {
-            collect_freshness_targets(parsed_cd[i], project_dir, compile_targets, &target_count);
+            collect_freshness_targets(parsed_cd[i], compile_targets, &target_count);
         }
 
-        // 更新が必要なクラスがある場合のみコンパイルを実行
         if (target_count > 0) {
             Chunk dummy_chunk;
             init_chunk(&dummy_chunk);
@@ -267,21 +315,30 @@ int main(int argc, char** argv) {
             cd_compiler.output_dir = project_dir;
             cd_compiler.defined_class = shared_classes;
 
-            ASTNode* compile_targets[MAX_FILES];
-            int target_count = 0;
-    
-            // キャッシュ新鮮なクラスを .bcd からロードし、更新が必要なものだけを抽出
+            target_count = 0;
             for (int i = 0; i < parsed_cd_count; i++) {
-                prepare_classes(&cd_compiler, parsed_cd[i], project_dir, compile_targets, &target_count);
+                prepare_classes(&cd_compiler, parsed_cd[i], compile_targets, &target_count);
             }
-    
-            // 更新が必要なクラスがある場合のみ 4 パスを実行
+
             if (target_count > 0) {
-                for (int i = 0; i < target_count; i++) declare_class_skeleton(&cd_compiler, compile_targets[i]);
-                for (int i = 0; i < target_count; i++) resolve_class_skeleton_relations(&cd_compiler, compile_targets[i]);
-                for (int i = 0; i < target_count; i++) declare_class_signatures(&cd_compiler, compile_targets[i]);
-    
+                // スケルトン宣言
                 for (int i = 0; i < target_count; i++) {
+                    cd_compiler.filename = compile_targets[i]->loc.filename;
+                    declare_class_skeleton(&cd_compiler, compile_targets[i]);
+                }
+                // 関係性解決
+                for (int i = 0; i < target_count; i++) {
+                    cd_compiler.filename = compile_targets[i]->loc.filename;
+                    resolve_class_skeleton_relations(&cd_compiler, compile_targets[i]);
+                }
+                // シグネチャ先行登録
+                for (int i = 0; i < target_count; i++) {
+                    cd_compiler.filename = compile_targets[i]->loc.filename;
+                    declare_class_signatures(&cd_compiler, compile_targets[i]);
+                }
+                // クラス本体のコンパイル
+                for (int i = 0; i < target_count; i++) {
+                    cd_compiler.filename = compile_targets[i]->loc.filename;
                     compile_class_body(&cd_compiler, compile_targets[i]);
                 }
             }
@@ -297,9 +354,9 @@ int main(int argc, char** argv) {
 
         Compiler script_compiler;
         init_compiler(&script_compiler, &script_chunk);
+        script_compiler.filename = parsed_je[i]->loc.filename;
         script_compiler.output_dir = project_dir;
         script_compiler.defined_class = shared_classes;
-
 
         compile(&script_compiler, parsed_je[i]);
         emit_constant(&script_compiler, make_int(0));
@@ -307,7 +364,11 @@ int main(int argc, char** argv) {
 
         char script_name[256];
         get_basename_without_ext(parsed_je[i]->loc.filename, script_name, sizeof(script_name));
-        write_script_bje(script_compiler.output_dir, script_name, &script_chunk);
+
+        // ★ スクリプトもそのスクリプトがあるディレクトリの .je_cache に出力
+        char script_dir[1024];
+        get_dir_from_filename(parsed_je[i]->loc.filename, script_dir, sizeof(script_dir));
+        write_script_bje(script_dir, script_name, &script_chunk);
 
         free_chunk(&script_chunk);
     }

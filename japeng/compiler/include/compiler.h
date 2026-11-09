@@ -37,6 +37,9 @@ typedef struct {
 } TypeEnv;
 
 typedef struct compiler {
+    const char* filename;
+    Table*      imported_classes;
+    Table*      dict_aliases;
     struct compiler* enclosing;
     Chunk* chunk;
     const char* output_dir;

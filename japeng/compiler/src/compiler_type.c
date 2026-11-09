@@ -225,7 +225,7 @@ static void collect_block_arg_info(Compiler* c, ASTNode* node,
     if (node->kind == AST_VAR_DECL) {
         int idx = (*param_count)++;
 
-        TypeInfo* t = build_type_info(node->var_decl.type);
+        TypeInfo* t = build_type_info(c, node->var_decl.type);
         if (t != NULL && t->name == sym_Function && node->var_decl.type->kind != AST_FUNC_TYPE) {
             Symbol* arg_name = node->var_decl.identifier ? node->var_decl.identifier->identifier.name : sym_Function;
             error_compile(node, ERR_FUNCTION_REQUIRES_SIGNATURE, arg_name->chars);
@@ -276,7 +276,7 @@ static void collect_block_arg_info(Compiler* c, ASTNode* node,
 //         return;
 //     }
 //     if (node->kind == AST_VAR_DECL) {
-//         list[(*count)++] = build_type_info(node->var_decl.type);
+//         list[(*count)++] = build_type_info(c, node->var_decl.type);
 //     }
 // }
 
@@ -308,7 +308,7 @@ static TypeInfo* replace_type_param(TypeInfo* type, Symbol* target_sym, TypeInfo
 }
 
 // 実引数（ブロック等）の戻り値から、Auto を置き換えるべき具象型を抽出する
-static TypeInfo* infer_auto_from_args(TypeInfo* concrete_fn_type, ASTNode** args, int actual_argc)
+static TypeInfo* infer_auto_from_args(Compiler* c, TypeInfo* concrete_fn_type, ASTNode** args, int actual_argc)
 {
     for (int i = 0; i < actual_argc && i < concrete_fn_type->param_count; i++) {
         TypeInfo* formal_param = concrete_fn_type->type_args[i];
@@ -323,7 +323,7 @@ static TypeInfo* infer_auto_from_args(TypeInfo* concrete_fn_type, ASTNode** args
                 if (args[i]->kind == AST_BLOCK && args[i]->block.rets != NULL) {
                     TypeInfo* block_rets[MAX_ARGS];
                     int b_rcnt = 0;
-                    collect_ret_types_from_ast(args[i]->block.rets, block_rets, &b_rcnt);
+                    collect_ret_types_from_ast(c, args[i]->block.rets, block_rets, &b_rcnt);
                     if (b_rcnt > 0 && block_rets[0] != NULL && 
                         block_rets[0]->name != sym_Auto && block_rets[0]->name != sym_Void) {
                         return block_rets[0]; // 呼び出し時に確定した真の型！
@@ -336,15 +336,15 @@ static TypeInfo* infer_auto_from_args(TypeInfo* concrete_fn_type, ASTNode** args
 }
 
 // rets の AST_STMT ツリーからすべての型を配列に集めるヘルパー
-void collect_ret_types_from_ast(ASTNode* node, TypeInfo** list, int* count) 
+void collect_ret_types_from_ast(Compiler* c, ASTNode* node, TypeInfo** list, int* count) 
 {
     if (node == NULL) return;
     if (node->kind == AST_STMT) {
-        collect_ret_types_from_ast(node->stmt.left, list, count);
-        collect_ret_types_from_ast(node->stmt.right, list, count);
+        collect_ret_types_from_ast(c, node->stmt.left, list, count);
+        collect_ret_types_from_ast(c, node->stmt.right, list, count);
         return;
     }
-    list[(*count)++] = build_type_info(node);
+    list[(*count)++] = build_type_info(c, node);
 }
 
 // ブロックから詳細な Function 型 [引数1, 引数2, ..., 戻り値] を構築
@@ -358,7 +358,7 @@ TypeInfo* build_function_type_from_block(Compiler* c, ASTNode* block_node)
     collect_block_arg_info(c, block_node->block.args, params, default_vals, &param_count, &min_param_count);
 
     TypeInfo* rets[16]; int r_cnt = 0;
-    if (block_node->block.rets) collect_ret_types_from_ast(block_node->block.rets, rets, &r_cnt);
+    if (block_node->block.rets) collect_ret_types_from_ast(c, block_node->block.rets, rets, &r_cnt);
 
     TypeInfo* fn_type = new_func_type_info(param_count, params, r_cnt, rets);
     fn_type->min_param_count = min_param_count;
@@ -409,7 +409,18 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
 {
     if (send_node == NULL || rec_type == NULL) return new_type_info(sym_Error, 0);
 
-    Symbol* msg = send_node->send.message->identifier.name;
+    Symbol* msg = resolve_name_alias(c, send_node->send.message->identifier.name);
+
+    // 辞書にあればメッセージ名を本名に変換！
+    // for (Compiler* comp = c; comp != NULL; comp = comp->enclosing) {
+    //     if (comp->dict_aliases != NULL) {
+    //         Value real_msg_val;
+    //         if (table_get(comp->dict_aliases, msg, &real_msg_val)) {
+    //             msg = (Symbol*)as_obj(real_msg_val);
+    //             break;
+    //         }
+    //     }
+    // }
 
     // 1. すでにエラーが出ている場合は、連鎖エラーを出さずに黙って Error を返す
     if (rec_type->name == sym_Error) {
@@ -589,7 +600,7 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
 
     // 実引数（ブロック等）の戻り値型から Auto を具象型に推論し、汎用的に置換！
     // (ret_type が単体の Auto でも、List Auto でも、Map Key Auto でも等しく具象化される)
-    TypeInfo* inferred = infer_auto_from_args(concrete_fn_type, args, actual_argc);
+    TypeInfo* inferred = infer_auto_from_args(c, concrete_fn_type, args, actual_argc);
     if (inferred != NULL) {
         ret_type = replace_type_param(ret_type, sym_Auto, inferred);
     }
@@ -687,7 +698,8 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                     return c->current_class->field_infos[field_idx].type;
                 }
             }
-            ClassDef* klass = resolve_class(c, node->identifier.name);
+            Symbol* class_name = resolve_name_alias(c, node->identifier.name);
+            ClassDef* klass = resolve_class(c, class_name);
             if (klass != NULL) {
                 // クラスオブジェクトそのものをスタックに積む
                 uint32_t const_idx = add_constant(c->chunk, make_obj((Obj*)klass));
@@ -1136,7 +1148,8 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                 class_name = node->construct.class_node->klass.classname->identifier.name;
             }
 
-            ClassDef* klass = resolve_class(c, class_name);
+            Symbol* name = resolve_name_alias(c, class_name);
+            ClassDef* klass = resolve_class(c, name);
             if (klass == NULL) {
                 error_compile(node, ERR_CLASS_NOT_REGISTERED, class_name ? class_name->chars : "unknown");
                 return new_type_info(sym_Error, 0);
@@ -1146,8 +1159,8 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                 return new_type_info(sym_Error, 0);
             }
 
-            // ★ 2. ジェネリクスを反映した具象型の構築 (例: List Integer)
-            TypeInfo* target_type = build_type_info(node->construct.class_node);
+            // 2. ジェネリクスを反映した具象型の構築 
+            TypeInfo* target_type = build_type_info(c, node->construct.class_node);
 
             // 3. init のシグネチャ取得
             TypeInfo* formal_init_type = find_method_type(klass, sym_init);
@@ -1237,71 +1250,6 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
             // ★ 12. 式の評価結果として、ジェネリクスを反映した具象型を返す！
             return target_type ? target_type : (klass->type ? klass->type : new_type_info(class_name, 0));
         }
-        // case AST_CONSTRUCT: {
-        //     Symbol* class_name = node->construct.class_name;
-        //     ClassDef* klass = resolve_class(c, class_name);
-        //     if (klass == NULL) {
-        //         error_compile(node, ERR_CLASS_NOT_REGISTERED, class_name->chars);
-        //         return new_type_info(sym_Error, 0);
-        //     }
-
-        //     // 1. init (コンストラクタ) のシグネチャ取得
-        //     TypeInfo* formal_init_type = find_method_type(klass, sym_init);
-
-        //     // 2. 実引数の収集
-        //     ASTNode* args[16];
-        //     int actual_argc = 0;
-        //     collect_args(node->construct.args, args, &actual_argc, 16);
-
-        //     int min_argc = formal_init_type ? formal_init_type->min_param_count : 0;
-        //     int max_argc = formal_init_type ? formal_init_type->param_count : 0;
-
-        //     // 3. 引数の個数チェック
-        //     if (actual_argc < min_argc || actual_argc > max_argc) {
-        //         if (min_argc == max_argc) {
-        //             error_compile(node, ERR_METHOD_ARITY_MISMATCH, "init", max_argc, actual_argc);
-        //         } else {
-        //             error_compile(node, ERR_METHOD_ARITY_RANGE, "init", min_argc, max_argc, actual_argc);
-        //         }
-        //         emit_constant(c, make_nil());
-        //         return new_type_info(sym_Error, 0);
-        //     }
-
-        //     // 4. バイトコード生成: クラスオブジェクトをロードしてインスタンス生成
-        //     uint32_t class_sym_idx = add_constant(c->chunk, make_obj((Obj*)class_name));
-        //     emit_inst(c, OP_GET_GLOBAL, class_sym_idx); // stack: +1
-        //     emit_inst(c, OP_NEW_INSTANCE, 0);           // stack: ±0
-
-        //     // 5. インスタンスを複製 (1つは式の結果としてスタックに残し、1つは init のレシーバにする)
-        //     emit_inst(c, OP_DUP, 0);                    // stack: +1
-
-        //     // 6. 各実引数の評価 & 静的型チェック
-        //     for (int i = 0; i < actual_argc; i++) {
-        //         TypeInfo* arg_type = compile_expression(c, args[i]);
-        //         TypeInfo* expected_type = formal_init_type ? formal_init_type->type_args[i] : NULL;
-
-        //         if (expected_type != NULL && !is_assignable(c, expected_type, arg_type)) {
-        //             error_compile(args[i], ERR_METHOD_ARG_TYPE_MISMATCH, "init", i + 1,
-        //                           type_to_string(expected_type),
-        //                           type_to_string(arg_type));
-        //         }
-        //     }
-
-        //     // 7. デフォルト引数の補完
-        //     for (int i = actual_argc; i < max_argc; i++) {
-        //         emit_constant(c, formal_init_type->default_values[i]);
-        //     }
-
-        //     // 8. init (vtable スロット 0) を呼び出し
-        //     uint32_t call_op = ((uint32_t)max_argc << 16) | 0; // スロット 0 固定
-        //     emit_inst(c, OP_INVOKE_VIRTUAL, call_op);
-
-        //     // 9. init の戻り値を破棄 (スタックには DUP したインスタンスのみが残る)
-        //     emit_inst(c, OP_POP, 0);
-
-        //     // 10. 式の評価結果として、そのクラスの型を返す
-        //     return klass->type ? klass->type : new_type_info(class_name, 0);
-        // }
 
         default:
             compile(c, node);

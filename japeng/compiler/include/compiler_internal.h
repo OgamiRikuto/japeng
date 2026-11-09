@@ -40,7 +40,7 @@ int add_anonymous_local(Compiler* c);
 int add_upvalue(Compiler* compiler, uint8_t index, bool is_local);
 int resolve_upvalue(Compiler* compiler, Symbol* name);
 void emit_load_self(Compiler* c);
-Symbol* get_type_name(ASTNode* type_node);
+Symbol* get_type_name(Compiler* c, ASTNode* type_node);
 bool is_integer_type(Symbol* name);
 bool is_float_type(Symbol* name);
 bool is_decimal_type(Symbol* name);
@@ -52,7 +52,7 @@ bool is_collection_type(Symbol* name);
 Value parse_ast_literal(ASTNode* node, TypeInfo** out_type);
 Value parse_ast_literal_with_expected(ASTNode* node, TypeInfo* expected_type, TypeInfo** out_type);
 void collect_args(ASTNode* node, ASTNode** list, int* count, int max);
-void collect_ret_types_from_ast(ASTNode* node, TypeInfo** list, int* count);
+void collect_ret_types_from_ast(Compiler* c, ASTNode* node, TypeInfo** list, int* count);
 void collect_identifiers(ASTNode* node, ASTNode** list, int* count);
 
 // 基本構文コンパイル関数
@@ -76,10 +76,11 @@ void emit_close_resource(Compiler* c, int slot);
 void compile_with(Compiler* c, ASTNode* node);
 
 // クラスコンパイル関数
-TypeInfo* build_type_info(ASTNode* node);
+TypeInfo* build_type_info(Compiler* c, ASTNode* node);
 void compile_class_def(Compiler* c, ASTNode* node);
 int count_type_args(ASTNode* node);
 ClassDef* resolve_class(Compiler* c, Symbol* name);
+ClassDef* resolve_class_from_file(Compiler* c, const char* file_path);
 
 // 型チェック関数
 bool type_equals(TypeInfo* a, TypeInfo* b);
@@ -91,6 +92,10 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node);
 TypeInfo* substitute_type(TypeInfo* formal, TypeEnv* env) ;
 TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* rec_type);
 char* type_to_string(TypeInfo* type);
+
+// モジュール用
+void compile_import(Compiler* c, ASTNode* node);
+Symbol* resolve_name_alias(Compiler* c, Symbol* name);
 
 
 #endif

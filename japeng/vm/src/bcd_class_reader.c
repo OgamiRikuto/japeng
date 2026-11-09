@@ -331,48 +331,78 @@ ObjClass* vm_load_class_bcd(VM* vm, const char* bcd_path)
     free(pool);
     fclose(fp);
 
+    bind_native_class_if_needed(klass);
+
     if (vm != NULL) {
         table_set(vm->globals, class_name, make_obj((Obj*)klass));
     }
 
     return klass;
 }
+static bool bcd_file_exists(const char* path) {
+    struct stat st;
+    return (stat(path, &st) == 0 && !S_ISDIR(st.st_mode));
+}
 
-// ★★★ 遅延ロードのコア実装 ★★★
 ObjClass* vm_resolve_class(VM* vm, Symbol* class_name) 
 {
-    if (class_name == NULL) return NULL;
+    if (vm == NULL || class_name == NULL) return NULL;
 
-    // 1. すでにロード済みか確認
-    Value val;
-    if (table_get(vm->globals, class_name, &val)) {
-        return (ObjClass*)as_obj(val);
+    // 1. すでに globals にロード済みならそれを返す
+    Value existing_val;
+    if (table_get(vm->globals, class_name, &existing_val)) {
+        return (ObjClass*)as_obj(existing_val);
     }
 
-    struct stat st;
-    char path[1024];
+    char bcd_path[1024];
 
-    // 2. プロジェクトのキャッシュ (.je_cache/<Name>.bcd) を探す
-    const char* base_dir = vm->project_dir ? vm->project_dir : ".";
-    get_cache_filepath(base_dir, class_name->chars, "bcd", path, sizeof(path));
-    if (stat(path, &st) == 0) {
-        return vm_load_class_bcd(vm, path);
+    // 2. プロジェクトディレクトリ直下のキャッシュ (.je_cache/<Name>.bcd)
+    if (vm->project_dir != NULL) {
+        get_cache_filepath(vm->project_dir, class_name->chars, "bcd", bcd_path, sizeof(bcd_path));
+        if (bcd_file_exists(bcd_path)) {
+            return vm_load_class_bcd(vm, bcd_path);
+        }
+
+        // プロジェクト内のモジュールフォルダ (例: <proj>/<Name>/.je_cache/<Name>.bcd)
+        snprintf(bcd_path, sizeof(bcd_path), "%s/%s/.je_cache/%s.bcd", 
+                 vm->project_dir, class_name->chars, class_name->chars);
+        if (bcd_file_exists(bcd_path)) {
+            return vm_load_class_bcd(vm, bcd_path);
+        }
     }
 
-    // 3. 標準ライブラリディレクトリ (/usr/local/lib/japeng または ./lib) を探す
-    const char* lib_dir = get_japeng_lib_dir();
-    if (strstr(lib_dir, "usr") != NULL) {
-        // インストール先: /usr/local/lib/japeng/<Name>.bcd
-        char enc_name[256];
-        encode_cache_name(class_name->chars, enc_name, sizeof(enc_name));
-        snprintf(path, sizeof(path), "%s/%s.bcd", lib_dir, enc_name);
-    } else {
-        // 開発環境: ./lib/.je_cache/<Name>.bcd
-        get_cache_filepath(lib_dir, class_name->chars, "bcd", path, sizeof(path));
+    // 3. 標準ライブラリ配下のモジュールキャッシュ 
+    const char* stdlib_dir = get_japeng_lib_dir();
+    if (stdlib_dir != NULL) {
+        // A. lib/std/<Name>/.je_cache/<Name>.bcd
+        snprintf(bcd_path, sizeof(bcd_path), "%s/std/%s/.je_cache/%s.bcd", 
+                 stdlib_dir, class_name->chars, class_name->chars);
+        if (bcd_file_exists(bcd_path)) {
+            return vm_load_class_bcd(vm, bcd_path);
+        }
+
+        // B. 相対パスフォールバック: ./lib/std/<Name>/.je_cache/<Name>.bcd
+        snprintf(bcd_path, sizeof(bcd_path), "./lib/std/%s/.je_cache/%s.bcd", 
+                 class_name->chars, class_name->chars);
+        if (bcd_file_exists(bcd_path)) {
+            return vm_load_class_bcd(vm, bcd_path);
+        }
+
+        // C. 基本ビルトイン: lib/.je_cache/<Name>.bcd
+        get_cache_filepath(stdlib_dir, class_name->chars, "bcd", bcd_path, sizeof(bcd_path));
+        if (bcd_file_exists(bcd_path)) {
+            return vm_load_class_bcd(vm, bcd_path);
+        }
     }
 
-    if (stat(path, &st) == 0) {
-        return vm_load_class_bcd(vm, path);
+    // 4. ユーザーパッケージ (~/.japeng/packages/<Name>/.je_cache/<Name>.bcd)
+    const char* home = getenv("HOME");
+    if (home != NULL) {
+        snprintf(bcd_path, sizeof(bcd_path), "%s/.japeng/packages/%s/.je_cache/%s.bcd", 
+                 home, class_name->chars, class_name->chars);
+        if (bcd_file_exists(bcd_path)) {
+            return vm_load_class_bcd(vm, bcd_path);
+        }
     }
 
     return NULL;

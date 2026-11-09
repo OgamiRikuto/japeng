@@ -326,6 +326,10 @@ static const char* const error_table[ERR_COUNT][LANG_COUNT] = {
         [LANG_EN] = "'with' requires a resource expression and a block.",
         [LANG_JA] = "'with' にはリソース式と実行ブロックが必要です。"
     },
+    [ERR_MODULE_NOT_FOUND] = {
+        [LANG_EN] = "Module '%s' not found.",
+        [LANG_JA] = "モジュール '%s' が見つかりません。"
+    },
 
     // // --- 実行時エラー ---
     // [ERR_UNDEFINED_GLOBAL] = {

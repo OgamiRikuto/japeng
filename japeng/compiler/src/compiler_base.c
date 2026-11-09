@@ -214,8 +214,8 @@ bool compile_compound_assignment(Compiler* c, ASTNode* node)
 
 void compile_var_decl(Compiler* c, ASTNode* node)
 {
-    TypeInfo* t_info     = build_type_info(node->var_decl.type);
-    Symbol* type_name = t_info ? t_info->name : get_type_name(node->var_decl.type);
+    TypeInfo* t_info     = build_type_info(c, node->var_decl.type);
+    Symbol* type_name = t_info ? t_info->name : get_type_name(c, node->var_decl.type);
 
     ASTNode* vars[MAX_ARGS];
     int var_count = 0;
@@ -259,7 +259,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
         node->send.receiver->var_decl.identifier->kind == AST_STMT) {
 
         ASTNode* var_tree = node->send.receiver->var_decl.identifier;
-        TypeInfo* declared_type = build_type_info(node->send.receiver->var_decl.type);
+        TypeInfo* declared_type = build_type_info(c, node->send.receiver->var_decl.type);
 
         ASTNode* vars[MAX_ARGS];
         int var_count = 0;
@@ -425,8 +425,8 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
     if (node->send.receiver->kind == AST_VAR_DECL) {
         ASTNode* decl = node->send.receiver;
         Symbol* var_name  = decl->var_decl.identifier->identifier.name;
-        Symbol* type_name = get_type_name(decl->var_decl.type);
-        TypeInfo* declared_type = build_type_info(decl->var_decl.type);
+        Symbol* type_name = get_type_name(c, decl->var_decl.type);
+        TypeInfo* declared_type = build_type_info(c, decl->var_decl.type);
 
         bool is_null_literal = (node->send.args != NULL && 
                                 node->send.args->kind == AST_LITERAL && 

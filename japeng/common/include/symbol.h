@@ -72,12 +72,14 @@ typedef struct symbol {
     X(String,       "String") \
     X(List,         "List") \
     X(Boolean,      "Boolean") \
+    X(Fraction,     "Fraction") \
     X(Close,        "Close") \
     X(close,        "close") \
     X(Null,         "Null") \
     X(__multi__,    "__multi__") \
     X(Void,         "Void") \
-    X(Error,        "Error")
+    X(Error,        "Error") \
+    X(File,         "File")
 
 #define DECLARE_SYM(name, str) extern Symbol* sym_##name;
 CORE_SYMBOLS(DECLARE_SYM)

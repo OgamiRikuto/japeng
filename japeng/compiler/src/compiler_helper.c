@@ -6,6 +6,9 @@
 
 void init_compiler(Compiler* compiler, Chunk* chunk)
 {
+    compiler->filename = NULL;
+    compiler->imported_classes = NULL;
+    compiler->dict_aliases = NULL;
     compiler->enclosing = NULL;
     compiler->chunk = chunk;
     compiler->output_dir = ".";
@@ -237,15 +240,16 @@ void emit_load_self(Compiler* c)
     }
 }
 
-Symbol* get_type_name(ASTNode* type_node) {
+Symbol* get_type_name(Compiler* c, ASTNode* type_node) 
+{
     if (type_node == NULL) return NULL;
+    Symbol* name = NULL;
     if (type_node->kind == AST_IDENTIFIER) {
-        return type_node->identifier.name;
+        name = type_node->identifier.name;
+    } else if (type_node->kind == AST_CLASS && type_node->klass.classname != NULL) {
+        name = type_node->klass.classname->identifier.name;
     }
-    if (type_node->kind == AST_CLASS && type_node->klass.classname != NULL) {
-        return type_node->klass.classname->identifier.name;
-    }
-    return NULL;
+    return resolve_name_alias(c, name);
 }
 
 bool is_integer_type(Symbol* name) 
@@ -298,7 +302,9 @@ bool is_builtin(Symbol* name)
             name == sym_List ||
             name == sym_String ||
             name == sym_Boolean ||
-            name == sym_Void
+            name == sym_Void ||
+            name == sym_Fraction ||
+            name == sym_Close
             ;
 }
 
@@ -418,4 +424,34 @@ Value parse_ast_literal_with_expected(ASTNode* node, TypeInfo* expected_type, Ty
             if (out_type) *out_type = new_type_info(sym_Error, 0);
             return make_nil();
     }
+}
+// 名前（シンボル）からエイリアスおよび辞書マッピングを走査して正準シンボルを返す
+Symbol* resolve_name_alias(Compiler* c, Symbol* name)
+{
+    if (name == NULL || c == NULL) return name;
+
+    for (Compiler* comp = c; comp != NULL; comp = comp->enclosing) {
+        // 1. importエイリアステーブルを走査 (as Alias で束縛された本名)
+        if (comp->imported_classes != NULL) {
+            Value val;
+            if (table_get(comp->imported_classes, name, &val)) {
+                ClassDef* klass = (ClassDef*)as_obj(val);
+                if (klass && klass->name) {
+                    name = klass->name;
+                    break;
+                }
+            }
+        }
+
+        // 2. 辞書エイリアステーブルを走査 (ファイル型 -> File, 開く -> open など)
+        if (comp->dict_aliases != NULL) {
+            Value val;
+            if (table_get(comp->dict_aliases, name, &val)) {
+                name = (Symbol*)as_obj(val);
+                break;
+            }
+        }
+    }
+
+    return name;
 }

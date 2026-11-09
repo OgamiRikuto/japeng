@@ -104,6 +104,9 @@ void compile(Compiler* c, ASTNode* node)
 #endif
 
     switch(node->kind) {
+        case AST_IMPORT:
+            compile_import(c, node);
+            break;
         // 値（式）
         case AST_LITERAL:
         case AST_IDENTIFIER:

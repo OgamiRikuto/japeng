@@ -1,0 +1,19 @@
+// クラス名対応
+ファイル型: File
+
+// フィールド名対応
+ポインタ上: ptr_hi
+ポインタ下: ptr_lo
+閉じているか: is_closed
+
+// メソッド名対応
+初期化: init
+一行読む: read_line
+読む: read_all
+書く: write
+一行書く: write_line
+終端か: is_eof
+閉じる: close
+開く: open
+作成: create
+追加: append

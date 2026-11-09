@@ -1,0 +1,27 @@
+class File based Object implements Close:
+    ptr_hi: Integer;
+    ptr_lo: Integer;
+    is_closed: Boolean;
+
+    init:       Function is [ arg path: String, mode: String; ];    // path, mode ("r", "w", "a" 等)
+    read_line:  Function is [ ret String; ];                        // 1行読み込み (EOFなら null または "")
+    read_all:   Function is [ ret String; ];                        // 残りの全量を一括読み込み
+    write:      Function is [ arg out: String; ret Boolean; ];      // 文字列を書き込み
+    write_line: Function is [ arg out: String; ret Booleabn; ];     // 文字列 + 改行を書き込み
+    is_eof:     Function is [ ret Boolean; ];                       // 終端に達したか (feof)
+    close:      Function is [];                                     // ファイルを閉じる (fclose)
+
+    static open: Function is [
+        arg path: String; ret File;
+        return File(path, "r");
+    ];
+
+    static create: Function is [
+        arg path: String; ret File;
+        return File(path, "w");
+    ];
+
+    static append: Function is [
+        arg path: String; ret File;
+        return File(path, "a");
+    ];

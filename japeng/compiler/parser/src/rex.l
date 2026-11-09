@@ -40,6 +40,8 @@ static Symbol* resolve_and_intern(const char* text) {
 "from"	{ return FROM; }
 "implements" { return IMPLEMENTS; }
 "static"    { return STATIC;}
+"import"    { return IMPORT; }
+"as"        { return AS; }
 "is"	{ yylval.symbol = sym_is; return ASSIGN_IDENTIFIER; }
 "are"	{ yylval.symbol = sym_are; return ASSIGN_IDENTIFIER; }
 "self"	{ yylval.symbol = sym_self; return SELF; }
