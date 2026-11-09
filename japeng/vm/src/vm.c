@@ -83,6 +83,7 @@ const char* op_kind[OP_MAX] = {
     [OP_NEW_INSTANCE] = "OP_NEW_INSTANCE",
     [OP_INDEX_GET]     = "OP_INDEX_GET",
     [OP_INDEX_SET]     = "OP_INDEX_SET",
+    [OP_BUILD_LIST]    = "OP_BUILD_LIST"
 };
 #endif
 
@@ -1129,6 +1130,22 @@ static InterpretResult run(VM* vm, int stop_frame_count)
 
                 error_runtime(ERR_NOT_CALLABLE);
                 return INTERPRET_RUNTIME_ERROR;
+            }
+            case OP_BUILD_LIST: {
+                uint32_t count = get_operand(instruction);
+                ObjList* list = gc_new_list(&vm->heap, count);
+    
+                if (count > 0) {
+                    list->capacity = count;
+                    list->size = count;
+    
+                    for (int i = (int)count - 1; i >= 0; i--) {
+                        list->elements[i] = pop(vm);
+                    }
+                }
+    
+                push(vm, make_obj((Obj*)list));
+                break;
             }
             default: 
                 error_runtime(ERR_UNKNOWN_OPCODE, op);

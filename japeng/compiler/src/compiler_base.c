@@ -453,69 +453,42 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                 TypeInfo* expected_elem = (declared_type->type_arg_count > 0) 
                                           ? declared_type->type_args[0] 
                                           : NULL;
-    
-                ClassDef* list_class = resolve_class(c, sym_List);
-                if (list_class == NULL) {
-                    error_compile(node, ERR_CLASS_NOT_REGISTERED, sym_List->chars);
-                    return new_type_info(sym_Error, 0);
-                }
-                int push_slot = get_vtable_index(list_class, sym_push);
-                if (push_slot == -1) {
-                    error_compile(node, ERR_UNDEFINED_MESSAGE, sym_push->chars, sym_List->chars);
-                    return new_type_info(sym_Error, 0);
-                }
-    
-                // パターン A: カンマで 2 個以上並んでいる場合 (例: arr: List Integer is 1, 2, 3;)
+
+                // パターン A: カンマで 2 個以上並んでいる場合
                 if (elem_count > 1) {
-                    uint32_t list_sym = add_constant(c->chunk, make_obj((Obj*)sym_List));
-                    emit_inst(c, OP_GET_GLOBAL, list_sym);
-                    emit_inst(c, OP_NEW_INSTANCE, 0);
-    
+                    // 各要素を順番に評価してスタックに積む
                     for (int i = 0; i < elem_count; i++) {
-                        emit_inst(c, OP_DUP, 0);
                         TypeInfo* actual_elem = compile_expression(c, elems[i]);
-    
+
                         if (expected_elem != NULL && !is_assignable(c, expected_elem, actual_elem)) {
                             error_compile(elems[i], ERR_EACH_ELEMENT_TYPE,
                                           type_to_string(expected_elem),
                                           actual_elem ? type_to_string(actual_elem) : "nil");
                         }
-                        
-                        emit_inst(c, OP_INVOKE_VIRTUAL, make_call_operand(1, push_slot));
-                        emit_inst(c, OP_POP, 0);
                     }
+
+                    // 要素数 (elem_count) を指定して一括生成
+                    emit_inst(c, OP_BUILD_LIST, (uint32_t)elem_count);
                     emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
                     return declared_type;
                 }
-    
+
                 // パターン B: 右辺の式が 1 つだけの場合 (elem_count == 1)
                 TypeInfo* actual_type = compile_expression(c, elems[0]);
-    
+
                 // B-1: 右辺がすでに List 型の場合 (例: arr2: List Integer is list;)
                 if (is_assignable(c, declared_type, actual_type)) {
                     emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
                     return declared_type;
                 }
-    
-                // B-2: 右辺が要素型の場合 (例: arr: List (List Integer) is list;)
+
+                // B-2: 右辺が要素単体の場合 (例: arr: List Integer is 10;) -> 要素数 1 のリストにする
                 if (expected_elem != NULL && is_assignable(c, expected_elem, actual_type)) {
+                    emit_inst(c, OP_BUILD_LIST, 1);
                     emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
-
-                    uint32_t list_sym = add_constant(c->chunk, make_obj((Obj*)sym_List));
-                    emit_inst(c, OP_GET_GLOBAL, list_sym);
-                    emit_inst(c, OP_NEW_INSTANCE, 0);
-
-                    emit_inst(c, OP_DUP, 0);
-                    emit_inst(c, OP_GET_LOCAL, (uint32_t)slot); 
-                    
-                    emit_inst(c, OP_INVOKE_VIRTUAL, make_call_operand(1, push_slot));
-                    emit_inst(c, OP_POP, 0);
-
-                    emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
-                    emit_inst(c, OP_POP, 0);
                     return declared_type;
                 }
-    
+
                 // B-3: 型不一致
                 error_compile(elems[0], ERR_ASSIGN_TYPE_MISMATCH,
                               type_to_string(actual_type),

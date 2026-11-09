@@ -1158,10 +1158,41 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                 error_compile(node, ERR_CANNOT_INSTANTIATE_INTERFACE, class_name->chars);
                 return new_type_info(sym_Error, 0);
             }
-
             // 2. ジェネリクスを反映した具象型の構築 
             TypeInfo* target_type = build_type_info(c, node->construct.class_node);
 
+            if (name == sym_List) {
+                ASTNode* args[MAX_ARGS];
+                int actual_argc = 0;
+                collect_args(node->construct.args, args, &actual_argc, MAX_ARGS);
+
+                TypeInfo* elem_type = (target_type && target_type->type_arg_count > 0)
+                                      ? target_type->type_args[0]
+                                      : NULL;
+        
+                for (int i = 0; i < actual_argc; i++) {
+                    TypeInfo* arg_t = compile_expression(c, args[i]);
+
+                    if (elem_type == NULL)  elem_type = arg_t;
+                    else {
+                        // 期待される要素型との不一致をチェック
+                        if (!is_assignable(c, elem_type, arg_t)) {
+                            error_compile(args[i], ERR_TYPE_MISMATCH,
+                                          type_to_string(elem_type),
+                                          type_to_string(arg_t));
+                        }
+                    }
+                }
+        
+                // 最速の OP_BUILD_LIST を発行 
+                emit_inst(c, OP_BUILD_LIST, (uint32_t)actual_argc);
+        
+                // 推論された要素型を持つ List<T> を構築して返す
+                TypeInfo* list_type = new_type_info(sym_List, 1);
+                list_type->type_args[0] = elem_type ? elem_type : new_type_info(sym_Auto, 0);
+                return list_type;
+            }
+                
             // 3. init のシグネチャ取得
             TypeInfo* formal_init_type = find_method_type(klass, sym_init);
 
@@ -1173,7 +1204,7 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
             int min_argc = formal_init_type ? formal_init_type->min_param_count : 0;
             int max_argc = formal_init_type ? formal_init_type->param_count : 0;
             
-            // ★ 可変長引数 (...) を持っているか判定
+            // 可変長引数 (...) を持っているか判定
             bool has_ellipsis = (formal_init_type && max_argc > 0 && 
                                  formal_init_type->type_args[max_argc - 1]->name == sym_ellipsis);
 
@@ -1240,14 +1271,13 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
             }
 
             // 10. init (vtable スロット 0) を呼び出し
-            // ★ 可変長なら実際に渡された actual_argc で呼ぶ！
             int emit_argc = has_ellipsis ? actual_argc : max_argc;
             emit_inst(c, OP_INVOKE_VIRTUAL, make_call_operand((uint8_t)emit_argc, 0));
 
             // 11. init の戻り値を破棄
             emit_inst(c, OP_POP, 0);
 
-            // ★ 12. 式の評価結果として、ジェネリクスを反映した具象型を返す！
+            // 12. 式の評価結果として、ジェネリクスを反映した具象型を返す！
             return target_type ? target_type : (klass->type ? klass->type : new_type_info(class_name, 0));
         }
 

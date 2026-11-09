@@ -121,6 +121,9 @@ void emit_inst(Compiler* c, Opcode op, uint32_t operand) {
         case OP_INDEX_SET:
             c->stack_depth -= 2;
             break;
+        case OP_BUILD_LIST:
+            c->stack_depth -= (operand - 1);
+            break;
 
         case OP_MAX:
             break;

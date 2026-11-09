@@ -64,6 +64,7 @@ typedef enum {
     OP_NOT,
     OP_INDEX_GET,
     OP_INDEX_SET,
+    OP_BUILD_LIST,
     OP_MAX
 } Opcode;
 
