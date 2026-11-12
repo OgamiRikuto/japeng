@@ -17,6 +17,8 @@ typedef struct loop {
     int start_pos;
     int break_jump;
     int continue_jump;
+    int loop_local_count;
+    int body_local_count;
 } Loop;
 
 typedef struct local {
@@ -75,6 +77,7 @@ void resolve_class_skeleton_relations(Compiler* c, ASTNode* node);
 void declare_class_signatures(Compiler* c, ASTNode* node);
 void compile_class_body(Compiler* c, ASTNode* node);
 void compile_class_def(Compiler* c, ASTNode* node);
+void compile_import(Compiler* c, ASTNode* node);
 
 
 #endif

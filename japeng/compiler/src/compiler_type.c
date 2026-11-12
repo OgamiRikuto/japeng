@@ -94,6 +94,20 @@ bool type_equals(TypeInfo* a, TypeInfo* b) {
     return true;
 }
 
+static bool class_implements_interface_rec(ClassDef* curr, Symbol* target_name) 
+{
+    while (curr != NULL) {
+        for (int i = 0; i < curr->interface_count; i++) {
+            ClassDef* iface = curr->interfaces[i];
+            if (iface == NULL) continue;
+            if (iface->name == target_name) return true;
+            if (class_implements_interface_rec(iface, target_name)) return true;
+        }
+        curr = curr->superclass;
+    }
+    return false;
+}
+
 // target 型に source 型を代入できるか判定
 bool is_assignable(Compiler* c, TypeInfo* target, TypeInfo* source) {
     if (target == NULL || source == NULL) return false;
@@ -198,14 +212,8 @@ bool is_assignable(Compiler* c, TypeInfo* target, TypeInfo* source) {
     // 6. インターフェース実装チェック
     ClassDef* tgt_class = resolve_class(c, target->name);
     if (tgt_class != NULL && tgt_class->is_interface) {
-        curr = src_class;
-        while (curr != NULL) {
-            for (int i = 0; i < curr->interface_count; i++) {
-                if (curr->interfaces[i] != NULL && curr->interfaces[i]->name == target->name) {
-                    return true;
-                }
-            }
-            curr = curr->superclass;
+        if (class_implements_interface_rec(src_class, target->name)) {
+            return true;
         }
     }
 
@@ -1280,7 +1288,31 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
             // 12. 式の評価結果として、ジェネリクスを反映した具象型を返す！
             return target_type ? target_type : (klass->type ? klass->type : new_type_info(class_name, 0));
         }
-
+        case AST_LIST_LITERAL: {
+            // 1. カンマ区切りの AST_STMT ツリーを配列に展開
+            ASTNode* elems[MAX_ELEMENTS];
+            int elem_count = 0;
+            collect_args(node->list_literal.elements, elems, &elem_count, MAX_ELEMENTS);
+        
+            TypeInfo* elem_type = NULL;
+        
+            // 2. 各要素式を評価してスタックへ push
+            for (int i = 0; i < elem_count; i++) {
+                TypeInfo* t = compile_expression(c, elems[i]);
+                if (elem_type == NULL && t != NULL) {
+                    elem_type = t;
+                }
+            }
+        
+            // 3. VM の OP_BUILD_LIST を発行 (引数は要素数)
+            emit_inst(c, OP_BUILD_LIST, (uint32_t)elem_count);
+        
+            // 4. 型推論: List<elem_type>
+            TypeInfo* list_type = new_type_info(sym_List, 1);
+            list_type->type_args[0] = (elem_type != NULL) ? elem_type : new_type_info(sym_Auto, 0);
+            return list_type;
+        }
+            
         default:
             compile(c, node);
             return new_type_info(sym_Error, 0);

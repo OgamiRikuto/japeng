@@ -24,6 +24,7 @@ static ASTNode* alloc_node(ASTNodeType kind)
     }
 
     node->kind = kind;
+    node->is_parenthesized = false;
     node->loc = current_ast_loc;
     node->loc.filename = current_filename ? current_filename : "unknown.je";
 
@@ -160,5 +161,12 @@ ASTNode* create_import_node(Symbol* path, ASTNode* name, ASTNode* alias)
     node->import_stmt.path = path;
     node->import_stmt.name = name;
     node->import_stmt.alias = alias;
+    return node;
+}
+
+ASTNode* create_list_literal_node(ASTNode* elements)
+{
+    ASTNode* node = alloc_node(AST_LIST_LITERAL);
+    node->list_literal.elements = elements;
     return node;
 }

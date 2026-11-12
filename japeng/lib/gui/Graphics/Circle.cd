@@ -1,0 +1,8 @@
+class Circle:
+    pos: Point;
+    radius: Float;
+    color: Integer;
+    intersects: Function is [
+        arg other: Circle;
+        ret Boolean;
+    ];

@@ -35,6 +35,15 @@ static void end_loop(Compiler* c, Loop* loop)
 #endif
 }
 
+static void pop_locals_to(Compiler* c, int target_count)
+{
+    int count = c->local_count - target_count;
+    if (count > 0) {
+        emit_inst(c, OP_POP, (uint32_t)count);
+        c->local_count = target_count;
+    }
+}
+
 static void patch_continue_jumps(Compiler* c, Loop* loop)
 {
     int jump = loop->continue_jump;
@@ -91,7 +100,7 @@ void compile_if_chain(Compiler* c, ASTNode* node)
 
             int prev_locals = c->local_count;
             compile_statement_node(c, block_node->block.body);
-            c->local_count = prev_locals;
+            pop_locals_to(c, prev_locals);
 
             // 4. ブロック終了後は if 全体の末尾へ脱出
             exit_jumps[exit_count++] = emit_jump(c, OP_JUMP);
@@ -105,7 +114,7 @@ void compile_if_chain(Compiler* c, ASTNode* node)
 
             int prev_locals = c->local_count;
             compile_statement_node(c, block_node->block.body);
-            c->local_count = prev_locals;
+            pop_locals_to(c, prev_locals);
         }
     }
 
@@ -130,7 +139,9 @@ void compile_if(Compiler* c, ASTNode* node)
     int then_jump = emit_jump(c, OP_JUMP_IF_FALSE);
     emit_inst(c, OP_POP, 0);
 
+    int prev_locals = c->local_count;
     compile_statement_node(c, block_node->block.body);
+    pop_locals_to(c, prev_locals);
 
     int exit_jump = emit_jump(c, OP_JUMP);
 
@@ -153,6 +164,8 @@ void compile_repeat(Compiler* c, ASTNode* node)
     
         Loop loop;
         start_loop(c, &loop, loop_start);
+        loop.loop_local_count = c->local_count;
+        loop.body_local_count = c->local_count;
     
         TypeInfo* cond_type = compile_expression(c, cond_node);
         if (cond_type != NULL && !is_boolean_type(cond_type->name) &&
@@ -165,6 +178,7 @@ void compile_repeat(Compiler* c, ASTNode* node)
         emit_inst(c, OP_POP, 0);
     
         compile_statement_node(c, block_node->block.body);
+        pop_locals_to(c, loop.body_local_count);
     
         emit_loop(c, loop_start);
         patch_jump(c, exit_jump);
@@ -181,8 +195,11 @@ void compile_repeat(Compiler* c, ASTNode* node)
     
         Loop loop;
         start_loop(c, &loop, loop_start);
+        loop.loop_local_count = c->local_count;
+        loop.body_local_count = c->local_count;
     
         compile_statement_node(c, node->send.args->block.body);
+        pop_locals_to(c, loop.body_local_count);
     
         emit_loop(c, loop_start);
     
@@ -193,6 +210,7 @@ void compile_repeat(Compiler* c, ASTNode* node)
     // パターン 3: limit repeat [ arg i: Integer. body ] (回数指定ループ)
     if (!is_self && node->send.args->kind == AST_BLOCK) {
         ASTNode* block_node = node->send.args;
+        int loop_locals = c->local_count;
     
         // 1. 上限値 (limit) を評価して匿名スロットに格納
         TypeInfo* limit_type = compile_expression(c, node->send.receiver);
@@ -224,6 +242,8 @@ void compile_repeat(Compiler* c, ASTNode* node)
     
         Loop loop;
         start_loop(c, &loop, loop_start);
+        loop.loop_local_count = loop_locals;
+        loop.body_local_count = c->local_count;
     
         // 条件判定: counter < limit
         emit_inst(c, OP_GET_LOCAL, counter_slot);
@@ -235,6 +255,7 @@ void compile_repeat(Compiler* c, ASTNode* node)
     
         // 4. 本体ブロック実行
         compile_statement_node(c, block_node->block.body);
+        pop_locals_to(c, loop.body_local_count);
 
         patch_continue_jumps(c, &loop);
     
@@ -248,8 +269,10 @@ void compile_repeat(Compiler* c, ASTNode* node)
         // 6. ループ巻き戻し & 脱出パッチ
         emit_loop(c, loop_start);
         patch_jump(c, exit_jump);
+        c->stack_depth++;
         emit_inst(c, OP_POP, 0);
     
+        pop_locals_to(c, loop_locals);
         end_loop(c, &loop);
         return;
     }
@@ -260,6 +283,11 @@ void compile_break(Compiler* c, ASTNode* node)
     if (c->current_loop == NULL) {
         error_compile(node, ERR_BREAK_OUTSIDE_LOOP);
         return;
+    }
+    int pop_count = c->local_count - c->current_loop->loop_local_count;
+    if (pop_count > 0) {
+        emit_inst(c, OP_POP, (uint32_t)pop_count);
+        c->stack_depth += pop_count;
     }
     int jump = emit_jump(c, OP_JUMP);
     uint32_t prev = (c->current_loop->break_jump == -1) 
@@ -274,6 +302,11 @@ void compile_continue(Compiler* c, ASTNode* node)
     if (c->current_loop == NULL) {
         error_compile(node, ERR_CONTINUE_OUTSIDE_LOOP);
         return;
+    }
+    int pop_count = c->local_count - c->current_loop->body_local_count;
+    if (pop_count > 0) {
+        emit_inst(c, OP_POP, (uint32_t)pop_count);
+        c->stack_depth += pop_count;
     }
 
     // 回数指定ループ等で continue_jump による遅延解決が必要な場合
@@ -383,11 +416,12 @@ void compile_switch(Compiler* c, ASTNode* node)
     ASTNode* target_expr = node->send.args->stmt.left;
     ASTNode* body_block  = node->send.args->stmt.right;
 
+    int switch_locals = c->local_count;
+
     // 1. switch (target) の対象式を評価し、匿名ローカルスロットに格納
     TypeInfo* target_type =  compile_expression(c, target_expr);
     int target_slot = add_anonymous_local(c);
     emit_inst(c, OP_SET_LOCAL, (uint32_t)target_slot);
-    emit_inst(c, OP_POP, 0); // スタックをクリーンにする
 
     // 2. 本体のブロック内にある case / default 文をフラットに収集
     ASTNode* clauses[64];
@@ -458,7 +492,9 @@ void compile_switch(Compiler* c, ASTNode* node)
                     }
 
                     // 本体ブロック実行
+                    int case_locals = c->local_count;
                     compile_statement_node(c, case_block->block.body);
+                    pop_locals_to(c, case_locals);
 
                     // switch 全体の末尾へ自動脱出
                     exit_jumps[exit_count++] = emit_jump(c, OP_JUMP);
@@ -476,7 +512,9 @@ void compile_switch(Compiler* c, ASTNode* node)
                                  ? clause->send.args
                                  : clause->send.args->stmt.right;
 
+            int def_locals = c->local_count;
             compile_statement_node(c, def_block->block.body);
+            pop_locals_to(c, def_locals);
 
             // switch 出口へ脱出
             exit_jumps[exit_count++] = emit_jump(c, OP_JUMP);
@@ -487,6 +525,7 @@ void compile_switch(Compiler* c, ASTNode* node)
     for (int i = 0; i < exit_count; i++) {
         patch_jump(c, exit_jumps[i]);
     }
+    pop_locals_to(c, switch_locals);
 }
 
 void compile_each(Compiler* c, ASTNode* node)
@@ -506,6 +545,8 @@ void compile_each(Compiler* c, ASTNode* node)
         error_compile(block_node, ERR_EACH_ARITY, arg_count);
         return;
     }
+
+    int each_locals = c->local_count;
 
     // 2. レシーバ（リスト）を評価してスロットに保持 (スタック: +1)
     TypeInfo* rec_type = compile_expression(c, node->send.receiver);
@@ -609,6 +650,8 @@ void compile_each(Compiler* c, ASTNode* node)
     int loop_start = c->chunk->count;
     Loop loop;
     start_loop(c, &loop, loop_start);
+    loop.loop_local_count = each_locals;
+    loop.body_local_count = c->local_count;
 
     // 継続条件: i < len (スタック: +1)
     emit_inst(c, OP_GET_LOCAL, (uint32_t)i_slot);   // stack: +1
@@ -634,8 +677,9 @@ void compile_each(Compiler* c, ASTNode* node)
 
     // 8. 本体ブロックの実行 (文末の POP によりブロック終了時は stack 増減 0)
     compile_statement_node(c, block_node->block.body);
+    pop_locals_to(c, loop.body_local_count);
 
-    // ★ continue の合流地点（カウンタ加算へジャンプしてくる）
+    // continue の合流地点（カウンタ加算へジャンプしてくる）
     patch_continue_jumps(c, &loop);
 
     // 9. カウンタ加算: i = i + 1
@@ -653,6 +697,7 @@ void compile_each(Compiler* c, ASTNode* node)
     c->stack_depth++;        // 偽の世界線（条件値が 1 個乗っている状態）に合わせて補正！
     emit_inst(c, OP_POP, 0); // 条件値を pop
 
+    pop_locals_to(c, each_locals);
     end_loop(c, &loop); // break はここへ脱出パッチされる
 }
 
@@ -726,6 +771,7 @@ void compile_with(Compiler* c, ASTNode* node)
 
     int allocated_slots[MAX_ARGS];
     int start_with_depth = c->with_depth;
+    int with_locals = c->local_count;
 
     // 3. 各リソースを順番に評価・型チェック・変数束縛
     for (int i = 0; i < res_count; i++) {
@@ -766,7 +812,9 @@ void compile_with(Compiler* c, ASTNode* node)
     }
 
     // 4. ブロック本体のインラインコンパイル
+    int body_locals = c->local_count;
     compile_statement_node(c, block_node->block.body);
+    pop_locals_to(c, body_locals);
 
     // 5. 正常終了時の自動 close (生成と逆順 LIFO で呼び出し)
     for (int i = res_count - 1; i >= 0; i--) {
@@ -774,4 +822,5 @@ void compile_with(Compiler* c, ASTNode* node)
     }
 
     c->with_depth = start_with_depth;
+    pop_locals_to(c, with_locals);
 }

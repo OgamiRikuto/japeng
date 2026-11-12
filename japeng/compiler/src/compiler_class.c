@@ -197,6 +197,8 @@ static void collect_interfaces(Compiler* c, ASTNode* node, ClassDef** list, int*
     ClassDef* iface = resolve_class(c, name);
     if (iface != NULL) {
         list[(*idx)++] = iface;
+    } else {
+        error_compile(node, ERR_CLASS_NOT_REGISTERED, name ? name->chars : "unknown");
     }
 }
 
@@ -551,6 +553,7 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
 
         FieldInfo f_info = new_field_info(member_name, member_type, from_class, is_static);
         Value init_val = make_nil();
+        bool has_list_literal = false;
 
         if (node->field_decl.default_data != NULL) {
             if (node->field_decl.default_data->kind == AST_LITERAL) {
@@ -562,7 +565,12 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
                                   member_type ? member_type->name->chars : "unknown",
                                   actual_type ? actual_type->name->chars : "nil");
                 }
-            } else {
+            } else if (node->field_decl.default_data->kind == AST_LIST_LITERAL) {
+                if (!is_static) error_compile(node, ERR_FIELD_INIT_MUST_BE_LITERAL, member_name->chars);
+                init_val = make_nil();
+                has_list_literal = true;
+            } 
+            else {
                 error_compile(node, ERR_FIELD_INIT_MUST_BE_LITERAL, member_name->chars);
                 init_val = get_implicit_default_value(member_type ? member_type->name : NULL);
             }
@@ -571,11 +579,38 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
         }
 
         if (is_static) {
-            add_static_field(klass, f_info, init_val);
+            int static_idx = find_static_field_index(klass, member_name);
+            if (static_idx != -1) {
+                klass->static_default_values[static_idx] = init_val;
+            } else {
+                add_static_field(klass, f_info, init_val);
+                static_idx = find_static_field_index(klass, member_name);
+            }
+
+            if (has_list_literal) {
+                uint32_t class_const_idx = add_constant(c->chunk, make_obj((Obj*)klass));
+                emit_inst(c, OP_CONSTANT, class_const_idx);
+
+                TypeInfo* actual_type = compile_expression(c, node->field_decl.default_data);
+                if (!is_assignable(c, member_type, actual_type)) {
+                    error_compile(node->field_decl.default_data, ERR_TYPE_MISMATCH,
+                                  member_type ? member_type->name->chars : "unknown",
+                                  actual_type ? actual_type->name->chars : "nil");
+                }
+
+                emit_inst(c, OP_SET_STATIC, (uint32_t)static_idx);
+                emit_inst(c, OP_POP, 0);
+            }
         } else {
-            add_field(klass, f_info, init_val);
+            int field_idx = find_field_index(klass, member_name);
+            if (field_idx != -1) {
+                klass->default_values[field_idx] = init_val;
+            } else {
+                add_field(klass, f_info, init_val);
+            }
         }
     }
+
 
     if (node->kind == AST_SEND) {
         Symbol* msg_sym = node->send.message->identifier.name;
@@ -624,7 +659,7 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
         if (args && args->kind == AST_BLOCK) {
             add_method_type(klass, target_name, build_function_type_from_block(c, args));
 
-            if (args->block.body != NULL) {
+            if (args->block.body != NULL || !is_builtin(klass->name)) {
                 c->current_class = klass;
                 c->is_method = true;
                 c->is_static_method = is_static;
@@ -653,6 +688,7 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
     
         TypeInfo* t_info = build_type_info(c, type_node);
         FieldInfo f_info = new_field_info(target_name, t_info, from_class, is_static);
+        bool has_list_literal = false;
     
         Value init_val = make_nil();
         if (args != NULL) {
@@ -665,6 +701,12 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
                                   t_info ? t_info->name->chars : "unknown",
                                   actual_type ? actual_type->name->chars : "nil");
                 }
+            } else if (args->kind == AST_LIST_LITERAL){
+                if (!is_static) {
+                    error_compile(node, ERR_FIELD_INIT_MUST_BE_LITERAL, target_name->chars);
+                }
+                init_val = make_nil();
+                has_list_literal = true;
             } else {
                 error_compile(node, ERR_FIELD_INIT_MUST_BE_LITERAL, target_name->chars);
                 init_val = get_implicit_default_value(t_info ? t_info->name : NULL);
@@ -674,9 +716,35 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
         }
     
         if (is_static) {
-            add_static_field(klass, f_info, init_val);
+            int static_idx = find_static_field_index(klass, target_name);
+            if (static_idx != -1) {
+                klass->static_default_values[static_idx] = init_val;
+            } else {
+                add_static_field(klass, f_info, init_val);
+                static_idx = find_static_field_index(klass, target_name);
+            }
+
+            if (has_list_literal) {
+                uint32_t class_const_idx = add_constant(c->chunk, make_obj((Obj*)klass));
+                emit_inst(c, OP_CONSTANT, class_const_idx);
+
+                TypeInfo* actual_type = compile_expression(c, args);
+                if (!is_assignable(c, t_info, actual_type)) {
+                    error_compile(args, ERR_TYPE_MISMATCH,
+                                  t_info ? t_info->name->chars : "unknown",
+                                  actual_type ? actual_type->name->chars : "nil");
+                }
+
+                emit_inst(c, OP_SET_STATIC, (uint32_t)static_idx);
+                emit_inst(c, OP_POP, 0);
+            }
         } else {
-            add_field(klass, f_info, init_val);
+            int field_idx = find_field_index(klass, target_name);
+            if (field_idx != -1) {
+                klass->default_values[field_idx] = init_val;
+            } else {
+                add_field(klass, f_info, init_val);
+            }
         }
         return;
     }
@@ -803,13 +871,38 @@ static void declare_class_member_signatures(Compiler* c, ClassDef* klass, ASTNod
         ASTNode* receiver = node->send.receiver;
         ASTNode* args = node->send.args;
         Symbol* target_name = NULL;
+        ASTNode* type_node = NULL;
+        bool is_static = false;
+
         if (receiver->kind == AST_IDENTIFIER) target_name = receiver->identifier.name;
         else if (receiver->kind == AST_FIELD_DECL || receiver->kind == AST_VAR_DECL) {
             target_name = receiver->var_decl.identifier->identifier.name;
+            type_node   = receiver->var_decl.type;
+            is_static   = receiver->var_decl.is_static;
         }
 
+        // メソッドの場合
         if (target_name && args && args->kind == AST_BLOCK) {
             add_method_type(klass, target_name, build_function_type_from_block(c, args));
+            if (is_static) {
+                add_static_method(klass, target_name, make_nil());
+            }
+            return;
+        }
+
+        // フィールド初期化代入の登録
+        if (target_name && type_node) {
+            TypeInfo* f_type = build_type_info(c, type_node);
+            FieldInfo f_info = new_field_info(target_name, f_type, NULL, is_static);
+            if (is_static) {
+                if (find_static_field_index(klass, target_name) == -1) {
+                    add_static_field(klass, f_info, make_nil());
+                }
+            } else {
+                if (find_field_index(klass, target_name) == -1) {
+                    add_field(klass, f_info, make_nil());
+                }
+            }
         }
         return;
     }
@@ -817,6 +910,7 @@ static void declare_class_member_signatures(Compiler* c, ClassDef* klass, ASTNod
     if (node->kind == AST_FIELD_DECL) {
         Symbol* member_name = node->field_decl.identifier->identifier.name;
         TypeInfo* member_type = build_type_info(c, node->field_decl.type);
+        bool is_static = node->field_decl.is_static;
 
         if (klass->is_interface) {
             if (member_type == NULL || member_type->name != sym_Function) {
@@ -829,15 +923,28 @@ static void declare_class_member_signatures(Compiler* c, ClassDef* klass, ASTNod
         }
 
         if (member_type && member_type->name == sym_Function) {
+            // 関数フィールドのシグネチャ登録
             if (node->field_decl.default_data && node->field_decl.default_data->kind == AST_SEND) {
                 ASTNode* send_node = node->field_decl.default_data;
                 if (send_node->send.args && send_node->send.args->kind == AST_BLOCK) {
-                    if (klass->is_interface && send_node->send.args->block.body != NULL) {
-                        error_compile(node, ERR_INTERFACE_METHOD_CANNOT_HAVE_BODY, member_name->chars, klass->name->chars);
-                        return;
-                    }
                     add_method_type(klass, member_name, build_function_type_from_block(c, send_node->send.args));
+                    if (is_static) {
+                        add_static_method(klass, member_name, make_nil());
+                    }   
                 }
+            }
+            return;
+        }
+
+        // 通常フィールドの登録
+        FieldInfo f_info = new_field_info(member_name, member_type, NULL, is_static);
+        if (is_static) {
+            if (find_static_field_index(klass, member_name) == -1) {
+                add_static_field(klass, f_info, make_nil());
+            }
+        } else {
+            if (find_field_index(klass, member_name) == -1) {
+                add_field(klass, f_info, make_nil());
             }
         }
     }
@@ -860,7 +967,95 @@ void declare_class_signatures(Compiler* c, ASTNode* node)
     ClassDef* klass = resolve_class(c, class_name);
     if (klass == NULL) return;
 
+    // すでに第3パス完了済み（vtable構築済み）ならスキップ
+    if (klass->vtable_count > 0) return;
+
+    // 1. 親クラスがまだ第3パス未完了なら先に実行してレイアウトを確定させる
+    if (klass->superclass != NULL && klass->superclass->vtable_count == 0) {
+        ASTNode* super_ast = find_class_ast(klass->superclass->name);
+        if (super_ast != NULL) {
+            declare_class_signatures(c, super_ast);
+        }
+    }
+
+    // 2. インターフェース・委譲元も第3パス未完了なら先に確定させる
+    for (int i = 0; i < klass->interface_count; i++) {
+        ClassDef* iface = klass->interfaces[i];
+        if (iface != NULL && iface->vtable_count == 0) {
+            ASTNode* iface_ast = find_class_ast(iface->name);
+            if (iface_ast != NULL) declare_class_signatures(c, iface_ast);
+        }
+    }
+    for (int i = 0; i < klass->delegate_count; i++) {
+        ClassDef* del_klass = klass->delegates[i];
+        if (del_klass != NULL && del_klass->vtable_count == 0) {
+            ASTNode* del_ast = find_class_ast(del_klass->name);
+            if (del_ast != NULL) declare_class_signatures(c, del_ast);
+        }
+    }
+
+    // 3. 親クラスのフィールドを先頭スロットに引き継ぐ
+    if (klass->superclass != NULL) {
+        for (int i = 0; i < klass->superclass->field_count; i++) {
+            Symbol* s_fname = klass->superclass->field_infos[i].name;
+            if (find_field_index(klass, s_fname) == -1) {
+                add_field(klass, klass->superclass->field_infos[i], klass->superclass->default_values[i]);
+            }
+        }
+    }
+
+    // 4. 親クラスの vtable スロットを引き継ぐ
+    if (!klass->is_interface) {
+        init_class_vtable_from_super(klass);
+    }
+
+    // 5. 委譲インスタンス用の隠しフィールドを確保
+    for (int i = 0; i < klass->delegate_count; i++) {
+        ClassDef* del_klass = klass->delegates[i];
+        if (del_klass == NULL) continue;
+        Symbol* hidden_name = get_delegate_field_name(del_klass);
+        if (find_field_index(klass, hidden_name) == -1) {
+            TypeInfo* del_type = (klass->delegate_types && klass->delegate_types[i]) 
+                ? klass->delegate_types[i] 
+                : new_type_info(del_klass->name, 0);
+            FieldInfo f_info = {
+                .name = hidden_name,
+                .type = del_type,
+                .from_class = del_klass,
+                .is_static = false,
+                .is_delegate_instance = true
+            };
+            add_field(klass, f_info, make_nil());
+        }
+    }
+
+    // 6. 自クラスの vtable スロットを予約
+    reserve_class_vtable_slots(c, klass, node->class_def.members);
+
+    // 7. 自クラスのシグネチャとフィールド枠を登録
+    ClassDef* enclosing_class = c->current_class;
+    c->current_class = klass;
+
     declare_class_member_signatures(c, klass, node->class_def.members);
+
+    c->current_class = enclosing_class;
+
+    // 8. インターフェースの親インターフェースからのシグネチャ＆vtable引き継ぎ
+    if (klass->is_interface && klass->interface_count > 0) {
+        for (int i = 0; i < klass->interface_count; i++) {
+            ClassDef* parent_iface = klass->interfaces[i];
+            if (parent_iface == NULL) continue;
+
+            for (int m = 0; m < parent_iface->vtable_count; m++) {
+                Symbol* mname = parent_iface->vtable_names[m];
+                TypeInfo* mtype = find_method_type(parent_iface, mname);
+                if (find_method_type(klass, mname) == NULL) {
+                    add_method_type(klass, mname, mtype);
+                    add_or_override_vtable_slot(klass, mname, make_nil());
+                }
+            }
+        }
+    }
 }
 
 void compile_class_body(Compiler* c, ASTNode* node)
@@ -939,12 +1134,24 @@ void compile_class_body(Compiler* c, ASTNode* node)
 
     if (klass->superclass != NULL) {
         for (int i = 0; i < klass->superclass->field_count; i++) {
-            add_field(klass, klass->superclass->field_infos[i], klass->superclass->default_values[i]);
+            Symbol* s_fname = klass->superclass->field_infos[i].name;
+            int f_idx = find_field_index(klass, s_fname);
+            if (f_idx != -1) {
+                klass->default_values[f_idx] = klass->superclass->default_values[i];
+            } else {
+                add_field(klass, klass->superclass->field_infos[i], klass->superclass->default_values[i]);
+            }
         }
     }
 
     if (!klass->is_interface) {
-        init_class_vtable_from_super(klass);
+        if (klass->vtable_count == 0) {
+            init_class_vtable_from_super(klass);
+        } else if (klass->superclass != NULL) {
+            for (int i = 0; i < klass->superclass->vtable_count && i < klass->vtable_count; i++) {
+                klass->vtable[i] = klass->superclass->vtable[i];
+            }
+        }
     }
     
     for (int i = 0; i < klass->delegate_count; i++) {
@@ -1057,6 +1264,8 @@ void compile_class_body(Compiler* c, ASTNode* node)
     fprintf(stderr, "\033[1;36m[COMPILED CLASS]\033[0m %s (file: %s)\n", 
             class_name->chars, node->loc.filename ? node->loc.filename : "unknown");
 
+    if (had_compile_error) return;
+
     if (!is_builtin(class_name)) {
         uint32_t class_const_idx = add_constant(c->chunk, make_obj((Obj*)klass));
         uint32_t name_sym_idx = add_constant(c->chunk, make_obj((Obj*)class_name));
@@ -1120,24 +1329,34 @@ void compile_class_def(Compiler* c, ASTNode* node)
     compile_class_body(c, node);
 }
 
+static void run_file_imports(Compiler* c, ASTNode* node)
+{
+    if (node == NULL) return;
+    if (node->kind == AST_IMPORT) {
+        compile_import(c, node);
+    } else if (node->kind == AST_STMT) {
+        run_file_imports(c, node->stmt.left);
+        run_file_imports(c, node->stmt.right);
+    }
+}
+
 ClassDef* resolve_class_from_file(Compiler* c, const char* file_path)
 {
     if (!file_path) return NULL;
 
-    // ファイル名からクラス名シンボルを特定 (例: lib/std/File/File.cd -> File)
     const char* slash = strrchr(file_path, '/');
     const char* base_name = slash ? slash + 1 : file_path;
     char class_name_buf[128];
     strncpy(class_name_buf, base_name, sizeof(class_name_buf) - 1);
+    class_name_buf[sizeof(class_name_buf) - 1] = '\0';
     char* dot = strrchr(class_name_buf, '.');
     if (dot) *dot = '\0';
     Symbol* class_sym = intern_cstr(class_name_buf);
 
-    // そのファイルが存在する親ディレクトリを取得
     char file_dir[1024];
     get_dir_from_filename(file_path, file_dir, sizeof(file_dir));
 
-    // 1. ファイル自身の横にある .je_cache/<Name>.bcd を最優先チェック！
+    // 1. キャッシュチェック
     char bcd_path[1024];
     get_cache_filepath(file_dir, class_sym->chars, "bcd", bcd_path, sizeof(bcd_path));
     if (is_cache_fresh(bcd_path, file_dir)) {
@@ -1145,19 +1364,28 @@ ClassDef* resolve_class_from_file(Compiler* c, const char* file_path)
         if (loaded) return loaded;
     }
 
-    // 2. キャッシュがない／古い場合はパースしてコンパイル
+    // 2. パース実行
     if (!parse_file(file_path)) {
         return NULL;
     }
 
+    // パースされたファイル全体の AST を取得
+    ASTNode* file_ast = (parsed_cd_count > 0) ? parsed_cd[parsed_cd_count - 1] : NULL;
     ASTNode* ast = find_class_ast(class_sym);
     if (ast) {
         const char* saved_filename = c->filename;
+        Table* saved_imports = c->imported_classes;
         c->filename = file_path;
+        c->imported_classes = new_table(8);
+
+        run_file_imports(c, file_ast);
+
         declare_class_skeleton(c, ast);
         resolve_class_skeleton_relations(c, ast);
         declare_class_signatures(c, ast);
         compile_class_body(c, ast);
+
+        c->imported_classes = saved_imports;
         c->filename = saved_filename;
         return resolve_class(c, class_sym);
     }

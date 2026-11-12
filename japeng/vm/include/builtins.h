@@ -17,6 +17,13 @@ void list_append(VM* vm, ObjList* list, Value val);
 void setup_list(VM* vm);
 void setup_string(VM* vm);
 
-
+void set_static_int(ObjClass* klass, const char* name, int32_t val);
+void vm_define_static_native(ObjClass* klass, const char* name, NativeFn func);
 void register_file_natives(ObjClass* klass);
+void register_clock_natives(ObjClass* klass);
+void register_random_natives(ObjClass* klass);
+
+void register_window_natives(ObjClass* klass);
+void register_input_natives(ObjClass* klass);
+void register_key_natives(ObjClass* klass);
 #endif

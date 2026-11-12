@@ -94,7 +94,7 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
 char* type_to_string(TypeInfo* type);
 
 // モジュール用
-void compile_import(Compiler* c, ASTNode* node);
+// void compile_import(Compiler* c, ASTNode* node);
 Symbol* resolve_name_alias(Compiler* c, Symbol* name);
 
 

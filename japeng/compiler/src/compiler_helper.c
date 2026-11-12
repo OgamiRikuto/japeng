@@ -47,6 +47,8 @@ void emit_inst(Compiler* c, Opcode op, uint32_t operand) {
 
         // --- -1: ポップ・二項演算・フィールド代入 ---
         case OP_POP:
+            c->stack_depth -= (operand > 0) ? (int)operand : 1;
+            break;
         case OP_CONCAT:
         case OP_ADD_INT:
         case OP_SUB_INT:

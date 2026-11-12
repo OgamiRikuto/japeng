@@ -1,0 +1,37 @@
+class Clock based Object:
+    lastTime: Float;
+
+    init: Function is [
+        lastTime is Clock now;
+    ];
+
+    // リセットせずに経過秒数を返す (ベンチマーク用)
+    elapsed: Function is [
+        ret Float;
+        return Clock now - lastTime;
+    ];
+
+    // 経過秒数 (deltaTime) を返しつつ基準時刻をリセット (ゲームループ用)
+    restart: Function is [
+        ret Float;
+        current: Float is Clock now;
+        dt: Float is current - lastTime;
+        lastTime is current;
+        return dt;
+    ];
+
+    // フレームレート制御 (例: 60FPSなら残り時間を自動 sleep して dt を返す)
+    tick: Function is [
+        arg fps: Float; // toFloatを実装後Integerに変更
+        ret Float;
+        target: Float is 1.0 / fps; // toFloat 実装後に(fps toFloatに変更)
+        dt: Float is self elapsed;
+        if (dt < target) [
+            Clock sleep(target - dt);
+        ];
+        return self restart;
+    ];
+
+    
+    static now:   Function is [ ret Float; ];
+    static sleep: Function is [ arg seconds: Float; ];

@@ -55,6 +55,7 @@ static Symbol* resolve_and_intern(const char* text) {
 "true"	{ yylval.literal = new_string(yytext, yyleng); return TRUE_LITERAL; }
 "false"	{ yylval.literal = new_string(yytext, yyleng); return FALSE_LITERAL; }
 "null"	{ yylval.literal = new_string(yytext, yyleng); return NULL_LITERAL; }
+"L["    { return L_LIST_BLACKET; }
 [A-Z][a-zA-Z0-9_]*	{ yylval.symbol = resolve_and_intern(yytext); return CLASS_NAME; }
 [a-z_][a-zA-Z0-9_]*	{ yylval.symbol = resolve_and_intern(yytext); return IDENTIFIER; }
 [0-9]+				{ yylval.literal = new_string(yytext, yyleng); return INTEGER; }

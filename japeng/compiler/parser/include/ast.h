@@ -24,6 +24,7 @@ typedef enum {
     AST_INDEX_ACCESS,
     AST_CONSTRUCT,
     AST_IMPORT,
+    AST_LIST_LITERAL,
 } ASTNodeType;
 
 typedef enum {
@@ -43,6 +44,7 @@ typedef struct ASTNode ASTNode;
 
 struct ASTNode {
     ASTNodeType kind;
+    bool is_parenthesized;
     Location loc;
 
     union {
@@ -126,6 +128,10 @@ struct ASTNode {
             ASTNode* name;
             ASTNode* alias;
         } import_stmt;
+
+        struct {
+            ASTNode* elements;
+        } list_literal;
     };
 };
 
@@ -145,6 +151,7 @@ ASTNode* create_continue_node();
 ASTNode* create_index_access_node(ASTNode* target, ASTNode* index);
 ASTNode* create_construct_node(ASTNode* class_node, ASTNode* args);
 ASTNode* create_import_node(Symbol* path, ASTNode* name, ASTNode* alias);
+ASTNode* create_list_literal_node(ASTNode* elements);
 
 ASTNode* fix_precedence(ASTNode* node);
 ASTNode* fold_constants(ASTNode* node);

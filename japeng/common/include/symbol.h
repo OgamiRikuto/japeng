@@ -79,7 +79,12 @@ typedef struct symbol {
     X(__multi__,    "__multi__") \
     X(Void,         "Void") \
     X(Error,        "Error") \
-    X(File,         "File")
+    X(File,         "File") \
+    X(Clock,        "Clock") \
+    X(Random,       "Random") \
+    X(Window,       "Window") \
+    X(Input,        "Input") \
+    X(Key,          "Key")
 
 #define DECLARE_SYM(name, str) extern Symbol* sym_##name;
 CORE_SYMBOLS(DECLARE_SYM)

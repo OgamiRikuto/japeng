@@ -1,0 +1,38 @@
+// lib/gui/Graphics/Rectangle.cd
+import "gui/Window";
+import "std/Math/Point";
+import "gui/Graphics/Drawable";
+
+class Rectangle based Object implements Drawable:
+    pos: Point;
+    width: Float;
+    height: Float;
+    color: Integer;
+
+    init: Function is [
+        arg x: Float, y: Float, w: Float, h: Float, c: Integer is 16777215;
+        pos is Point(x, y);
+        width is w;
+        height is h;
+        color is c;
+    ];
+
+    move: Function is [
+        arg dx: Float, dy: Float;
+        pos move(dx, dy);
+    ];
+
+    moveTo: Function is [
+        arg x: Float, y: Float;
+        pos change(x, y);
+    ];
+
+    setColor: Function is [
+        arg c: Integer;
+        color is c;
+    ];
+
+    draw: Function is [
+        arg win: Window;
+        win fillRect(pos x, pos y, width, height, color);
+    ];

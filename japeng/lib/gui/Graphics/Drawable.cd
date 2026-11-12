@@ -1,0 +1,5 @@
+import "gui/Window";
+
+interface Drawable:
+    draw: Function(Window;);
+

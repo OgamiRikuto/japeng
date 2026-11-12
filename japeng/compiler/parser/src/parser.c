@@ -159,6 +159,8 @@ static inline ASTNode* with_loc(ASTNode* node, Location loc) {
 
 ASTNode* parse_program(Parser* p)
 {
+    if (check(p, TOK_EOF)) return NULL;
+
     ASTNode* import_stmt = parse_import_stmt_list(p);
 
     if (import_stmt == NULL) {
@@ -494,7 +496,7 @@ static bool is_control_stmt_node(ASTNode* node) {
 
     if (node->kind == AST_SEND && node->send.message != NULL) {
         Symbol* msg = node->send.message->identifier.name;
-        if (msg == sym_if || msg == sym_repeat || sym_switch ||
+        if (msg == sym_if || msg == sym_repeat || msg == sym_switch ||
             msg == sym_elif || msg == sym_else || msg == sym_each ||
             msg == sym_case || msg == sym_with) {
             return true;
@@ -631,9 +633,30 @@ ASTNode* parse_multi_identifier(Parser* p)
     return root;
 }
 
+ASTNode* parse_unary(Parser* p)
+{
+    if (check(p, SP_IDENTIFIER)) {
+        Token op_tok = peek(p, 0);
+        if (op_tok.symbol == sym_not || op_tok.symbol == sym_bnot) {
+            advance(p);
+            Location op_loc = op_tok.loc;
+
+            ASTNode* operand = parse_unary(p);
+            ASTNode* op_node = create_identifier_node(op_tok.symbol);
+            op_node->loc = op_loc;
+
+            ASTNode* send = create_send_node(operand, op_node, NULL);
+            send->loc = op_loc;
+            return send;
+        }
+    }
+
+    return parse_message(p);
+}
+
 ASTNode* parse_expression(Parser* p)
 {
-    ASTNode* left = parse_message(p);
+    ASTNode* left = parse_unary(p);
 
     // 二項演算子 (+, -, *, /, ==, !=, and, or など)
     while (check(p, SP_IDENTIFIER)) {
@@ -657,6 +680,33 @@ ASTNode* parse_receiver(Parser* p)
         return parse_identifier_decl(p);
     }
     return parse_primary(p);
+}
+
+static bool is_block_ahead(Parser* p) {
+    if (peek_type(p, 0) != L_BLACKET) return false;
+    
+    // 空ブロック [] はブロック
+    if (peek_type(p, 1) == R_BLACKET) return true;
+    
+    // arg や ret で始まるならブロック
+    if (peek_type(p, 1) == ARG || peek_type(p, 1) == RET) return true;
+    
+    // '[' に対応する ']' の間に ';' があればブロック、無ければ添字アクセス
+    int d = 1;
+    int depth = 1;
+    bool has_semicolon = false;
+    while (peek_type(p, d) != TOK_EOF) {
+        int t = peek_type(p, d);
+        if (t == L_BLACKET) depth++;
+        else if (t == R_BLACKET) {
+            depth--;
+            if (depth == 0) break;
+        } else if (t == SEMICOLON && depth == 1) {
+            has_semicolon = true;
+        }
+        d++;
+    }
+    return has_semicolon;
 }
 
 ASTNode* parse_message(Parser* p)
@@ -716,7 +766,7 @@ ASTNode* parse_message(Parser* p)
                     if (!check(p, R_PAR)) args = parse_expr_list(p);
                     consume(p, R_PAR);
                 }
-                if (check(p, L_BLACKET)) {
+                if (check(p, L_BLACKET) && is_block_ahead(p)) {
                     ASTNode* blk = parse_block(p);
                     args = (args == NULL) ? blk : create_stmt_node(args, blk);
                 }
@@ -746,18 +796,25 @@ ASTNode* parse_message(Parser* p)
                 if (!check(p, R_PAR)) args = parse_expr_list(p);
                 consume(p, R_PAR);
                 ASTNode* send = create_send_node(node, msg_node, args);
-                send->loc = msg_tok.loc; // ★
+                send->loc = msg_tok.loc;
                 node = send;
-            } else if (check(p, L_BLACKET)) {
+            } else if (check(p, L_BLACKET) && is_block_ahead(p)) {
                 args = parse_block(p);
                 ASTNode* send = create_send_node(node, msg_node, args);
-                send->loc = msg_tok.loc; // ★
+                send->loc = msg_tok.loc;
                 node = send;
             } else {
                 ASTNode* send = create_send_node(node, msg_node, NULL);
-                send->loc = msg_tok.loc; // ★
+                send->loc = msg_tok.loc;
                 node = send;
             }
+            continue;
+        }
+
+        if (match(p, L_BLACKET)) {
+            ASTNode* index_expr = parse_expression(p);
+            consume(p, R_BLACKET);
+            node = create_index_access_node(node, index_expr);
             continue;
         }
 
@@ -839,27 +896,27 @@ ASTNode* parse_primary(Parser* p)
     ASTNode* node = NULL;
     // 1. 単項演算子: -, +, ~, !
     if (check(p, SP_IDENTIFIER)) {
-        Token op_tok = advance(p);
-        ASTNode* operand = parse_primary(p);
+        Token op_tok = peek(p, 0);
+        if (op_tok.symbol == sym_minus || op_tok.symbol == sym_plus) {
+            advance(p);
+            ASTNode* operand = parse_primary(p);
 
-        if (op_tok.symbol == sym_minus) {
-            // 数値リテラルへの即時マイナス適用
-            if (operand->kind == AST_LITERAL && 
-               (operand->literal.kind == TOKEN_INTEGER || operand->literal.kind == TOKEN_FLOAT)) {
-                char buf[1024];
-                snprintf(buf, sizeof(buf), "-%s", operand->literal.raw->chars);
-                Symbol* neg_raw = new_string(buf, (int)strlen(buf));
-                node = create_literal_node(operand->literal.kind, neg_raw);
-            } else {
-                ASTNode* zero = create_literal_node(TOKEN_INTEGER, new_string("0", 1));
-                node = create_send_node(zero, create_identifier_node(sym_minus), operand);
+            if (op_tok.symbol == sym_minus) {
+                if (operand->kind == AST_LITERAL && 
+                   (operand->literal.kind == TOKEN_INTEGER || operand->literal.kind == TOKEN_FLOAT)) {
+                    char buf[1024];
+                    snprintf(buf, sizeof(buf), "-%s", operand->literal.raw->chars);
+                    Symbol* neg_raw = new_string(buf, (int)strlen(buf));
+                    node = create_literal_node(operand->literal.kind, neg_raw);
+                } else {
+                    ASTNode* zero = create_literal_node(TOKEN_INTEGER, new_string("0", 1));
+                    node = create_send_node(zero, create_identifier_node(sym_minus), operand);
+                }
+            } else if (op_tok.symbol == sym_plus) {
+                node = operand;
             }
-        } else if (op_tok.symbol == sym_plus) {
-            node = operand;
-        } else if (op_tok.symbol == sym_bnot || op_tok.symbol == sym_not) {
-            node = create_send_node(operand, create_identifier_node(op_tok.symbol), NULL);
+            return node;
         }
-        return node;
     }
 
     // 2. リテラル
@@ -891,7 +948,16 @@ ASTNode* parse_primary(Parser* p)
             int d = 1;
             while (peek_type(p, d) != TOK_EOF && peek_type(p, d) != L_PAR && peek_type(p, d) != SEMICOLON) d++;
             if (peek_type(p, d) == L_PAR) {
-                type_args = parse_type_arg_list(p);
+                int l_par_pos = p->pos + d;
+                
+                // '(' の手前までだけ型引数としてパースする
+                ASTNode* root = NULL;
+                while (p->pos < l_par_pos && check(p, CLASS_NAME)) {
+                    Token tok = consume(p, CLASS_NAME);
+                    ASTNode* item = create_class_node(create_identifier_node(tok.symbol), NULL);
+                    root = (root == NULL) ? item : create_stmt_node(root, item);
+                }
+                type_args = root;
             }
         }
 
@@ -906,7 +972,6 @@ ASTNode* parse_primary(Parser* p)
             consume(p, R_PAR);
             node = create_construct_node(klass, args);
         } else {
-            // 引数がなければクラス名ノード単体 (レシーバー等)
             node = (type_args != NULL) ? klass : name_node;
         }
     }
@@ -918,6 +983,11 @@ ASTNode* parse_primary(Parser* p)
     else if (match(p, L_PAR)) {
         node = parse_expression(p);
         consume(p, R_PAR);
+        if (node) node->is_parenthesized = true;
+    }
+    // 9. リストリテラル #[ ... ]
+    else if (match(p, L_LIST_BLACKET)) {
+        node = parse_list_literal(p);
     }
 
     // 添字アクセス: primary "[" expr "]" の左結合ループ
@@ -1070,8 +1140,26 @@ ASTNode* parse_statement_list_opt(Parser* p)
     return parse_statement_list(p);
 }
 
+ASTNode* parse_list_literal(Parser* p) 
+{
+    ASTNode* elements = NULL;
+
+    if (!check(p, R_BLACKET)) {
+        elements = parse_expr_list(p);
+    }
+
+    consume(p, R_BLACKET); // 適切な構文エラーコード
+
+    return create_list_literal_node(elements);
+}
+extern int yycolumn;
 // Bison 互換エントリポイント (parse.c からそのまま呼ばれる)
 int yyparse(void) {
+    yycolumn = 1;
+    current_ast_loc.filename = current_filename;
+    current_ast_loc.line     = 1;
+    current_ast_loc.column   = 1;
+    current_ast_loc.col_end  = 1;
     TokenArray arr;
     token_array_init(&arr);
 

@@ -68,7 +68,7 @@ void compile_statement_node(Compiler* c, ASTNode* node)
             return;
 
         // 2. 再代入 (x is 10; や a, b are ...) は内部で POP 済みのため POP しない
-        if (msg == sym_is || msg == sym_are)
+        if (msg == sym_is || msg == sym_are || is_compound_operator(msg))
             return;
 
         // 3. 制御構文は自前でスタックを整合させているので POP しない
@@ -230,9 +230,13 @@ void compile(Compiler* c, ASTNode* node)
             }
 
             if (expr_count == 0) {
-                // 式なし return; (Void 関数)
-                emit_with_cleanup(c); // 脱出前に close
-                emit_inst(c, OP_RETURN, 0);
+                emit_with_cleanup(c);
+                if (c->is_method) {
+                    emit_inst(c, OP_GET_LOCAL, 0);
+                } else {
+                    emit_constant(c, make_nil());
+                }
+                emit_inst(c, OP_RETURN, 1);
             } else {
                 // 戻り値式（1個または多値）をスタックに評価
                 for (int i = 0; i < expr_count; i++) {

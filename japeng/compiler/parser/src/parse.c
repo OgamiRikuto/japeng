@@ -126,14 +126,14 @@ bool parse_file(const char* full_path)
         compile_lang = LANG_EN;
         yyin = file;
         yyrestart(file);
-        if (yyparse() == 0 && current_parsed_ast != NULL && syntax_error_count == 0) {
+        if (yyparse() == 0 && syntax_error_count == 0) {
             success = true;
         }
         fclose(file);
     }
 
     // パース成功後の格納先振り分け 
-    if (success) {
+    if (success && current_parsed_ast != NULL) {
         current_parsed_ast = fix_precedence(current_parsed_ast);
         current_parsed_ast = fold_constants(current_parsed_ast);
 

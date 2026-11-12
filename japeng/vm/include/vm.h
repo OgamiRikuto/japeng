@@ -55,6 +55,7 @@ bool vm_call_function(VM* vm, Value func_val, uint8_t arg_count, Value* args, Va
 
 void push(VM* vm, Value value);
 Value pop(VM* vm);
+void pops(VM* vm, uint32_t count);
 
 ObjClass* get_class_for_value(VM* vm, Value val);
 

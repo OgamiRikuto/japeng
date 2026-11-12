@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <dirent.h>
 
 Value vm_read_value(FILE* fp, Symbol** pool, VM* vm);
 
@@ -339,9 +340,43 @@ ObjClass* vm_load_class_bcd(VM* vm, const char* bcd_path)
 
     return klass;
 }
+
 static bool bcd_file_exists(const char* path) {
     struct stat st;
     return (stat(path, &st) == 0 && !S_ISDIR(st.st_mode));
+}
+
+// ディレクトリ配下を再帰的に探索して .je_cache/<ClassName>.bcd を見つける
+static bool find_bcd_recursive(const char* dir_path, const char* class_name, char* out_path, size_t max_len) {
+    // 1. このディレクトリ直下の .je_cache/<ClassName>.bcd を確認
+    get_cache_filepath(dir_path, class_name, "bcd", out_path, max_len);
+    if (bcd_file_exists(out_path)) {
+        return true;
+    }
+
+    // 2. サブディレクトリを再帰探索
+    DIR* dir = opendir(dir_path);
+    if (!dir) return false;
+
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_name[0] == '.') continue; // ".", "..", ".je_cache" 等をスキップ
+        if (strcmp(entry->d_name, "dict") == 0) continue;
+
+        char sub_path[1024];
+        snprintf(sub_path, sizeof(sub_path), "%s/%s", dir_path, entry->d_name);
+
+        struct stat st;
+        if (stat(sub_path, &st) == 0 && S_ISDIR(st.st_mode)) {
+            if (find_bcd_recursive(sub_path, class_name, out_path, max_len)) {
+                closedir(dir);
+                return true;
+            }
+        }
+    }
+
+    closedir(dir);
+    return false;
 }
 
 ObjClass* vm_resolve_class(VM* vm, Symbol* class_name) 
@@ -356,51 +391,30 @@ ObjClass* vm_resolve_class(VM* vm, Symbol* class_name)
 
     char bcd_path[1024];
 
-    // 2. プロジェクトディレクトリ直下のキャッシュ (.je_cache/<Name>.bcd)
+    // 2. プロジェクトディレクトリ配下を再帰探索
     if (vm->project_dir != NULL) {
-        get_cache_filepath(vm->project_dir, class_name->chars, "bcd", bcd_path, sizeof(bcd_path));
-        if (bcd_file_exists(bcd_path)) {
-            return vm_load_class_bcd(vm, bcd_path);
-        }
-
-        // プロジェクト内のモジュールフォルダ (例: <proj>/<Name>/.je_cache/<Name>.bcd)
-        snprintf(bcd_path, sizeof(bcd_path), "%s/%s/.je_cache/%s.bcd", 
-                 vm->project_dir, class_name->chars, class_name->chars);
-        if (bcd_file_exists(bcd_path)) {
+        if (find_bcd_recursive(vm->project_dir, class_name->chars, bcd_path, sizeof(bcd_path))) {
             return vm_load_class_bcd(vm, bcd_path);
         }
     }
 
-    // 3. 標準ライブラリ配下のモジュールキャッシュ 
+    // 3. 標準ライブラリ (lib/ 全体: std/..., gui/... をすべて自動探索)
     const char* stdlib_dir = get_japeng_lib_dir();
     if (stdlib_dir != NULL) {
-        // A. lib/std/<Name>/.je_cache/<Name>.bcd
-        snprintf(bcd_path, sizeof(bcd_path), "%s/std/%s/.je_cache/%s.bcd", 
-                 stdlib_dir, class_name->chars, class_name->chars);
-        if (bcd_file_exists(bcd_path)) {
-            return vm_load_class_bcd(vm, bcd_path);
-        }
-
-        // B. 相対パスフォールバック: ./lib/std/<Name>/.je_cache/<Name>.bcd
-        snprintf(bcd_path, sizeof(bcd_path), "./lib/std/%s/.je_cache/%s.bcd", 
-                 class_name->chars, class_name->chars);
-        if (bcd_file_exists(bcd_path)) {
-            return vm_load_class_bcd(vm, bcd_path);
-        }
-
-        // C. 基本ビルトイン: lib/.je_cache/<Name>.bcd
-        get_cache_filepath(stdlib_dir, class_name->chars, "bcd", bcd_path, sizeof(bcd_path));
-        if (bcd_file_exists(bcd_path)) {
+        if (find_bcd_recursive(stdlib_dir, class_name->chars, bcd_path, sizeof(bcd_path))) {
             return vm_load_class_bcd(vm, bcd_path);
         }
     }
+    if (find_bcd_recursive("./lib", class_name->chars, bcd_path, sizeof(bcd_path))) {
+        return vm_load_class_bcd(vm, bcd_path);
+    }
 
-    // 4. ユーザーパッケージ (~/.japeng/packages/<Name>/.je_cache/<Name>.bcd)
+    // 4. ユーザーパッケージ (~/.japeng/packages/)
     const char* home = getenv("HOME");
     if (home != NULL) {
-        snprintf(bcd_path, sizeof(bcd_path), "%s/.japeng/packages/%s/.je_cache/%s.bcd", 
-                 home, class_name->chars, class_name->chars);
-        if (bcd_file_exists(bcd_path)) {
+        char pkg_dir[1024];
+        snprintf(pkg_dir, sizeof(pkg_dir), "%s/.japeng/packages", home);
+        if (find_bcd_recursive(pkg_dir, class_name->chars, bcd_path, sizeof(bcd_path))) {
             return vm_load_class_bcd(vm, bcd_path);
         }
     }

@@ -156,7 +156,8 @@ TypeInfo* new_type_info(Symbol* name, int type_arg_count) {
 
 TypeInfo* new_func_type_info(int param_count, TypeInfo** params, int ret_count, TypeInfo** rets) 
 {
-    int total_types = param_count + ret_count;
+    int actual_ret_count = (ret_count > 0) ? ret_count : 1;
+    int total_types = param_count + actual_ret_count;
     TypeInfo* t = (TypeInfo*)malloc(sizeof(TypeInfo) + sizeof(TypeInfo*) * total_types);
     t->name = sym_Function;
     t->type_arg_count = total_types;

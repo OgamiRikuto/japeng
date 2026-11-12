@@ -125,6 +125,20 @@ static Opcode resolve_actual_op(Symbol* msg, TypeInfo* lhs)
     return (Opcode)-1;
 }
 
+static Symbol* get_binary_op_from_compound(Symbol* comp_op) 
+{
+    if (comp_op == sym_plus_eq)  return sym_plus;
+    if (comp_op == sym_minus_eq) return sym_minus;
+    if (comp_op == sym_multi_eq) return sym_multi;
+    if (comp_op == sym_div_eq)   return sym_div;
+    if (comp_op == sym_band_eq)  return sym_band;
+    if (comp_op == sym_bor_eq)   return sym_bor;
+    if (comp_op == sym_bxor_eq)  return sym_bxor;
+    if (comp_op == sym_shl_eq)   return sym_shl;
+    if (comp_op == sym_shr_eq)   return sym_shr;
+    return NULL;
+}
+
 // 複合代入のコード生成 (ローカル変数 or selfのフィールド)
 bool compile_compound_assignment(Compiler* c, ASTNode* node) 
 {
@@ -149,6 +163,23 @@ bool compile_compound_assignment(Compiler* c, ASTNode* node)
         }
     }
 
+    if (target->kind == AST_INDEX_ACCESS) {
+        Symbol* bin_op = get_binary_op_from_compound(msg);
+        if (bin_op == NULL) return false;
+
+        // 右辺式: target[i] | shiftedMinoRow
+        ASTNode* op_node  = create_identifier_node(bin_op);
+        ASTNode* rhs_expr = create_send_node(target, op_node, node->send.args);
+
+        // 代入式: target[i] is rhs_expr
+        ASTNode* assign_node = create_send_node(target, create_identifier_node(sym_is), rhs_expr);
+        assign_node->loc = node->loc;
+
+        // 既存の代入コンパイル (ケース 4: 添字代入) へ流す
+        TypeInfo* res = compile_assignment(c, assign_node);
+        return res != NULL && res->name != sym_Error;
+    }
+
     if (name == NULL) {
         error_compile(node, ERR_COMPOUND_ASSIGN_TARGET);
         return false;
@@ -169,6 +200,7 @@ bool compile_compound_assignment(Compiler* c, ASTNode* node)
             Opcode actual_op = resolve_actual_op(msg, lhs_type);
             emit_inst(c, actual_op, 0);
             emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
+            emit_inst(c, OP_POP, 0);
             return true;
         }
 
@@ -183,6 +215,7 @@ bool compile_compound_assignment(Compiler* c, ASTNode* node)
             Opcode actual_op = resolve_actual_op(msg, lhs_type);
             emit_inst(c, actual_op, 0);
             emit_inst(c, OP_SET_UPVALUE, (uint32_t)upval_slot);
+            emit_inst(c, OP_POP, 0);
             return true;
         }
     }
@@ -204,6 +237,7 @@ bool compile_compound_assignment(Compiler* c, ASTNode* node)
             Opcode actual_op = resolve_actual_op(msg, lhs_type);
             emit_inst(c, actual_op, 0);
             emit_inst(c, OP_SET_FIELD, (uint32_t)field_idx);
+            emit_inst(c, OP_POP, 0);
             return true;
         }
     }
@@ -217,6 +251,16 @@ void compile_var_decl(Compiler* c, ASTNode* node)
     TypeInfo* t_info     = build_type_info(c, node->var_decl.type);
     Symbol* type_name = t_info ? t_info->name : get_type_name(c, node->var_decl.type);
 
+    bool is_type_param = false;
+    if (c->current_class != NULL && c->current_class->type != NULL) {
+        for (int i = 0; i < c->current_class->type->type_arg_count; i++) {
+            if (c->current_class->type->type_args[i]->name == type_name) {
+                is_type_param = true;
+                break;
+            }
+        }
+    }
+    
     ASTNode* vars[MAX_ARGS];
     int var_count = 0;
     collect_identifiers(node->var_decl.identifier, vars, &var_count);
@@ -238,7 +282,7 @@ void compile_var_decl(Compiler* c, ASTNode* node)
             emit_constant(c, make_obj((Obj*)new_string("", 0)));
         } else if (is_boolean_type(type_name)) {
             emit_constant(c, make_bool(false));
-        } else if (type_name == sym_Function || type_name == sym_Auto) {
+        } else if (type_name == sym_Function || type_name == sym_Auto || is_type_param) {
             emit_constant(c, make_nil());
         } else {
             uint32_t class_sym_idx = add_constant(c->chunk, make_obj((Obj*)type_name));
@@ -351,22 +395,78 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
         // ---------------------------------------------------------
         if (expr_count == var_count) {
             for (int i = 0; i < var_count; i++) {
-                TypeInfo* actual_type = compile_expression(c, exprs[i]);
-                int slot = resolve_local(c, vars[i]->identifier.name);
+                Symbol* target_name = vars[i]->identifier.name;
 
+                // 1. ローカル変数
+                int slot = resolve_local(c, target_name);
                 if (slot != -1) {
+                    TypeInfo* actual_type = compile_expression(c, exprs[i]);
                     TypeInfo* expected = c->locals[slot].type;
                     if (!is_assignable(c, expected, actual_type)) {
-                        error_compile(exprs[i], ERR_ASSIGN_TYPE_MISMATCH,
-                                      type_to_string(actual_type),
-                                      vars[i]->identifier.name->chars,
-                                      type_to_string(expected));
+                        error_compile(exprs[i], ERR_TYPE_MISMATCH,
+                                      expected->name->chars, actual_type->name->chars);
                     }
                     emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
                     emit_inst(c, OP_POP, 0);
-                } else {
-                    error_compile(vars[i], ERR_UNDEFINED_VAR, vars[i]->identifier.name->chars);
+                    continue;
                 }
+
+                // 2. アップバリュー
+                int upval = resolve_upvalue(c, target_name);
+                if (upval != -1) {
+                    TypeInfo* actual_type = compile_expression(c, exprs[i]);
+                    TypeInfo* expected = NULL;
+                    for (Compiler* enc = c->enclosing; enc != NULL; enc = enc->enclosing) {
+                        int s = resolve_local(enc, target_name);
+                        if (s != -1) { expected = enc->locals[s].type; break; }
+                    }
+                    if (expected != NULL && !is_assignable(c, expected, actual_type)) {
+                        error_compile(exprs[i], ERR_TYPE_MISMATCH,
+                                      expected->name->chars, actual_type->name->chars);
+                    }
+                    emit_inst(c, OP_SET_UPVALUE, (uint32_t)upval);
+                    emit_inst(c, OP_POP, 0);
+                    continue;
+                }
+
+                // 3. クラスのフィールド (static / インスタンス)
+                if (c->current_class != NULL) {
+                    int static_idx = find_static_field_index(c->current_class, target_name);
+                    if (static_idx != -1) {
+                        FieldInfo f_info = c->current_class->static_field_infos[static_idx];
+                        uint32_t class_sym_idx = add_constant(c->chunk, make_obj((Obj*)c->current_class->name));
+                        emit_inst(c, OP_GET_GLOBAL, class_sym_idx);
+
+                        TypeInfo* actual_type = compile_expression(c, exprs[i]);
+                        if (!is_assignable(c, f_info.type, actual_type)) {
+                            error_compile(exprs[i], ERR_TYPE_MISMATCH,
+                                          f_info.type->name->chars, actual_type->name->chars);
+                        }
+                        emit_inst(c, OP_SET_STATIC, (uint32_t)static_idx);
+                        emit_inst(c, OP_POP, 0);
+                        continue;
+                    }
+
+                    int field_idx = find_field_index(c->current_class, target_name);
+                    if (field_idx != -1) {
+                        if (c->is_static_method) {
+                            error_compile(vars[i], ERR_CANNOT_ACCESS_FIELD_ON_CLASS);
+                            continue;
+                        }
+                        FieldInfo f_info = c->current_class->field_infos[field_idx];
+                        emit_load_self(c);
+                        TypeInfo* actual_type = compile_expression(c, exprs[i]);
+                        if (!is_assignable(c, f_info.type, actual_type)) {
+                            error_compile(exprs[i], ERR_TYPE_MISMATCH,
+                                          f_info.type->name->chars, actual_type->name->chars);
+                        }
+                        emit_inst(c, OP_SET_FIELD, (uint32_t)field_idx);
+                        emit_inst(c, OP_POP, 0);
+                        continue;
+                    }
+                }
+
+                error_compile(vars[i], ERR_UNDEFINED_VAR, target_name->chars);
             }
             return new_type_info(sym_Void, 0);
         }
@@ -428,6 +528,16 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
         Symbol* type_name = get_type_name(c, decl->var_decl.type);
         TypeInfo* declared_type = build_type_info(c, decl->var_decl.type);
 
+        bool is_type_param = false;
+        if (c->current_class != NULL && c->current_class->type != NULL) {
+            for (int i = 0; i < c->current_class->type->type_arg_count; i++) {
+                if (c->current_class->type->type_args[i]->name == type_name) {
+                    is_type_param = true;
+                    break;
+                }
+            }
+        }
+
         bool is_null_literal = (node->send.args != NULL && 
                                 node->send.args->kind == AST_LITERAL && 
                                 node->send.args->literal.kind == TOKEN_NULL);
@@ -438,6 +548,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
         if (is_builtin(type_name) || 
             type_name == sym_Auto || 
             type_name == sym_Function ||
+            is_type_param || 
             is_null_literal ||
             (node->send.args != NULL && node->send.args->kind == AST_BLOCK)) {
 
@@ -653,6 +764,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                         }
 
                         emit_inst(c, OP_SET_FIELD, (uint32_t)field_idx);
+                        emit_inst(c, OP_POP, 0);
                         return f_info.type;
                     }
                 }
@@ -678,6 +790,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
             }
 
             emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
+            emit_inst(c, OP_POP, 0);
             return val_type;
         }
 
@@ -693,6 +806,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
             }
 
             emit_inst(c, OP_SET_UPVALUE, (uint32_t)upval);
+            emit_inst(c, OP_POP, 0);
             return val_type;
         }
 
@@ -713,6 +827,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                 }
 
                 emit_inst(c, OP_SET_STATIC, (uint32_t)static_idx);
+                emit_inst(c, OP_POP, 0);
                 return val_type;
             }
 
@@ -734,6 +849,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                 }
 
                 emit_inst(c, OP_SET_FIELD, (uint32_t)field_idx);
+                emit_inst(c, OP_POP, 0);
                 return field_type;
             }
         }
@@ -769,6 +885,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
         }
 
         emit_inst(c, OP_INDEX_SET, 0);
+        emit_inst(c, OP_POP, 0);
         return val_type;
     }
 
@@ -792,6 +909,7 @@ void compile_mesage_send(Compiler* c, ASTNode* node, Symbol* msg)
         // ★ 2. コンパイル時に親クラスからメソッドを特定！
         if (!find_method(superclass, msg, &method_val)) {
             error_compile(node, ERR_UNDEFINED_MESSAGE, msg->chars);
+            emit_constant(c, make_nil());
             return;
         }
 

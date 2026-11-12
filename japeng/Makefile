@@ -1,22 +1,29 @@
 CC      = clang
+GLFW_INC = -Ithird_party/glfw/include
+GLFW_LIB = third_party/glfw/lib/libglfw3.a -framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo -framework QuartzCore
 CFLAGS  = -Wall -O3 -flto -g \
+		  -DGL_SILENCE_DEPRECATION \
+          $(GLFW_INC) \
           -Icommon/include \
           -Icompiler/include \
           -Icompiler/parser/include \
           -Icompiler/parser/src \
           -Icompiler/src \
           -Ivm/include
-LD      = clang
 LDFLAGS = -Wall -O3 -flto
+LD      = clang
 
-# CFLAGS = -Wall -g -O0 
+
+# CFLAGS  = -Wall -O1 -g -fno-omit-frame-pointer -fsanitize=address \
+#           -DGL_SILENCE_DEPRECATION \
+#           $(GLFW_INC) \
 #           -Icommon/include \
 #           -Icompiler/include \
 #           -Icompiler/parser/include \
 #           -Icompiler/parser/src \
 #           -Icompiler/src \
 #           -Ivm/include
-# LDFLAGS = -Wall -g -O0
+# LDFLAGS = -Wall -O1 -g -fsanitize=address
 
 LEX     = flex
 YAC     = bison -d -v
@@ -26,7 +33,7 @@ TARGET_COMPILER = jpenc         # コンパイラ本体
 TARGET_RUN      = jpen          # VM ランタイム
 TARGET_PARSE    = jpen-parse    # パーサー単体テスト
 
-BUILTIN_CD      = lib/
+BUILTIN_CD      = lib/builtins.cd lib/Fraction.cd
 
 PREFIX  ?= /usr/local
 BINDIR  ?= $(PREFIX)/bin
@@ -41,7 +48,10 @@ COMMON_SRCS = $(wildcard common/src/*.c)
 COMMON_OBJS = $(COMMON_SRCS:.c=.o)
 
 # vm (純粋な実行エンジン)
-VM_SRCS     = $(wildcard vm/src/*.c) $(wildcard vm/src/builtin_functions/*.c)
+VM_SRCS     = $(wildcard vm/src/*.c) \
+              $(wildcard vm/src/builtin_functions/*.c) \
+              $(wildcard vm/src/builtin_functions/std/*.c) \
+              $(wildcard vm/src/builtin_functions/gui/*.c)
 VM_OBJS     = $(VM_SRCS:.c=.o)
 
 # compiler コア
@@ -122,7 +132,7 @@ $(TARGET_COMPILER): $(COMPILER_BIN_OBJS)
 	@$(LD) $(LDFLAGS) -o $@ $^
 
 $(TARGET_RUN): $(VM_BIN_OBJS)
-	@$(LD) $(LDFLAGS) -o $@ $^
+	@$(LD) $(LDFLAGS) $(GLFW_LIB) -o $@ $^
 
 $(TARGET_PARSE): $(PARSER_BIN_OBJS)
 	@$(LD) $(LDFLAGS) -o $@ $^
@@ -152,7 +162,7 @@ $(LEX_GEN_C): compiler/parser/src/rex.l
 # 組み込みクラスのコンパイル
 builtins: $(TARGET_COMPILER) $(BUILTIN_CD)
 	@echo "Compiling built-in classes to .bcd..."
-	@./$(TARGET_COMPILER) -d lib/
+	@./$(TARGET_COMPILER) $(BUILTIN_CD)
 
 clean:
 	@rm -f $(TARGET_PARSE) $(TARGET_COMPILER) $(TARGET_RUN)

@@ -1,0 +1,11 @@
+import "gui/Window";
+
+class Input based Object:
+    win: Window;
+
+    init: Function is [ 
+        arg target: Window; 
+        win is target; 
+    ];
+    isKeyDown:    Function is [ arg key: Integer; ret Boolean; ];
+    isKeyPressed: Function is [ arg key: Integer; ret Boolean; ];

@@ -1,0 +1,21 @@
+class Key based Object:
+    static space:  Integer;
+    static enter:  Integer;
+    static escape: Integer;
+    static tab:    Integer;
+
+    static right:  Integer;
+    static left:   Integer;
+    static down:   Integer;
+    static up:     Integer;
+
+    static a: Integer;
+    static c: Integer;
+    static d: Integer;
+    static p: Integer;
+    static q: Integer;
+    static r: Integer;
+    static s: Integer;
+    static w: Integer;
+    static x: Integer;
+    static z: Integer;

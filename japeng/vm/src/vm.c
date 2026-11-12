@@ -96,7 +96,7 @@ void init_vm(VM* vm)
 {
     reset_stack(vm);
     vm->frame_count = 0;
-    gc_heap_init(&vm->heap, 10000);
+    gc_heap_init(&vm->heap, 100000);
     vm->globals = new_table(8);
     init_builtin_classes(vm);
 }
@@ -117,6 +117,11 @@ Value pop(VM* vm)
 {
     vm->stack_top--;
     return *vm->stack_top;
+}
+
+void pops(VM* vm, uint32_t count)
+{
+    vm->stack_top -= count;
 }
 
 ObjClass* get_class_for_value(VM* vm, Value val) 
@@ -303,6 +308,14 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                     error_runtime(ERR_NULL_REFERENCE, "field");
                     return INTERPRET_RUNTIME_ERROR;
                 }
+                if (!is_obj(receiver) || ((Obj*)as_obj(receiver))->type != OBJ_INSTANCE) {
+                    fprintf(stderr, "[ERR GET_FIELD] field=%u, int=%d, val=%d, obj_type=%d, cls=%s\n",
+                            get_operand(instruction), is_int(receiver), is_int(receiver) ? as_int(receiver) : -1,
+                            is_obj(receiver) ? ((Obj*)as_obj(receiver))->type : -1,
+                            is_obj_type(receiver, OBJ_CLASS) ? ((ObjClass*)as_obj(receiver))->name->chars : "-");
+                    error_runtime(ERR_CANNOT_ACCESS_FIELD_ON_CLASS); 
+                    return INTERPRET_RUNTIME_ERROR;
+                }
                 
                 if (!is_obj(receiver) || ((Obj*)as_obj(receiver))->type != OBJ_INSTANCE) {
                     error_runtime(ERR_CANNOT_ACCESS_FIELD_ON_CLASS); 
@@ -326,7 +339,7 @@ static InterpretResult run(VM* vm, int stop_frame_count)
             
                 ObjInstance* instance = (ObjInstance*)as_obj(receiver);
                 instance->fields[field_idx] = value;
-                gc_write_barrier(&vm->heap, instance, value); // ★ ライトバリア発動
+                gc_write_barrier(&vm->heap, instance, value);
                 push(vm, value);
                 break;
             }
@@ -334,6 +347,13 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 uint32_t slot = get_operand(instruction);
                 Value receiver = pop(vm);
 
+                if (!is_obj_type(receiver, OBJ_CLASS)) {
+                    fprintf(stderr, "[ERR GET_STATIC] slot=%u, int=%d, nil=%d, obj_type=%d\n",
+                            slot, is_int(receiver), is_nil(receiver),
+                            is_obj(receiver) ? ((Obj*)as_obj(receiver))->type : -1);
+                    error_runtime(ERR_CANNOT_ACCESS_FIELD_ON_CLASS);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
                 if (!is_obj_type(receiver, OBJ_CLASS)) {
                     error_runtime(ERR_CANNOT_ACCESS_FIELD_ON_CLASS);
                     return INTERPRET_RUNTIME_ERROR;
@@ -349,6 +369,13 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 Value value = pop(vm);
                 Value receiver = pop(vm);
 
+                if (!is_obj_type(receiver, OBJ_CLASS)) {
+                    fprintf(stderr, "[ERR SET_STATIC] slot=%u, int=%d, nil=%d, obj_type=%d\n",
+                            slot, is_int(receiver), is_nil(receiver),
+                            is_obj(receiver) ? ((Obj*)as_obj(receiver))->type : -1);
+                    error_runtime(ERR_CANNOT_ACCESS_FIELD_ON_CLASS);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
                 if (!is_obj_type(receiver, OBJ_CLASS)) {
                     error_runtime(ERR_CANNOT_ACCESS_FIELD_ON_CLASS);
                     return INTERPRET_RUNTIME_ERROR;
@@ -423,6 +450,10 @@ static InterpretResult run(VM* vm, int stop_frame_count)
             case OP_LOOP: {
                 uint32_t offset = get_operand(instruction);
                 frame->ip -= offset;
+                ptrdiff_t depth = vm->stack_top - vm->stack;
+                if (depth > 200) {
+                    fprintf(stderr, "[STACK LEAK] depth = %td\n", depth);
+                }
                 break;
             }
             // case OP_SEND: {
@@ -645,6 +676,13 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 // 1. スタックからレシーバーのクラスオブジェクトを取得
                 Value receiver = peek(vm, arg_count);
                 if (!is_obj_type(receiver, OBJ_CLASS)) {
+                    fprintf(stderr, "[ERR STATIC_CALL] slot=%u, argc=%u, int=%d, nil=%d, obj_type=%d\n",
+                            slot, arg_count, is_int(receiver), is_nil(receiver),
+                            is_obj(receiver) ? ((Obj*)as_obj(receiver))->type : -1);
+                    error_runtime(ERR_CANNOT_ACCESS_FIELD_ON_CLASS);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                if (!is_obj_type(receiver, OBJ_CLASS)) {
                     error_runtime(ERR_CANNOT_ACCESS_FIELD_ON_CLASS);
                     return INTERPRET_RUNTIME_ERROR;
                 }
@@ -690,9 +728,11 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 if (frame == NULL) return INTERPRET_RUNTIME_ERROR;
                 break;
             }
-            case OP_POP:
-                pop(vm);
+            case OP_POP: {
+                uint32_t count = get_operand(instruction);
+                pops(vm, (count > 0) ? count : 1);
                 break;
+            }
             case OP_DUP: 
                 push(vm, peek(vm, 0));
                 break; 
@@ -841,17 +881,7 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 push(vm, make_bool(calc_compare_int_slow(a, b) > 0));
                 break;
             }
-            case OP_NLESS_INT: { // <=
-                Value b = pop(vm);
-                Value a = pop(vm);
-                if (is_int(a) && is_int(b)) {
-                    push(vm, make_bool(as_int(a) <= as_int(b)));
-                    break;
-                }
-                push(vm, make_bool(calc_compare_int_slow(a, b) <= 0));
-                break;
-            }
-            case OP_NGREAT_INT: { // >=
+            case OP_NLESS_INT: { // Not Less (>=)
                 Value b = pop(vm);
                 Value a = pop(vm);
                 if (is_int(a) && is_int(b)) {
@@ -859,6 +889,16 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                     break;
                 }
                 push(vm, make_bool(calc_compare_int_slow(a, b) >= 0));
+                break;
+            }
+            case OP_NGREAT_INT: { // Not Great (<=)
+                Value b = pop(vm);
+                Value a = pop(vm);
+                if (is_int(a) && is_int(b)) {
+                    push(vm, make_bool(as_int(a) <= as_int(b)));
+                    break;
+                }
+                push(vm, make_bool(calc_compare_int_slow(a, b) <= 0));
                 break;
             }
             // --- Float 専用 ---
@@ -944,16 +984,16 @@ static InterpretResult run(VM* vm, int stop_frame_count)
                 push(vm, make_bool(calc_compare(a, b) > 0));
                 break;
             }
-            case OP_NLESS: { // <=
-                Value b = pop(vm);
-                Value a = pop(vm);
-                push(vm, make_bool(calc_compare(a, b) <= 0));
-                break;
-            }
-            case OP_NGREAT: { // >=
+            case OP_NLESS: { // Not Less (>=)
                 Value b = pop(vm);
                 Value a = pop(vm);
                 push(vm, make_bool(calc_compare(a, b) >= 0));
+                break;
+            }
+            case OP_NGREAT: { // Not Great (<=)
+                Value b = pop(vm);
+                Value a = pop(vm);
+                push(vm, make_bool(calc_compare(a, b) <= 0));
                 break;
             }
             case OP_SHL: {

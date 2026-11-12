@@ -61,6 +61,7 @@ static int get_binary_precedence(const Symbol* op) {
 // ノードが二項演算子（単一引数を持つ演算子メッセージ送信）か判定
 static bool is_binary_op_send(const ASTNode* node) {
     if (!node || node->kind != AST_SEND) return false;
+    if (node->is_parenthesized) return false;
     if (!node->send.receiver || !node->send.message || !node->send.args) return false;
     
     if (node->send.args->kind == AST_STMT) return false;
@@ -74,6 +75,42 @@ static bool is_binary_op_send(const ASTNode* node) {
 // -----------------------------------------------------------------------------
 // 2. 木の回転と優先順位の補正
 // -----------------------------------------------------------------------------
+
+// 単項演算子ノード (!A や ~A) かどうか判定
+static bool is_unary_op_send(const ASTNode* node) {
+    if (!node || node->kind != AST_SEND) return false;
+    if (!node->send.receiver || !node->send.message) return false;
+    // 単項演算子は引数が NULL
+    if (node->send.args != NULL) return false;
+    if (node->send.message->kind != AST_IDENTIFIER) return false;
+
+    Symbol* op = node->send.message->identifier.name;
+    return (op == sym_not || op == sym_bnot);
+}
+
+// (!A) method(args) を !(A method(args)) に組み替える
+static ASTNode* rotate_unary_method_call(ASTNode* node) {
+    if (!node || node->kind != AST_SEND) return node;
+
+    // 自身のメッセージが二項演算子 (+, ==, and など) の場合は回転させない
+    if (is_binary_op_send(node)) return node;
+
+    ASTNode* left = node->send.receiver;
+    if (is_unary_op_send(left)) {
+        ASTNode* a = left->send.receiver;
+
+        // node のレシーバを A に付け替え: (A method(args))
+        node->send.receiver = a;
+
+        // メソッドチェーンが続く場合を考慮して内側を再帰補正
+        ASTNode* inner = rotate_unary_method_call(node);
+
+        left->send.receiver = inner;
+        return left;
+    }
+
+    return node;
+}
 
 // 二項演算ノードの木を優先順位に従って回転・組み替えるコア関数
 static ASTNode* rotate_binary_op(ASTNode* node) {
@@ -163,6 +200,8 @@ ASTNode* fix_precedence(ASTNode* node)
             node->send.receiver = fix_precedence(node->send.receiver);
             node->send.message  = fix_precedence(node->send.message);
             node->send.args     = fix_precedence(node->send.args);
+            
+            // node = rotate_unary_method_call(node);
 
             // 二項演算メッセージであれば回転ロジックを適用
             node = rotate_binary_op(node);

@@ -193,6 +193,12 @@ static void prepare_classes(Compiler* c, ASTNode* node, ASTNode** targets, int* 
         return;
     }
 
+    if (node->kind == AST_IMPORT) {
+        c->filename = node->loc.filename;
+        compile_import(c, node);
+        return;
+    }
+
     if (node->kind == AST_CLASS_DEF) {
         ASTNode* cnode = node->class_def.klass;
         if (cnode && cnode->kind == AST_CLASS && cnode->klass.classname) {
@@ -324,21 +330,25 @@ int main(int argc, char** argv) {
                 // スケルトン宣言
                 for (int i = 0; i < target_count; i++) {
                     cd_compiler.filename = compile_targets[i]->loc.filename;
+                    // fprintf(stderr, "declare_class_skeleton: %s\n", cd_compiler.filename);
                     declare_class_skeleton(&cd_compiler, compile_targets[i]);
                 }
                 // 関係性解決
                 for (int i = 0; i < target_count; i++) {
                     cd_compiler.filename = compile_targets[i]->loc.filename;
+                    // fprintf(stderr, "resolve_class_skeleton_relations: %s\n", cd_compiler.filename);
                     resolve_class_skeleton_relations(&cd_compiler, compile_targets[i]);
                 }
                 // シグネチャ先行登録
                 for (int i = 0; i < target_count; i++) {
                     cd_compiler.filename = compile_targets[i]->loc.filename;
+                    // fprintf(stderr, "declare_class_signatures: %s\n", cd_compiler.filename);
                     declare_class_signatures(&cd_compiler, compile_targets[i]);
                 }
                 // クラス本体のコンパイル
                 for (int i = 0; i < target_count; i++) {
                     cd_compiler.filename = compile_targets[i]->loc.filename;
+                    // fprintf(stderr, "compile_class_body: %s\n", cd_compiler.filename);
                     compile_class_body(&cd_compiler, compile_targets[i]);
                 }
             }

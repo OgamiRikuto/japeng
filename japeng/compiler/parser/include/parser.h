@@ -80,5 +80,6 @@ ASTNode* parse_arg_decl_list(Parser* p);
 ASTNode* parse_arg_decl(Parser* p);
 ASTNode* parse_expr_list(Parser* p);
 ASTNode* parse_statement_list_opt(Parser* p);
+ASTNode* parse_list_literal(Parser* p);
 
 #endif // PARSER_H

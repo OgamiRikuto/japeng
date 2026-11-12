@@ -1,0 +1,67 @@
+class Queue Type based Object:
+    queue: List Type;
+    head: Integer is 0;
+    tail: Integer is 0;
+    count: Integer is 0;
+    capacity: Integer is 16;
+
+    init: Function is [
+        arg initCapa: Integer;
+        if (initCapa > 16) [ capacity is initCapa; ];
+        queue is L[];
+        capacity repeat [ queue push(null); ];
+    ];
+
+    push: Function is [
+        arg item: Type;
+        if (count = capacity) [ self resize; ];
+        queue[tail] is item;
+        tail is (tail + 1) % capacity;
+        count += 1;
+    ];
+
+    pop: Function is [
+        ret Type;
+        if (count = 0) [ return null; ];
+        item: Type is queue[head];
+        queue[head] is null;
+        head is (head + 1) % capacity;
+        count -= 1;
+        return item;
+    ];
+
+    peek: Function is [
+        arg offset: Integer;
+        ret Type;
+        if (offset < 0 or offset >= count) [
+            return null;
+        ];
+        idx: Integer is (head + offset) % capacity;
+        return queue[idx];
+    ];
+
+    length: Function is [
+        ret Integer;
+        return count;
+    ];
+
+    isEmpty: Function is [
+        ret Boolean;
+        return count = 0;
+    ];
+
+    resize: Function is [
+        newCapa: Integer is capacity * 2;
+        newQueue: List Type is L[];
+
+        newCapa repeat [ newQueue push(null); ];
+        count repeat [
+            arg i: Integer;
+            newQueue[i] is queue[(head + i) % capacity];
+        ];
+
+        queue is newQueue;
+        head is 0;
+        tail is count;
+        capacity is newCapa;
+    ];
