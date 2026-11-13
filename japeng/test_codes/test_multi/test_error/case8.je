@@ -1,6 +1,6 @@
 // [C-1] 手前にデフォルト値があり、後ろにデフォルト値なし引数が配置されている
-bad_order: Function(Integer, String; Void) is [
-    arg x: Integer is 10, s: String; // ← ここで拒絶されるべき
+bad_order: Function(Integer, String; Void) = [
+    arg x: Integer = 10, s: String; // ← ここで拒絶されるべき
     ret Void;
     return;
 ];

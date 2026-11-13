@@ -1,7 +1,7 @@
 class Sum:
-    run: Function is [
+    run: Function = [
         arg n: Integer;
         ret Integer;
-        if (n = 0) [return 0;];
-        return n + self run(n-1);
+        if (n == 0) [return 0;];
+        return n + self.run(n-1);
     ];

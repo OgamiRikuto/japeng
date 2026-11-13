@@ -1,0 +1,17 @@
+import File as F;
+
+with (F.create("sample_en.txt")) [
+    arg f: F;
+    f.write("Hello with JapEng!");
+    "ファイルを書き込みました。".println;
+];
+
+// 2. 読み込みテスト (File open で開き直して読み込み -> 抜けると自動 close)
+with (F.open("sample_en.txt")) [
+    arg f: F;
+    data: String = f.read_all;
+    ("読み込んだデータ: " + data).println;
+];
+
+return 0;
+

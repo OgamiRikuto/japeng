@@ -1,7 +1,7 @@
 class WorkerB:
-    valB: Integer is 100;
+    valB: Integer = 100;
 
-    workB: Function is [
+    workB: Function = [
         arg x: Integer;
         ret Integer;
         valB += x;

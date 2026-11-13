@@ -1,0 +1,15 @@
+import "std/Clock";
+import "std/Random";
+
+// 1. Clock テスト
+clk: Clock = Clock();
+Clock.sleep(0.1);
+dt: Float = clk.restart;
+("経過時間: " + (dt.toString) + " 秒").println;
+
+// 2. Random & shuffle テスト
+nums: List Integer = L[0, 1, 2, 3, 4, 5, 6];
+Random.shuffle(nums);
+nums.println;
+
+return 0;

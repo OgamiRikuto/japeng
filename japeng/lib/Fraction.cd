@@ -2,125 +2,125 @@ class Fraction based Object:
     num: Integer;
     den: Integer;
 
-    init: Function is [
+    init: Function = [
         arg _num: Integer, _den: Integer;
 
         // 1. 最大公約数で約分
-        g: Integer is _num gcd(_den);
-        n: Integer is _num / g;
-        d: Integer is _den / g;
+        g: Integer = _num.gcd(_den);
+        n: Integer = _num / g;
+        d: Integer = _den / g;
 
         // 2. 符号の正規化 (分母は常に正にする)
         if (d < 0) [
-            d is 0 - d;
-            n is 0 - n;
+            d = 0 - d;
+            n = 0 - n;
         ];
 
-        num is n;
-        den is d;
+        num = n;
+        den = d;
     ];
 
-    +: Function is [
+    +: Function = [
         arg other: Fraction;
         ret Fraction;
-        _num: Integer is (num * other den) + (den * other num);
-        _den: Integer is den * other den;
+        _num: Integer = (num * other.den) + (den * other.num);
+        _den: Integer = den * other.den;
         return Fraction(_num, _den);
     ];
 
-    -: Function is [
+    -: Function = [
         arg other: Fraction;
         ret Fraction;
-        _num: Integer is (num * other den) - (den * other num);
-        _den: Integer is den * other den;
+        _num: Integer = (num * other.den) - (den * other.num);
+        _den: Integer = den * other.den;
         return Fraction(_num, _den);
     ];
 
-    *: Function is [
+    *: Function = [
         arg other: Fraction;
         ret Fraction;
-        return Fraction(num * other num, den * other den);
+        return Fraction(num * other.num, den * other.den);
     ];
 
-    /: Function is [
+    /: Function = [
         arg other: Fraction;
         ret Fraction;
-        return self * other reciprocal;
+        return self * other.reciprocal;
     ];
 
-    =: Function is [
+    ==: Function = [
         arg other: Fraction;
         ret Boolean;
-        return (num = other num) and (den = other den);
+        return (num == other.num) and (den == other.den);
     ];
 
-    !=: Function is [
+    !=: Function = [
         arg other: Fraction;
         ret Boolean;
-        return !(self = other);
+        return !(self == other);
     ];
 
-    >: Function is [
+    >: Function = [
         arg other: Fraction;
         ret Boolean;
-        if (den = other den) [ return num > other num; ];
-        return (num * other den) > (den * other num);
+        if (den == other.den) [ return num > other.num; ];
+        return (num * other.den) > (den * other.num);
     ];
 
-    <: Function is [
+    <: Function = [
         arg other: Fraction;
         ret Boolean;
-        if (den = other den) [ return num < other num; ];
-        return (num * other den) < (den * other num);
+        if (den == other.den) [ return num < other.num; ];
+        return (num * other.den) < (den * other.num);
     ];
 
-    >=: Function is [
+    >=: Function = [
         arg other: Fraction;
         ret Boolean;
         return !(self < other);
     ];
 
-    <=: Function is [
+    <=: Function = [
         arg other: Fraction;
         ret Boolean;
         return !(self > other);
     ];
 
-    isPositive: Function is [
+    isPositive: Function = [
         ret Boolean;
         return num >= 0;
     ];
 
-    toInteger: Function is [
+    toInteger: Function = [
         ret Integer;
         return num / den;
     ];
 
-    isZero: Function is [
+    isZero: Function = [
         ret Boolean;
-        return num = 0;
+        return num == 0;
     ];
 
-    isInteger: Function is [
+    isInteger: Function = [
         ret Boolean;
-        return den = 1;
+        return den == 1;
     ];
 
-    reciprocal: Function is [
+    reciprocal: Function = [
         ret Fraction;
         return Fraction(den, num);
     ];
 
-    pow: Function is [
+    pow: Function = [
         arg n: Integer;
         ret Fraction;
-        return Fraction(num pow(n), den pow(n));
+        return Fraction(num.pow(n), den.pow(n));
     ];
 
-    toString: Function is [
+    toString: Function = [
         ret String;
-        if (den = 1) [
-            return num toString;
+        if (den == 1) [
+            return num.toString;
         ];
-        return (num toString) + "/" + (den toString);
+        return (num.toString) + "/" + (den.toString);
     ];

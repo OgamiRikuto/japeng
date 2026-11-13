@@ -1,28 +1,28 @@
 class Sub based Base:
     // 子クラス自身のフィールド
-    static sub_s_val: Integer is 200;
-    sub_i_val: Integer is 20;
+    static sub_s_val: Integer = 200;
+    sub_i_val: Integer = 20;
 
     // 9. static メソッドのオーバーライド（再定義・隠蔽）
-    static s_touch_neither: Function is [
+    static s_touch_neither: Function = [
         ret Integer;
         return 888;
     ];
 
     // 10. 親クラスのスタティックフィールドに触れるメソッド
-    touch_parent_static: Function is [
+    touch_parent_static: Function = [
         ret Integer;
         return Base.base_s_val;
     ];
 
     // 11. 自クラスと親クラスのスタティックフィールドを両方合算するスタティックメソッド
-    static s_touch_sub_and_parent: Function is [
+    static s_touch_sub_and_parent: Function = [
         ret Integer;
         return sub_s_val + Base.base_s_val;
     ];
 
     // 12. 親子すべてのインスタンス・スタティックフィールドを合算するメソッド
-    touch_all: Function is [
+    touch_all: Function = [
         ret Integer;
         return base_i_val + sub_i_val + Base.base_s_val + sub_s_val;
     ];

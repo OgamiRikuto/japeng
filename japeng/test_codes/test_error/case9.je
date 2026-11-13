@@ -4,5 +4,5 @@
  * 期待される出力
  * 実行時エラー: 未定義のメッセージ (メソッド) 'hoge_method' が送信されました。
  */
-n: Integer is 42;
-n hoge_method;
+n: Integer = 42;
+n.hoge_method;

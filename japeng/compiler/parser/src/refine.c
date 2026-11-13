@@ -47,7 +47,7 @@ static int get_binary_precedence(const Symbol* op) {
         return 14;
     }
     // 代入系演算子
-    if (op == sym_is || op == sym_are || 
+    if (op == sym_assign || 
         op == sym_plus_eq || op == sym_minus_eq ||
         op == sym_multi_eq || op == sym_div_eq ||
         op == sym_band_eq || op == sym_bor_eq ||

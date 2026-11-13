@@ -2,13 +2,13 @@
 class Box T:
     value: T;
 
-    set: Function is [
+    set: Function = [
         arg v: T;
         ret Void;
-        value is v;
+        value = v;
     ];
 
-    get: Function is [
+    get: Function = [
         ret T;
         return value;
     ];

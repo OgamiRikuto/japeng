@@ -1,7 +1,7 @@
 class Math:
-    static a: Integer is 0;
+    static a: Integer = 0;
     b: Integer;
-    static sqrt: Function is [
+    static sqrt: Function = [
         arg n: Integer;
         ret Integer;
         return n * n;

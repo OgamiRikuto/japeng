@@ -68,7 +68,7 @@ void compile_statement_node(Compiler* c, ASTNode* node)
             return;
 
         // 2. 再代入 (x is 10; や a, b are ...) は内部で POP 済みのため POP しない
-        if (msg == sym_is || msg == sym_are || is_compound_operator(msg))
+        if (msg == sym_assign || is_compound_operator(msg))
             return;
 
         // 3. 制御構文は自前でスタックを整合させているので POP しない
@@ -130,7 +130,7 @@ void compile(Compiler* c, ASTNode* node)
             if (compile_compound_assignment(c, node)) break;
 
             // AST_SEND 内の代入処理
-            if (msg_sym == sym_is || msg_sym == sym_are) {
+            if (msg_sym == sym_assign) {
                 compile_assignment(c, node);
                 break;
             }

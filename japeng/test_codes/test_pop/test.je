@@ -1,34 +1,34 @@
-a: Integer is 10;
+a: Integer = 10;
 
-// if (a > 1) [ "aは1より大きい" println;
-// ] elif (a > 0)[ "aは0より小さい" println;
-// ]else ["aは0" println;];
+// if (a > 1) [ "aは1より大きい".println;
+// ] elif (a > 0)[ "aは0より小さい".println;
+// ]else ["aは0".println;];
 
-a repeat [ 
+a.repeat [ 
     arg i: Integer;
-    if (i > 5) [ "iは5より大きい" println; ]
-    elif (i < 5) [ "iは5より小さい" println;]
-    else ["iはなんだ" println;];
+    if (i > 5) [ "iは5より大きい".println; ]
+    elif (i < 5) [ "iは5より小さい".println;]
+    else ["iはなんだ".println;];
 
-    if (i = 5) [ "iは5だ" println;];
+    if (i == 5) [ "iは5だ".println;];
 ];
 
-b: Integer is 10;
-b repeat [
+b: Integer = 10;
+b.repeat [
     arg i: Integer;
-    if (i = 3) [ continue; ]; // 3 だけスキップされるか
-    if (i = 7) [ break; ];    // 7 で即脱出できるか
-    i println;
+    if (i == 3) [ continue; ]; // 3 だけスキップされるか
+    if (i == 7) [ break; ];    // 7 で即脱出できるか
+    i.println;
 ];
 
-c: Integer is 10;
+c: Integer = 10;
 if (c > 0) [
-    if (c = 10) [
-        "10です" println;
+    if (c == 10) [
+        "10です".println;
     ];
 ];
 
-check: Function is [
+check: Function = [
     arg n: Integer;
     ret String;
     if (n < 0) [ return "負の数"; ];
@@ -36,11 +36,11 @@ check: Function is [
 ];
 check(5);
 
-d: Integer is 0;
+d: Integer = 0;
 if (d > 100) [
-    "ここは通らない" println;
+    "ここは通らない".println;
 ];
-d println; // 正しく 0 が表示されるか
+d.println; // 正しく 0 が表示されるか
 
 return 0;
 

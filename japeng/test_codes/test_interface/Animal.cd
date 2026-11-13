@@ -1,12 +1,12 @@
 class Animal implements Speaker:
     name: String;
 
-    init: Function is [
+    init: Function = [
         arg n: String;
-        name is n;
+        name = n;
     ];
 
-    speak: Function is [
-        "動物の鳴き声" println;
+    speak: Function = [
+        "動物の鳴き声".println;
     ];
 

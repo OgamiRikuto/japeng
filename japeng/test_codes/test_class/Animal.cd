@@ -2,11 +2,11 @@ class Animal:
     name: String;
     age: Integer;
 
-    init: Function is [ arg _name: String, _age: Integer;
-        name is _name;
-        age is _age;
+    init: Function = [ arg _name: String, _age: Integer;
+        name = _name;
+        age = _age;
     ];
 
-    bark: Function is [
-        "この動物の鳴き声は" print;
+    bark: Function = [
+        "この動物の鳴き声は".print;
     ];

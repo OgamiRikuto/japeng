@@ -1104,7 +1104,7 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                 return method_type->type_args[1];
             }
 
-            if (msg == sym_is || msg == sym_are) {
+            if (msg == sym_assign) {
                 return compile_assignment(c, node);
             }
 

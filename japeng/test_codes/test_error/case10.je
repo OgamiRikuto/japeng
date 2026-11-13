@@ -4,5 +4,5 @@
  * 期待される出力
  * 実行時エラー: インデックスが範囲外です (インデックス: 99, サイズ: 5)。
  */
-s: String is "hello";
-c: String is s get 99;
+s: String = "hello";
+c: String = s.get(99);

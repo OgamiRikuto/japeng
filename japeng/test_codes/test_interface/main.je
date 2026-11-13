@@ -1,21 +1,21 @@
 // --- 1. 単数実装の検証 ---
-dog: Dog is Dog("ポチ");
+dog: Dog = Dog("ポチ");
 
 // Speaker インターフェース型変数に代入 (アップキャスト)
-s1: Speaker is dog;
-s1 speak; // OP_IMPL_SEND 発行 -> "わんわん！"
+s1: Speaker = dog;
+s1.speak; // OP_IMPL_SEND 発行 -> "わんわん！"
 
 
 // --- 2. 複数実装の検証 ---
-bot: Robot is Robot("RX-78");
+bot: Robot = Robot("RX-78");
 
 // Speaker として呼び出し
-s2: Speaker is bot;
-s2 speak; // OP_IMPL_SEND 発行 -> "ピピピッ！ ロボット起動。"
+s2: Speaker = bot;
+s2.speak; // OP_IMPL_SEND 発行 -> "ピピピッ！ ロボット起動。"
 
 // Calculator として呼び出し
-c: Calculator is bot;
-ans: Integer is c calc(5, 20); // 5 * 20 + 10 = 110
-ans println; // 110
+c: Calculator = bot;
+ans: Integer = c.calc(5, 20); // 5 * 20 + 10 = 110
+ans.println; // 110
 
 return 0;

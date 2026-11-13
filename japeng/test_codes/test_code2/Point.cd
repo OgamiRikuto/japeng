@@ -1,8 +1,8 @@
 class Point:
     x: Integer;
     y: Integer;
-    init: Function is [ arg val_x: Integer, val_y: Integer;
-        x is val_x;
-        y is val_y;
+    init: Function = [ arg val_x: Integer, val_y: Integer;
+        x = val_x;
+        y = val_y;
     ];
 

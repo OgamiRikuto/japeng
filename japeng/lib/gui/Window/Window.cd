@@ -2,24 +2,24 @@ class Window based Object implements Close:
     ptr_hi: Integer;
     ptr_lo: Integer;
 
-    init: Function is [
+    init: Function = [
         arg width: Integer, height: Integer, title: String,
-            resizable: Boolean is true, x: Integer is -1, y: Integer is -1;
+            resizable: Boolean = true, x: Integer = -1, y: Integer = -1;
     ];
 
-    shouldClose: Function is [ ret Boolean; ];
-    pollEvents:  Function is [];
-    swapBuffers: Function is [];
-    clear:       Function is [ arg color: Integer is 0; ];
-    close:       Function is [];
+    shouldClose: Function = [ ret Boolean; ];
+    pollEvents:  Function = [];
+    swapBuffers: Function = [];
+    clear:       Function = [ arg color: Integer = 0; ];
+    close:       Function = [];
 
-    width:       Function is [ ret Integer; ];
-    height:      Function is [ ret Integer; ];
-    setSize:     Function is [ arg w: Integer, h: Integer; ];
-    setPosition: Function is [ arg x: Integer, y: Integer; ];
-    setTitle:    Function is [ arg title: String; ];
+    width:       Function = [ ret Integer; ];
+    height:      Function = [ ret Integer; ];
+    setSize:     Function = [ arg w: Integer, h: Integer; ];
+    setPosition: Function = [ arg x: Integer, y: Integer; ];
+    setTitle:    Function = [ arg title: String; ];
 
     // プリミティブ描画
-    fillRect:    Function is [ arg x: Float, y: Float, w: Float, h: Float, color: Integer; ];
-    drawRect:    Function is [ arg x: Integer, y: Integer, w: Integer, h: Integer, color: Integer; ];
-    drawLine:    Function is [ arg x1: Float, y1: Float, x2: Float, y2: Float, color: Integer; ];
+    fillRect:    Function = [ arg x: Float, y: Float, w: Float, h: Float, color: Integer; ];
+    drawRect:    Function = [ arg x: Integer, y: Integer, w: Integer, h: Integer, color: Integer; ];
+    drawLine:    Function = [ arg x1: Float, y1: Float, x2: Float, y2: Float, color: Integer; ];

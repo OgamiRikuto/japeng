@@ -1,101 +1,101 @@
 // ==========================================
 // 1. 基本的な二項ビット演算 (&, |, ^)
 // ==========================================
-a: Integer is 12; // 2進数: 1100
-b: Integer is 10; // 2進数: 1010
+a: Integer = 12; // 2進数: 1100
+b: Integer = 10; // 2進数: 1010
 
-and_val: Integer is a & b;
-and_val println; // 期待値: 8 (1000)
+and_val: Integer = a & b;
+and_val.println; // 期待値: 8 (1000)
 
-or_val: Integer is a | b;
-or_val println;  // 期待値: 14 (1110)
+or_val: Integer = a | b;
+or_val.println;  // 期待値: 14 (1110)
 
-xor_val: Integer is a ^ b;
-xor_val println; // 期待値: 6 (0110)
+xor_val: Integer = a ^ b;
+xor_val.println; // 期待値: 6 (0110)
 
 
 // ==========================================
 // 2. シフト演算 (<<, >>)
 // ==========================================
-shl_val: Integer is 1 << 4;
-shl_val println; // 期待値: 16
+shl_val: Integer = 1 << 4;
+shl_val.println; // 期待値: 16
 
-shr_val: Integer is 32 >> 2;
-shr_val println; // 期待値: 8
+shr_val: Integer = 32 >> 2;
+shr_val.println; // 期待値: 8
 
 
 // ==========================================
 // 3. 単項ビット反転 (~)
 // ==========================================
-not_zero: Integer is ~0;
-not_zero println; // 期待値: -1
+not_zero: Integer = ~0;
+not_zero.println; // 期待値: -1
 
-not_val: Integer is ~10;
-not_val println;  // 期待値: -11
+not_val: Integer = ~10;
+not_val.println;  // 期待値: -11
 
 
 // ==========================================
 // 4. べき乗 (pow メソッド)
 // ==========================================
-pow_val: Integer is 2 pow(10);
-pow_val println; // 期待値: 1024
+pow_val: Integer = 2.pow(10);
+pow_val.println; // 期待値: 1024
 
-pow_zero: Integer is 5 pow(0);
-pow_zero println; // 期待値: 1
+pow_zero: Integer = 5.pow(0);
+pow_zero.println; // 期待値: 1
 
 
 // ==========================================
 // 5. 複合代入演算子 (&=, |=, ^=, <<=, >>=)
 // ==========================================
-x: Integer is 15; // 2進数: 1111
+x: Integer = 15; // 2進数: 1111
 
 x &= 6;           // 1111 & 0110 = 0110 (6)
-x println;       // 期待値: 6
+x.println;       // 期待値: 6
 
 x |= 1;           // 0110 | 0001 = 0111 (7)
-x println;       // 期待値: 7
+x.println;       // 期待値: 7
 
 x ^= 3;           // 0111 ^ 0011 = 0100 (4)
-x println;       // 期待値: 4
+x.println;       // 期待値: 4
 
 x <<= 2;          // 4 << 2 = 16
-x println;       // 期待値: 16
+x.println;       // 期待値: 16
 
 x >>= 3;          // 16 >> 3 = 2
-x println;       // 期待値: 2
+x.println;       // 期待値: 2
 
 
 // ==========================================
 // 6. 演算子の優先順位チェック
 //    (加減算 50 > シフト 45 > AND 40 > XOR 38 > OR 36)
 // ==========================================
-prec1: Integer is 1 + 2 << 2;  // (1 + 2) << 2 = 12
-prec1 println;                 // 期待値: 12
+prec1: Integer = 1 + 2 << 2;  // (1 + 2) << 2 = 12
+prec1.println;                 // 期待値: 12
 
-prec2: Integer is 1 | 2 & 3;   // 1 | (2 & 3) = 1 | 2 = 3
-prec2 println;                 // 期待値: 3
+prec2: Integer = 1 | 2 & 3;   // 1 | (2 & 3) = 1 | 2 = 3
+prec2.println;                 // 期待値: 3
 
 // 1. 巨大なべき乗 (BigInteger への自動昇格)
-p1: Integer is 2 pow(10);
-p1 println; // 1024 (SmallInteger)
+p1: Integer = 2.pow(10);
+p1.println; // 1024 (SmallInteger)
 
-p2: Integer is 2 pow(64);
-p2 println; // 18446744073709551616 (BigInteger!)
+p2: Integer = 2.pow(64);
+p2.println; // 18446744073709551616 (BigInteger!)
 
-p3: Integer is 3 pow(40);
-p3 println; // 12157665459056928801 (BigInteger!)
+p3: Integer = 3.pow(40);
+p3.println; // 12157665459056928801 (BigInteger!)
 
 // 2. 超高速バイナリ GCD
-g1: Integer is 48 gcd(18);
-g1 println; // 6
+g1: Integer = 48.gcd(18);
+g1.println; // 6
 
-g2: Integer is 1071 gcd(462);
-g2 println; // 21
+g2: Integer = 1071.gcd(462);
+g2.println; // 21
 
 // 巨大数同士の GCD
-huge_a: Integer is 2 pow(60);
-huge_b: Integer is 2 pow(50);
-g3: Integer is huge_a gcd(huge_b);
-g3 println; // 1125899906842624 (2の50乗)
+huge_a: Integer = 2.pow(60);
+huge_b: Integer = 2.pow(50);
+g3: Integer = huge_a.gcd(huge_b);
+g3.println; // 1125899906842624 (2の50乗)
 
 return 0;

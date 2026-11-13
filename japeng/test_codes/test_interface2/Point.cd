@@ -2,13 +2,13 @@ class Point:
     x: Integer;
     y: Integer;
 
-    init: Function is [
+    init: Function = [
         arg _x: Integer, _y: Integer;
-        x is _x;
-        y is _y;
+        x = _x;
+        y = _y;
     ];
 
-    toString: Function is [
+    toString: Function = [
         ret String;
         return "({x}, {y})";
     ];

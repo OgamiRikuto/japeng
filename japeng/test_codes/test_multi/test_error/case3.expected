@@ -1,6 +1,6 @@
 [EXIT: ERROR]
-[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_multi/test_error/case3.je:7:31: [1;31mエラー:[0m[1m 複数代入の要素数が一致しません (左辺: 3 個の変数, 右辺: 2 個の値)。[0m
-    7 | p1, p2, p3: Auto are self pair;
-      |                               [1;31m^[0m
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_multi/test_error/case3.je:7:29: [1;31mエラー:[0m[1m 複数代入の要素数が一致しません (左辺: 3 個の変数, 右辺: 2 個の値)。[0m
+    7 | p1, p2, p3: Auto = self.pair;
+      |                             [1;31m^[0m
 
 [1;31m1 個のコンパイルエラーが検出されました。[0m

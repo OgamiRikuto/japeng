@@ -1,0 +1,17 @@
+from "std/File" import File as ABCDEFG;
+
+with (ABCDEFG.create("sample_en.txt")) [
+    arg f: ABCDEFG;
+    f.write("Hello with JapEng!");
+    "ファイルを書き込みました。".println;
+];
+
+// 2. 読み込みテスト (File open で開き直して読み込み -> 抜けると自動 close)
+with (ABCDEFG.open("sample_en.txt")) [
+    arg f: ABCDEFG;
+    data: String = f.read_all;
+    ("読み込んだデータ: " + data).println;
+];
+
+return 0;
+

@@ -1,37 +1,37 @@
 // 1. if 条件式に非 Boolean
 if ("文字列") [
-    "NG" println;
+    "NG".println;
 ];
 
-// 2. repeat 回数指定に非 Integer
-"五回" repeat [
-    "NG" println;
+// 2..repeat 回数指定に非 Integer
+"五回".repeat [
+    "NG".println;
 ];
 
-// 3. each の添字型と要素型の不一致
-num_list: List Integer are 1, 2, 3;
-num_list each [ arg i: String, n: String;
-    "NG" println;
+// 3..each の添字型と要素型の不一致
+num_list: List Integer = 1, 2, 3;
+num_list.each [ arg i: String, n: String;
+    "NG".println;
 ];
 
 // 4. ビット演算に非 Integer
-bad_bit: Integer is 10 & "text";
+bad_bit: Integer = 10 & "text";
 
 // 5. 比較演算の型不一致
-if (10 = "10") [
-    "NG" println;
+if (10 == "10") [
+    "NG".println;
 ];
 
 // 6. メソッドの引数個数超過
-10 println("余計な引数1", "余計な引数2");
+10.println("余計な引数1", "余計な引数2");
 
 // 7. Void 関数で値を返却
-void_fn: Function(;) is [
+void_fn: Function(;) = [
     return 12345;
 ];
 
 // 8. 戻り値が必要な関数で空 return
-int_fn: Function(; Integer) is [
+int_fn: Function(; Integer) = [
     return;
 ];
 

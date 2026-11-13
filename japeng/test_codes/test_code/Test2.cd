@@ -1,9 +1,9 @@
 class Test2 based Test:
 
-    test: Function is [
+    test: Function = [
         arg x: Integer;
         ret Integer;
-        sum is sum - x;
+        sum = sum - x;
         return sum;
     ];
 

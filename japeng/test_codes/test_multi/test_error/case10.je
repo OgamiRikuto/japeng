@@ -1,13 +1,13 @@
 // [C-3] 式の計算 (1 + 2) をデフォルト値に指定
-bad_expr_default: Function(Integer; Void) is [
-    arg x: Integer is 1 + 2;
+bad_expr_default: Function(Integer; Void) = [
+    arg x: Integer = 1 + 2;
     ret Void;
     return;
 ];
 
 // [C-4] 空リスト生成 (List new や []) をデフォルト値に指定
-bad_list_default: Function(List Integer; Void) is [
-    arg l: List Integer is 1;
+bad_list_default: Function(List Integer; Void) = [
+    arg l: List Integer = 1;
     ret Void;
     return;
 ];

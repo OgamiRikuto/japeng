@@ -3,7 +3,7 @@ class SingleTest from WorkerA:
     workA: Function from WorkerA;
 
     // 2. info は自前ブロックでオーバーライド！
-    info: Function is [
+    info: Function = [
         ret String;
         return "Overridden in SingleTest";
     ] from WorkerA;

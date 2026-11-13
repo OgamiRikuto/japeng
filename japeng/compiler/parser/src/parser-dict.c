@@ -44,7 +44,7 @@ static const TokenNameEntry token_dict[TOKEN_COUNT] = {
     [IDENTIFIER] = {"identifier", "識別子"},
     [CLASS_NAME] = {"class name", "クラス名"},
     [SP_IDENTIFIER] = {"operator", "演算子"},
-    [ASSIGN_IDENTIFIER] = {"is or are", "は"},
+    [ASSIGN_IDENTIFIER] = {"=", "="},
     [STRING] = {"string", "文字列"},
     [FRACTION] = {"fraction", "分数"},
     [INTEGER] = {"integer", "整数"},

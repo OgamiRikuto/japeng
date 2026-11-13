@@ -1,18 +1,18 @@
 class Shape implements Draw:
     p: Point;
 
-    init: Function is [
+    init: Function = [
         arg _p: Point;
-        p is _p;
+        p = _p;
     ];
 
-    draw: Function is [
-        "を描画" println;
+    draw: Function = [
+        "を描画".println;
     ];
 
-    toString: Function is [
+    toString: Function = [
         ret String;
-        return "P : {p toString}";
+        return "P : {p.toString}";
     ];
 
 

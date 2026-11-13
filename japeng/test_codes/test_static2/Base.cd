@@ -1,40 +1,40 @@
 class Base:
     // フィールド
-    static base_s_val: Integer is 100; // スタティックフィールド 1つ
-    base_i_val: Integer is 10;         // 通常のフィールド 1つ
+    static base_s_val: Integer = 100; // スタティックフィールド 1つ
+    base_i_val: Integer = 10;         // 通常のフィールド 1つ
 
     // 1. スタティックフィールドに触れるメソッド
-    touch_static: Function is [
+    touch_static: Function = [
         ret Integer;
         return base_s_val;
     ];
 
     // 2. 通常のフィールドに触れるメソッド
-    touch_instance: Function is [
+    touch_instance: Function = [
         ret Integer;
         return base_i_val;
     ];
 
     // 3. スタティックフィールドと通常のフィールドどちらにも触れるメソッド
-    touch_both: Function is [
+    touch_both: Function = [
         ret Integer;
         return base_s_val + base_i_val;
     ];
 
     // 4. どちらにも触れないメソッド
-    touch_neither: Function is [
+    touch_neither: Function = [
         ret Integer;
         return 42;
     ];
 
     // 5. スタティックフィールドに触れるスタティックメソッド
-    static s_touch_static: Function is [
+    static s_touch_static: Function = [
         ret Integer;
         return base_s_val;
     ];
 
     // 6. どちらにも触れないスタティックメソッド
-    static s_touch_neither: Function is [
+    static s_touch_neither: Function = [
         ret Integer;
         return 777;
     ];
@@ -45,13 +45,13 @@ class Base:
      * =========================================================================
      */
     // // 7. 通常のフィールドに触れるスタティックメソッド
-    // static s_touch_instance: Function is [
+    // static s_touch_instance: Function = [
     //     ret Integer;
     //     return base_i_val;
     // ];
 
     // // 8. スタティックフィールドと通常のフィールドどちらにも触れるスタティックメソッド
-    // static s_touch_both: Function is [
+    // static s_touch_both: Function = [
     //     ret Integer;
     //     return base_s_val + base_i_val;
     // ];

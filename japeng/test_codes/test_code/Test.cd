@@ -1,15 +1,15 @@
 class Test:
-    sum: Integer is 0;
+    sum: Integer = 0;
     a: Integer;
 
-    init: Function is [
+    init: Function = [
         arg _a: Integer;
-        a is _a;
+        a = _a;
     ];
 
-    test:Function is [
+    test:Function = [
         arg x: Integer;
         ret Integer;
-        sum is sum + x;
+        sum = sum + x;
         return sum;
     ];

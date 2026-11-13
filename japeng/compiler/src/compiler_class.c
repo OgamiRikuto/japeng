@@ -614,7 +614,7 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
 
     if (node->kind == AST_SEND) {
         Symbol* msg_sym = node->send.message->identifier.name;
-        if (msg_sym != sym_is && msg_sym != sym_are) return;
+        if (msg_sym != sym_assign) return;
 
         ASTNode* receiver = node->send.receiver;
         ASTNode* args = node->send.args;

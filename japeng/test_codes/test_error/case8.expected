@@ -1,6 +1,6 @@
 [EXIT: ERROR]
-[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_error/case8.je:9:17: [1;31mエラー:[0m[1m 型の不一致です (期待される型: 'String', 実際の型: 'Integer')。[0m
-    9 | x: Integer is s + n;
-      |                 [1;31m^[0m
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_error/case8.je:9:16: [1;31mエラー:[0m[1m 型の不一致です (期待される型: 'String', 実際の型: 'Integer')。[0m
+    9 | x: Integer = s + n;
+      |                [1;31m^[0m
 
 [1;31m1 個のコンパイルエラーが検出されました。[0m

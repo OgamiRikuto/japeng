@@ -1,23 +1,23 @@
-class File implements ReadWriter:
+class FiLe implements ReadWriter:
     path: String;
 
-    init: Function is [
+    init: Function = [
         arg p: String;
-        path is p;
+        path = p;
     ];
 
-    read: Function is [
+    read: Function = [
         ret String;
         return "ファイル内容の読み込み成功";
     ];
 
-    write: Function is [
+    write: Function = [
         arg text: String;
-        "書き込み中: " print;
-        text println;
+        "書き込み中: ".print;
+        text.println;
     ];
 
-    flush: Function is [
-        "バッファをフラッシュしました。" println;
+    flush: Function = [
+        "バッファをフラッシュしました。".println;
     ];
 

@@ -1,18 +1,18 @@
 class Rectangle based Shape:
     p2: Point;
 
-    init: Function is [
+    init: Function = [
         arg p1: Point, _p2: Point;
-        super init(p1);
-        p2 is _p2;
+        super.init(p1);
+        p2 = _p2;
     ];
 
-    draw: Function is [
-        "{self toString}" print;
-        super draw;
+    draw: Function = [
+        "{self.toString}".print;
+        super.draw;
     ];
 
-    toString: Function is [
+    toString: Function = [
         ret String;
-        return "左下頂点:{p toString}, 右上頂点:{p2 toString}の長方形";
+        return "左下頂点:{p.toString}, 右上頂点:{p2.toString}の長方形";
     ];

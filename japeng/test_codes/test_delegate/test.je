@@ -3,44 +3,44 @@
 // ==========================================
 s1: SingleTest;
 
-"--- 1. Single Delegate & Override ---" println;
+"--- 1. Single Delegate & Override ---".println;
 // workA 5 -> 10 + 5 = 15
-res1: Integer is s1 workA(5);
-res1 println;
+res1: Integer = s1.workA(5);
+res1.println;
 
 // オーバーライドした info が呼ばれること ("Overridden in SingleTest")
-s1 info . println;
+s1 .info.println;
 
 
 // ==========================================
 // 2. インスタンス独立性の検証 (超重要！)
 // ==========================================
-"--- 2. Instance State Independence ---" println;
+"--- 2. Instance State Independence ---".println;
 s2: SingleTest;
 
 // s2 の workA を呼んだとき、s1 の影響を受けずに 10 + 1 = 11 になること！
 // (もし委譲先インスタンスが共有されていると 15 + 1 = 16 になってしまう)
-res2: Integer is s2 workA(1);
-res2 println;
+res2: Integer = s2.workA(1);
+res2.println;
 
 // s1 は自分の状態 (15) を保持していて、さらに +5 されて 20 になること
-res1_again: Integer is s1 workA(5);
-res1_again println;
+res1_again: Integer = s1.workA(5);
+res1_again.println;
 
 
 // ==========================================
 // 3. 複数 (多重) 委譲の検証
 // ==========================================
-"--- 3. Multiple Delegation ---" println;
+"--- 3. Multiple Delegation ---".println;
 m: MultiTest;
 
 // WorkerA のメソッド (10 + 10 = 20)
-m workA(10) . println;
+m.workA(10).println;
 
 // WorkerB のメソッド (100 + 50 = 150)
-m workB(50) . println;
+m.workB(50).println;
 
 // WorkerA の info ("WorkerA")
-m info . println;
+m.info.println;
 
 return 0;

@@ -1,16 +1,16 @@
-f: File is File("test.txt");
+f: FiLe = FiLe("test.txt");
 
 // 1. ReadWriter としての呼び出し
-rw: ReadWriter is f;
-rw flush; // -> "バッファをフラッシュしました。"
+rw: ReadWriter = f;
+rw.flush; // -> "バッファをフラッシュしました。"
 
 // 2. 親インターフェース Reader へのアップキャスト
-r: Reader is f;
-msg: String is r read;
-msg println; // -> "ファイル内容の読み込み成功"
+r: Reader = f;
+msg: String = r.read;
+msg.println; // -> "ファイル内容の読み込み成功"
 
 // 3. 親インターフェース Writer へのアップキャスト
-w: Writer is f;
-w write("Hello JapEng!"); // -> "書き込み中: Hello JapEng!"
+w: Writer = f;
+w.write("Hello JapEng!"); // -> "書き込み中: Hello JapEng!"
 
 return 0;

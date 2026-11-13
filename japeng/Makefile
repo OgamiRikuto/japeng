@@ -1,18 +1,20 @@
-CC      = clang
+CC       = clang
+LEX      = flex
+
 GLFW_INC = -Ithird_party/glfw/include
 GLFW_LIB = third_party/glfw/lib/libglfw3.a -framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo -framework QuartzCore
-CFLAGS  = -Wall -O3 -flto -g \
-		  -DGL_SILENCE_DEPRECATION \
-          $(GLFW_INC) \
-          -Icommon/include \
-          -Icompiler/include \
-          -Icompiler/parser/include \
-          -Icompiler/parser/src \
-          -Icompiler/src \
-          -Ivm/include
-LDFLAGS = -Wall -O3 -flto
-LD      = clang
 
+CFLAGS   = -Wall -O3 -flto -g \
+           -DGL_SILENCE_DEPRECATION \
+           $(GLFW_INC) \
+           -Icommon/include \
+           -Icompiler/include \
+           -Icompiler/parser/include \
+           -Icompiler/parser/src \
+           -Icompiler/src \
+           -Ivm/include
+LDFLAGS  = -Wall -O3 -flto
+LD       = clang
 
 # CFLAGS  = -Wall -O1 -g -fno-omit-frame-pointer -fsanitize=address \
 #           -DGL_SILENCE_DEPRECATION \
@@ -24,9 +26,6 @@ LD      = clang
 #           -Icompiler/src \
 #           -Ivm/include
 # LDFLAGS = -Wall -O1 -g -fsanitize=address
-
-LEX     = flex
-YAC     = bison -d -v
 
 # 生成するバイナリ
 TARGET_COMPILER = jpenc         # コンパイラ本体
@@ -58,48 +57,18 @@ VM_OBJS     = $(VM_SRCS:.c=.o)
 COMPILER_SRCS = $(wildcard compiler/src/*.c)
 COMPILER_OBJS = $(COMPILER_SRCS:.c=.o)
 
-# parser 共通基盤 (前処理・整形・AST構築補助)
-PARSER_BASE_SRCS = \
-	compiler/parser/src/ast.c \
-    compiler/parser/src/parse.c \
-    compiler/parser/src/ja_preprocessor.c \
-    compiler/parser/src/preprocessor.c \
-    compiler/parser/src/formatter.c \
-    compiler/parser/src/refine.c
-PARSER_BASE_OBJS = $(PARSER_BASE_SRCS:.c=.o)
-
 # Flex (字句解析器)
 LEX_GEN_C   = compiler/parser/src/lex.yy.c
 LEX_OBJS    = $(LEX_GEN_C:.c=.o)
 
-# ==============================================================================
-# 2. パーサー実装の切り替え (手書き vs Bison)
-# ==============================================================================
-# デフォルトは手書きパーサー (hand)
-PARSER_TYPE ?= hand
-
-# A. 手書き再帰下降パーサー (デフォルト)
-HAND_PARSER_SRCS = \
-    compiler/parser/src/parser.c \
-    compiler/parser/src/parser-dict.c
-HAND_PARSER_OBJS = $(HAND_PARSER_SRCS:.c=.o)
-
-# B. Bison レガシーパーサー (いつでも削除可能)
-BISON_GEN_C = compiler/parser/src/y.tab.c
-BISON_GEN_H = compiler/parser/src/y.tab.h
-BISON_OBJS  = compiler/parser/src/y.tab.o
-
-# 切り替えロジック
-ifeq ($(PARSER_TYPE), bison)
-    PARSER_IMPL_OBJS = $(BISON_OBJS)
-else
-    PARSER_IMPL_OBJS = $(HAND_PARSER_OBJS)
-endif
-
-PARSER_OBJS = $(PARSER_BASE_OBJS) $(PARSER_IMPL_OBJS) $(LEX_OBJS)
+# parser 共通基盤 (parser-main.c と自動生成の lex.yy.c は除外して重複を防ぐ)
+PARSER_MAIN_C    = compiler/parser/src/parser-main.c
+PARSER_ALL_C     = $(wildcard compiler/parser/src/*.c)
+PARSER_BASE_SRCS = $(filter-out $(PARSER_MAIN_C) $(LEX_GEN_C), $(PARSER_ALL_C))
+PARSER_OBJS      = $(PARSER_BASE_SRCS:.c=.o) $(LEX_OBJS)
 
 # ==============================================================================
-# 3. 実行バイナリのリンク構成
+# 2. 実行バイナリのリンク構成
 # ==============================================================================
 COMPILER_MAIN_OBJ = compiler-main.o
 COMPILER_BIN_OBJS = $(COMPILER_MAIN_OBJ) $(COMPILER_OBJS) $(PARSER_OBJS) $(COMMON_OBJS)
@@ -107,68 +76,45 @@ COMPILER_BIN_OBJS = $(COMPILER_MAIN_OBJ) $(COMPILER_OBJS) $(PARSER_OBJS) $(COMMO
 VM_MAIN_OBJ       = vm-main.o
 VM_BIN_OBJS       = $(VM_MAIN_OBJ) $(VM_OBJS) $(COMMON_OBJS)
 
-PARSER_MAIN_OBJ   = compiler/parser/src/parser-main.o
+PARSER_MAIN_OBJ   = $(PARSER_MAIN_C:.c=.o)
 PARSER_BIN_OBJS   = $(PARSER_MAIN_OBJ) $(COMPILER_OBJS) $(PARSER_OBJS) $(COMMON_OBJS)
 
 # ==============================================================================
-# 4. ビルドターゲット
+# 3. ビルドターゲット
 # ==============================================================================
 
-# 通常ビルド (手書きパーサー)
 all: $(TARGET_COMPILER) $(TARGET_RUN) builtins
 
-# パーサー単体テスト (jpen-parse)
 parse: $(TARGET_PARSE)
 
-# Bison版でビルドしたい場合はこれを叩く
-bison:
-	@$(MAKE) PARSER_TYPE=bison all
-
-bison-parse:
-	@$(MAKE) PARSER_TYPE=bison parse
-
-# リンク
 $(TARGET_COMPILER): $(COMPILER_BIN_OBJS)
 	@$(LD) $(LDFLAGS) -o $@ $^
 
 $(TARGET_RUN): $(VM_BIN_OBJS)
-	@$(LD) $(LDFLAGS) $(GLFW_LIB) -o $@ $^
+	@$(LD) $(LDFLAGS) -o $@ $^ $(GLFW_LIB)
 
 $(TARGET_PARSE): $(PARSER_BIN_OBJS)
 	@$(LD) $(LDFLAGS) -o $@ $^
 
 # ==============================================================================
-# 5. 生成・コンパイルルール
+# 4. 生成・コンパイルルール
 # ==============================================================================
 
-# Flex 生成
 $(LEX_GEN_C): compiler/parser/src/rex.l
 	@$(LEX) -o $@ $<
 
-# ------------------------------------------------------------------------------
-# [Bison セクション] 
-# ------------------------------------------------------------------------------
-# $(BISON_GEN_C) $(BISON_GEN_H): compiler/parser/src/parser.y
-# 	@$(YAC) -o $(BISON_GEN_C) $<
-
-# compiler/parser/src/y.tab.o: $(BISON_GEN_C)
-# 	@$(CC) $(CFLAGS) -c $< -o $@
-# ------------------------------------------------------------------------------
-
-# 汎用ルール
 %.o: %.c
 	@$(CC) $(CFLAGS) -c $< -o $@
 
-# 組み込みクラスのコンパイル
 builtins: $(TARGET_COMPILER) $(BUILTIN_CD)
 	@echo "Compiling built-in classes to .bcd..."
 	@./$(TARGET_COMPILER) $(BUILTIN_CD)
 
 clean:
 	@rm -f $(TARGET_PARSE) $(TARGET_COMPILER) $(TARGET_RUN)
-	@rm -f compiler/parser/src/y.tab.c compiler/parser/src/y.tab.h compiler/parser/src/y.output
-	@rm -f compiler/parser/src/lex.yy.c
-	@rm -f *.o compiler/parser/src/*.o compiler/src/*.o vm/src/*.o vm/src/builtin_functions/*.o common/src/*.o
+	@rm -f $(LEX_GEN_C)
+	@rm -f *.o compiler/parser/src/*.o compiler/src/*.o common/src/*.o \
+	       vm/src/*.o vm/src/builtin_functions/*.o vm/src/builtin_functions/*/*.o
 	@rm -rf .je_cache */.je_cache */*/.je_cache
 
-.PHONY: all clean parse bison bison-parse builtins
+.PHONY: all clean parse builtins

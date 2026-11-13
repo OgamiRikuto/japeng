@@ -1,18 +1,18 @@
 class Circle based Shape:
     radius: Integer;
 
-    init: Function is [
+    init: Function = [
         arg p: Point, r: Integer;
-        super init(p);
-        radius is r;
+        super.init(p);
+        radius = r;
     ];
 
-    draw: Function is [
-        "{self toString}" print;
-        super draw;
+    draw: Function = [
+        "{self.toString}".print;
+        super.draw;
     ];
 
-    toString: Function is [
+    toString: Function = [
         ret String;
-        return "半径:{radius}, 中心:{p toString}の円";
+        return "半径:{radius}, 中心:{p.toString}の円";
     ];

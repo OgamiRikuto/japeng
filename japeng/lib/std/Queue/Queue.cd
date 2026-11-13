@@ -1,67 +1,67 @@
 class Queue Type based Object:
     queue: List Type;
-    head: Integer is 0;
-    tail: Integer is 0;
-    count: Integer is 0;
-    capacity: Integer is 16;
+    head: Integer = 0;
+    tail: Integer = 0;
+    count: Integer = 0;
+    capacity: Integer = 16;
 
-    init: Function is [
+    init: Function = [
         arg initCapa: Integer;
-        if (initCapa > 16) [ capacity is initCapa; ];
-        queue is L[];
-        capacity repeat [ queue push(null); ];
+        if (initCapa > 16) [ capacity = initCapa; ];
+        queue = L[];
+        capacity.repeat [ queue.push(null); ];
     ];
 
-    push: Function is [
+    push: Function = [
         arg item: Type;
-        if (count = capacity) [ self resize; ];
-        queue[tail] is item;
-        tail is (tail + 1) % capacity;
+        if (count == capacity) [ self.resize; ];
+        queue[tail] = item;
+        tail = (tail + 1) % capacity;
         count += 1;
     ];
 
-    pop: Function is [
+    pop: Function = [
         ret Type;
-        if (count = 0) [ return null; ];
-        item: Type is queue[head];
-        queue[head] is null;
-        head is (head + 1) % capacity;
+        if (count == 0) [ return null; ];
+        item: Type = queue[head];
+        queue[head] = null;
+        head = (head + 1) % capacity;
         count -= 1;
         return item;
     ];
 
-    peek: Function is [
+    peek: Function = [
         arg offset: Integer;
         ret Type;
         if (offset < 0 or offset >= count) [
             return null;
         ];
-        idx: Integer is (head + offset) % capacity;
+        idx: Integer = (head + offset) % capacity;
         return queue[idx];
     ];
 
-    length: Function is [
+    length: Function = [
         ret Integer;
         return count;
     ];
 
-    isEmpty: Function is [
+    isEmpty: Function = [
         ret Boolean;
-        return count = 0;
+        return count == 0;
     ];
 
-    resize: Function is [
-        newCapa: Integer is capacity * 2;
-        newQueue: List Type is L[];
+    resize: Function = [
+        newCapa: Integer = capacity * 2;
+        newQueue: List Type = L[];
 
-        newCapa repeat [ newQueue push(null); ];
-        count repeat [
+        newCapa.repeat [ newQueue.push(null); ];
+        count.repeat [
             arg i: Integer;
-            newQueue[i] is queue[(head + i) % capacity];
+            newQueue[i] = queue[(head + i) % capacity];
         ];
 
-        queue is newQueue;
-        head is 0;
-        tail is count;
-        capacity is newCapa;
+        queue = newQueue;
+        head = 0;
+        tail = count;
+        capacity = newCapa;
     ];

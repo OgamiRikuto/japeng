@@ -1,5 +1,5 @@
 // 1. 複数リターン
-f: Function is [
+f: Function = [
     ret Integer, String;
     return 1, "test";
 ];
@@ -20,38 +20,38 @@ generator: Function(Integer; ...);
 printf_like: Function(String, ...; Void);
 
 // 4. 複数リターン & 複数代入
-a, b: Integer are 1, 2;
-f: Function is [
+a, b: Integer = 1, 2;
+f: Function = [
     ret Integer, String;
     return a, "OK";
 ];
 
 // 1. 既存変数への多値関数の再代入テスト
-c, d: Auto are self f;
-c println;   // 30
-d println;   // OK
+c, d: Auto = self.f;
+c.println;   // 30
+d.println;   // OK
 
 // 2. 高階関数のシグネチャ照合テスト
-callback: Function(Integer, String; Boolean) is [
+callback: Function(Integer, String; Boolean) = [
     arg n: Integer, s: String;
     ret Boolean;
     return n > 0;
 ];
 
 // 3. 不定引数 (...) を持つハンドラ
-any_fn: Function(...; Void) is [
+any_fn: Function(...; Void) = [
     arg x: Integer, y: Integer, z: String;
     ret Void;
     return;
 ];
 
 // デフォルト値 y = 10, msg = "OK"
-greet: Function(Integer, Integer, String; Void) is [
-    arg x: Integer, y: Integer is 10, msg: String is "OK";
+greet: Function(Integer, Integer, String; Void) = [
+    arg x: Integer, y: Integer = 10, msg: String = "OK";
     ret Void;
-    x println;
-    y println;
-    msg println;
+    x.println;
+    y.println;
+    msg.println;
 ];
 
 greet(1, 2, "Custom"); // 3引数すべて指定

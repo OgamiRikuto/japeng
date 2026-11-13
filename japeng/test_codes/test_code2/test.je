@@ -1,33 +1,33 @@
-x: Integer is 100;
-x println;
+x: Integer = 100;
+x.println;
 
-p: Point is 42, 50;
-p println;
-(p x) println;
-(p y) println;
+p: Point = 42, 50;
+p.println;
+(p.x).println;
+(p.y).println;
 
-arr: List Integer are 0, 1, 2;
+arr: List Integer = 0, 1, 2;
 
-arr_print: Function is [
+arr_print: Function = [
     arg n: Integer;
-    n repeat [ arg i: Integer;
-        arr get(i) println;
-        arr push(8);
-        n is 1;
+    n.repeat [ arg i: Integer;
+        arr.get(i).println;
+        arr.push(8);
+        n = 1;
     ];
 ];
 
-arr println;
+arr.println;
 
-arr_print (arr length);
+arr_print(arr.length);
 
-arr push(10);
+arr.push(10);
 
-arr println;
+arr.println;
 
-arr_print (arr length);
+arr_print(arr.length);
 
-arr set(2, 5);
+arr.set(2, 5);
 
-arr println;
+arr.println;
 return 0;

@@ -1,34 +1,34 @@
 // ==========================================
 // 1. Boolean リテラルと変数宣言のテスト
 // ==========================================
-t: Boolean is true;
-f: Boolean is false;
+t: Boolean = true;
+f: Boolean = false;
 
-t println; // 期待値: true
-f println; // 期待値: false
+t.println; // 期待値: true
+f.println; // 期待値: false
 
 // 未初期化のデフォルト値テスト (false になるはず)
 default_bool: Boolean;
-default_bool println; // 期待値: false
+default_bool.println; // 期待値: false
 
 
 // ==========================================
 // 2. 比較演算子が Boolean を返すテスト
 // ==========================================
-num1: Integer is 10;
-num2: Integer is 20;
+num1: Integer = 10;
+num2: Integer = 20;
 
-is_less: Boolean is num1 < num2;
-is_less println; // 期待値: true
+is_less: Boolean = num1 < num2;
+is_less.println; // 期待値: true
 
-is_equal: Boolean is num1 = num2;
-is_equal println; // 期待値: false
+is_equal: Boolean = num1 == num2;
+is_equal.println; // 期待値: false
 
 // if の条件式として直接機能するか
 if (num1 < num2) [
-    "10 is less than 20: OK" println;
+    "10 = less than 20: OK".println;
 ] else [
-    "Comparison Failed" println;
+    "Comparison Failed".println;
 ];
 
 
@@ -37,40 +37,40 @@ if (num1 < num2) [
 // ==========================================
 // クラス定義またはオブジェクト参照への null 代入
 
-node1: Node is null;
+node1: Node = null;
 node2: Node; // デフォルト初期化
 
 // null 同士の比較
-if (node1 = null) [
-    "node1 is successfully null: OK" println;
+if (node1 == null) [
+    "node1 = successfully null: OK".println;
 ];
 
 // 2. 自動生成されたインスタンスは null ではない
 if (node2 != null) [
-    "node2 is not null: OK" println;
+    "node2 = not null: OK".println;
 ];
 
 // 3. node1 にインスタンスを代入
-node1 is node2;
+node1 = node2;
 
 if (node1 != null) [
-    "node1 is not null after assignment: OK" println;
+    "node1 = not null after assignment: OK".println;
 ];
 
-if (node1 = null) [
-    "Error: node1 should not be null" println;
+if (node1 == null) [
+    "Error: node1 should not be null".println;
 ] else [
-    "node1 equality check passed: OK" println;
+    "node1 equality check passed: OK".println;
 ];
 
 
 // ==========================================
 // 4. Void 戻り値ブロックのテスト
 // ==========================================
-say_hello: Function is [
+say_hello: Function = [
     ret Void;
-    "Hello from Void function!" println;
+    "Hello from Void function!".println;
     return ;
 ];
 
-self say_hello;
+self.say_hello;

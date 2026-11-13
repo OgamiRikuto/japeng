@@ -1,9 +1,9 @@
 // [NG] クラスの未初期化フィールドでシグネチャを省略した場合:
 // -> コンパイルエラー: 'handler' の関数型宣言にはシグネチャの指定が必要です
 class Button:
-    handler: Function is [];
-    tmp: Function is [];
+    handler: Function = [];
+    tmp: Function = [];
 
 // [OK] クラスフィールドでシグネチャを指定した場合:
 class Button2:
-    handler: Function(;) is [];
+    handler: Function(;) = [];

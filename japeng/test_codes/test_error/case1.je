@@ -4,5 +4,5 @@
  * 期待する出力
  * 構文エラー: 文の末尾に ';' が必要です
  */
-a: Integer is 10
-b: Integer is 20;
+a: Integer = 10
+b: Integer = 20;

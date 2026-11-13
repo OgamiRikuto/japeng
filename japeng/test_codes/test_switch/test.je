@@ -1,21 +1,21 @@
-val: Integer is 2;
+val: Integer = 2;
 
 switch (val) [
     case (1) [
-        "1です" println;
+        "1です".println;
     ];
     case (2, 3) [
-        "2または3です" println;
+        "2または3です".println;
     ];
     case (
         4,
         5,
         6
     ) [
-        "4〜6のいずれかです" println;
+        "4〜6のいずれかです".println;
     ];
     default () [
-        "その他です" println;
+        "その他です".println;
     ];
 ];
 

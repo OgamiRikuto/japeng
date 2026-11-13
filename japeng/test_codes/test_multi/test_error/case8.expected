@@ -1,6 +1,6 @@
 [EXIT: ERROR]
-[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_multi/test_error/case8.je:3:30: [1;31mエラー:[0m[1m デフォルト値を持つ引数の後にデフォルト値のない引数を配置することはできません。[0m
-    3 |     arg x: Integer is 10, s: String; // ← ここで拒絶されるべき
-      |                              [1;31m^~~~~~[0m
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_multi/test_error/case8.je:3:29: [1;31mエラー:[0m[1m デフォルト値を持つ引数の後にデフォルト値のない引数を配置することはできません。[0m
+    3 |     arg x: Integer = 10, s: String; // ← ここで拒絶されるべき
+      |                             [1;31m^~~~~~[0m
 
 [1;31m1 個のコンパイルエラーが検出されました。[0m

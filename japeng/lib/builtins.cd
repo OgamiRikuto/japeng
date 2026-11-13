@@ -1,39 +1,39 @@
 class Object:
-    toString: Function is [ ret String; ];
-    print: Function is [];
-    println: Function is [];
-    input: Function is [ arg prompt: String is ""; ret String; ];
+    toString: Function = [ ret String; ];
+    print: Function = [];
+    println: Function = [];
+    input: Function = [ arg prompt: String = ""; ret String; ];
 
 class Integer based Object:
-    pow: Function is [ arg n: Integer; ret Integer; ];
-    gcd: Function is [ arg other: Integer; ret Integer; ];
-    toString: Function is [ ret String; ];
+    pow: Function = [ arg n: Integer; ret Integer; ];
+    gcd: Function = [ arg other: Integer; ret Integer; ];
+    toString: Function = [ ret String; ];
 
 class Float based Object:
-    toString: Function is [ ret String; ];
+    toString: Function = [ ret String; ];
 
 class Decimal based Object:
-    toString: Function is [ ret String; ];
+    toString: Function = [ ret String; ];
 
 class String based Object:
-    get: Function is [ arg n: Integer; ret String; ];
-    length: Function is [ ret Integer; ];
-    split: Function is [ arg seq: String is " "; ret List String; ];
-    trim: Function is [ ret String; ];
-    toString: Function is [ ret String; ];
+    get: Function = [ arg n: Integer; ret String; ];
+    length: Function = [ ret Integer; ];
+    split: Function = [ arg seq: String = " "; ret List String; ];
+    trim: Function = [ ret String; ];
+    toString: Function = [ ret String; ];
 
 class Boolean based Object:
-    toString: Function is [ ret String; ];
+    toString: Function = [ ret String; ];
 
 class List Type based Object:
-    init: Function is [ arg ...; ];
-    push: Function is [ arg val: Type; ];
-    get: Function is [ arg index: Integer; ret Type; ];
-    set: Function is [ arg index: Integer, val: Type; ];
-    length: Function is [ ret Integer; ];
-    swap: Function is [ arg index1:Integer, index2: Integer; ];
-    map: Function is [ arg lambda: Function(Type; Auto); ret List Auto; ];
-    toString: Function is [ ret String; ];
+    init: Function = [ arg ...; ];
+    push: Function = [ arg val: Type; ];
+    get: Function = [ arg index: Integer; ret Type; ];
+    set: Function = [ arg index: Integer, val: Type; ];
+    length: Function = [ ret Integer; ];
+    swap: Function = [ arg index1:Integer, index2: Integer; ];
+    map: Function = [ arg lambda: Function(Type; Auto); ret List Auto; ];
+    toString: Function = [ ret String; ];
 
 interface Close:
     close: Function(;);

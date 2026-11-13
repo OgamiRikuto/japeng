@@ -1,10 +1,10 @@
-pair: Function(; Integer, String) is [
+pair: Function(; Integer, String) = [
     ret Integer, String;
     return 1, "OK";
 ];
 
 // [A-5] 関数の戻り値(2個) に対して左辺が 3個 (左辺 > 右辺)
-p1, p2, p3: Auto are self pair;
+p1, p2, p3: Auto = self.pair;
 
 // [A-6] 関数の戻り値(2個) に対して左辺が 1個 (左辺 < 右辺)
-single: Auto are self pair;
+single: Auto = self.pair;

@@ -14,8 +14,7 @@ typedef struct symbol {
 // typedef struct objString ObjString;
 
 #define CORE_SYMBOLS(X) \
-    X(is,           "is") \
-    X(are,          "are") \
+    X(assign,        "=") \
     X(ellipsis,     "...") \
     X(self,         "self") \
     X(super,        "super") \
@@ -43,7 +42,7 @@ typedef struct symbol {
     X(multi,        "*") \
     X(div,          "/") \
     X(rem,          "%") \
-    X(equal,        "=") \
+    X(equal,        "==") \
     X(nequal,       "!=") \
     X(less,         "<") \
     X(nless,        ">=") \

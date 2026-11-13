@@ -1,17 +1,17 @@
 class Robot implements Speaker, Announcer:
     name: String;
 
-    init: Function is [
+    init: Function = [
         arg n: String;
-        name is n;
+        name = n;
     ];
 
-    speak: Function is [
-        name print;
-        "「お話し中です。」" println;
+    speak: Function = [
+        name.print;
+        "「お話し中です。」".println;
     ];
 
-    shout: Function is [
-        name print;
-        "「ワアアアア！！」" println;
+    shout: Function = [
+        name.print;
+        "「ワアアアア！！」".println;
     ];

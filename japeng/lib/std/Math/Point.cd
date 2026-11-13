@@ -2,19 +2,19 @@ class Point based Object:
     x: Float;
     y: Float;
 
-    init: Function is [
+    init: Function = [
         arg _x: Float, _y: Float;
-        x, y is _x, _y;
+        x, y = _x, _y;
     ];
 
-    move: Function is [
+    move: Function = [
         arg dx: Float, dy: Float;
         x += dx;
         y += dy;
     ];
 
-    change: Function is [
+    change: Function = [
         arg newX: Float, newY: Float;
-        x is newX;
-        y is newY;
+        x = newX;
+        y = newY;
     ];

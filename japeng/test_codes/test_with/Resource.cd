@@ -1,0 +1,25 @@
+class Resource based Object implements Close:
+    name: String;
+
+    init: Function = [
+        arg n: String;
+        name = n;
+        ("Opened: " + name).println;
+    ];
+
+    // 静的ファクトリメソッド
+    static create: Function = [
+        arg n: String;
+        ret Resource;
+        return Resource(n);
+    ];
+
+    work: Function = [
+        ("Working: " + name).println;
+    ];
+
+    // Close インターフェースの実装
+    close: Function = [
+        ("Closed: " + name).println;
+    ];
+

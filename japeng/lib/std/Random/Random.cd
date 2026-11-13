@@ -1,22 +1,22 @@
 class Random based Object:
-    static seed: Function is [ arg _seed: Integer; ];
-    static randint:   Function is [ arg min: Integer, max: Integer; ret Integer; ];
-    static randfloat: Function is [ ret Float; ];
+    static seed: Function = [ arg _seed: Integer; ];
+    static randint:   Function = [ arg min: Integer, max: Integer; ret Integer; ];
+    static randfloat: Function = [ ret Float; ];
 
-    static chance: Function is [
+    static chance: Function = [
         arg probability: Float;
         ret Boolean;
-        return (Random randfloat) < probability;
+        return Random.randfloat < probability;
     ];
 
-    static shuffle: Function is [
+    static shuffle: Function = [
         arg list: List Auto;
-        i: Integer is (list length) - 1;
+        i: Integer = list.length - 1;
         repeat (i > 0) [
-            j: Integer is Random randint(0, i);
-            list swap(i, j);
+            j: Integer = Random.randint(0, i);
+            list.swap(i, j);
             i -= 1;
         ];
     ];
 
-    static gaussian: Function is [ arg mean: Float, stdDev: Float; ret Float; ];
+    static gaussian: Function = [ arg mean: Float, stdDev: Float; ret Float; ];

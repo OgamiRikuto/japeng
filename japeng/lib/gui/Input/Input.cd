@@ -3,9 +3,9 @@ import "gui/Window";
 class Input based Object:
     win: Window;
 
-    init: Function is [ 
+    init: Function = [ 
         arg target: Window; 
-        win is target; 
+        win = target; 
     ];
-    isKeyDown:    Function is [ arg key: Integer; ret Boolean; ];
-    isKeyPressed: Function is [ arg key: Integer; ret Boolean; ];
+    isKeyDown:    Function = [ arg key: Integer; ret Boolean; ];
+    isKeyPressed: Function = [ arg key: Integer; ret Boolean; ];

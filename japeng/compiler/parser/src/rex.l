@@ -42,8 +42,7 @@ static Symbol* resolve_and_intern(const char* text) {
 "static"    { return STATIC;}
 "import"    { return IMPORT; }
 "as"        { return AS; }
-"is"	{ yylval.symbol = sym_is; return ASSIGN_IDENTIFIER; }
-"are"	{ yylval.symbol = sym_are; return ASSIGN_IDENTIFIER; }
+"="         { yylval.symbol = sym_assign; return ASSIGN_IDENTIFIER; }
 "self"	{ yylval.symbol = sym_self; return SELF; }
 "arg"	{ return ARG; }
 "ret"	{ return RET; }
@@ -121,7 +120,7 @@ static Symbol* resolve_and_intern(const char* text) {
 "*"					{ yylval.symbol = sym_multi; return SP_IDENTIFIER; }
 "/"					{ yylval.symbol = sym_div; return SP_IDENTIFIER; }
 "%"					{ yylval.symbol = sym_rem; return SP_IDENTIFIER; }
-"="					{ yylval.symbol = sym_equal; return SP_IDENTIFIER; }
+"=="					{ yylval.symbol = sym_equal; return SP_IDENTIFIER; }
 "!="				{ yylval.symbol = sym_nequal; return SP_IDENTIFIER; }
 ">"					{ yylval.symbol = sym_gt; return SP_IDENTIFIER; }
 "<"					{ yylval.symbol = sym_less; return SP_IDENTIFIER; }

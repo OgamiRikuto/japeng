@@ -1,6 +1,6 @@
 class Test3 from Test:
     sum: Integer from Test;
-    test: Function is [
+    test: Function = [
         arg x: Integer;
         ret Integer;
         return x + 100;

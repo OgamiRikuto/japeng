@@ -1,0 +1,25 @@
+import "gui/Window";
+import "gui/Input";
+import "gui/Input/Key";
+import "gui/Graphics/Rectangle";
+
+with (Window(480, 600, "JapEng Window Test")) [
+    arg win: Window;
+    input: Input = Input(win);
+    rect: Rectangle = Rectangle(200.0, 250.0, 40.0, 40.0, 16711680); // 赤い四角形
+
+    repeat (!win shouldClose) [
+        win.pollEvents;
+
+        if (input.isKeyDown(Key.left))  [ rect.move(-5.0, 0.0); ];
+        if (input.isKeyDown(Key.right)) [ rect.move(5.0, 0.0); ];
+        if (input.isKeyDown(Key.up))    [ rect.move(0.0, -5.0); ];
+        if (input.isKeyDown(Key.down))  [ rect.move(0.0, 5.0); ];
+
+        win.clear(2236962); // ダークグレー背景
+        rect.draw(win);
+        win.swapBuffers;
+    ];
+];
+
+return 0;

@@ -9,30 +9,30 @@ class Rectangle based Object implements Drawable:
     height: Float;
     color: Integer;
 
-    init: Function is [
-        arg x: Float, y: Float, w: Float, h: Float, c: Integer is 16777215;
-        pos is Point(x, y);
-        width is w;
-        height is h;
-        color is c;
+    init: Function = [
+        arg x: Float, y: Float, w: Float, h: Float, c: Integer = 16777215;
+        pos = Point(x, y);
+        width = w;
+        height = h;
+        color = c;
     ];
 
-    move: Function is [
+    move: Function = [
         arg dx: Float, dy: Float;
-        pos move(dx, dy);
+        pos.move(dx, dy);
     ];
 
-    moveTo: Function is [
+    moveTo: Function = [
         arg x: Float, y: Float;
-        pos change(x, y);
+        pos.change(x, y);
     ];
 
-    setColor: Function is [
+    setColor: Function = [
         arg c: Integer;
-        color is c;
+        color = c;
     ];
 
-    draw: Function is [
+    draw: Function = [
         arg win: Window;
-        win fillRect(pos x, pos y, width, height, color);
+        win.fillRect(pos x, pos y, width, height, color);
     ];

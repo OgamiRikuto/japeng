@@ -1,5 +1,5 @@
-arr: List Integer is 10, 20, 30;
-arr push(40);
+arr: List Integer = 10, 20, 30;
+arr.push(40);
 
-res: List Integer is arr map [ arg elem: Integer; ret Integer; return elem * 2; ];
-res println;
+res: List Integer = arr.map [ arg elem: Integer; ret Integer; return elem * 2; ];
+res.println;

@@ -1,6 +1,6 @@
 [EXIT: ERROR]
 [1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_error/case9.je:8:3: [1;31mエラー:[0m[1m 型 'Integer' に未定義のメッセージ (メソッド) 'hoge_method' が送信されました。[0m
-    8 | n hoge_method;
+    8 | n.hoge_method;
       |   [1;31m^~~~~~~~~~~[0m
 
 [1;31m1 個のコンパイルエラーが検出されました。[0m

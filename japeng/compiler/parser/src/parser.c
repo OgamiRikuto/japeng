@@ -754,7 +754,7 @@ ASTNode* parse_message(Parser* p)
 
     // メソッド呼び出しやメソッドチェーンのループ
     while (true) {
-        // A. ドット付きメソッド呼出: node . method(...) または node . + expr
+        // A. ドット付きメソッド呼出: node.method(...) または node.+ expr
         if (match(p, DOT)) {
             if (check(p, IDENTIFIER)) {
                 Token msg_tok = consume(p, IDENTIFIER);
@@ -782,35 +782,14 @@ ASTNode* parse_message(Parser* p)
                 ASTNode* send = create_send_node(node, op_node, right);
                 send->loc = op_tok.loc;
                 node = send;
-            }
-            continue;
-        }
-        // B. ドットなしメソッド呼出: node method(...) または node method [block]
-        if (check(p, IDENTIFIER)) {
-            Token msg_tok = consume(p, IDENTIFIER);
-            ASTNode* msg_node = create_identifier_node(msg_tok.symbol);
-            msg_node->loc = msg_tok.loc;
-
-            ASTNode* args = NULL;
-            if (match(p, L_PAR)) {
-                if (!check(p, R_PAR)) args = parse_expr_list(p);
-                consume(p, R_PAR);
-                ASTNode* send = create_send_node(node, msg_node, args);
-                send->loc = msg_tok.loc;
-                node = send;
-            } else if (check(p, L_BLACKET) && is_block_ahead(p)) {
-                args = parse_block(p);
-                ASTNode* send = create_send_node(node, msg_node, args);
-                send->loc = msg_tok.loc;
-                node = send;
             } else {
-                ASTNode* send = create_send_node(node, msg_node, NULL);
-                send->loc = msg_tok.loc;
-                node = send;
+                // '.' の直後に識別子も演算子も来なかった場合
+                consume(p, IDENTIFIER);
             }
             continue;
         }
 
+        // B. 添字アクセス: node[expr]
         if (match(p, L_BLACKET)) {
             ASTNode* index_expr = parse_expression(p);
             consume(p, R_BLACKET);

@@ -1,32 +1,32 @@
 // test_string.je
 
-text: String is "hello";
-text println;
+text: String = "hello";
+text.println;
 
 // 1. 文字列長のテスト (5 が表示されれば成功)
-len: Integer is text length;
-len println;
+len: Integer = text.length;
+len.println;
 
 // 2. 1文字取得のテスト ("h" と "o" が表示されれば成功)
-first: String is text get (0);
-first println;
+first: String = text.get(0);
+first.println;
 
-last: String is text get (4);
-last println;
+last: String = text.get(4);
+last.println;
 
 // 3. メソッドチェーンによる直接取得 ("e" が表示されれば成功)
-text get (1) . println;
+text.get(1).println;
 
 // 4. 文字比較のテスト (intern が効いていれば 1 が表示される)
-ch: String is text get (0);
-is_match: Boolean is (ch = "h");
-is_match println;
+ch: String = text.get (0);
+is_match: Boolean = (ch == "h");
+is_match.println;
 
 // 5. 1文字ずつ取り出すループ (正規表現の走査パターン)
-i: Integer is 0;
+i: Integer = 0;
 repeat (i < len) [
-    c: String is text get (i);
-    c println;
+    c: String = text.get(i);
+    c.println;
     i += 1;
 ];
 

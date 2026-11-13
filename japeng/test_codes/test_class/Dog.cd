@@ -1,10 +1,10 @@
 class Dog based Animal:
 
-    init: Functioin is [ arg name: String, age: Integer;
-        super init(name, age);
+    init: Functioin = [ arg name: String, age: Integer;
+        super.init(name, age);
     ];
 
-    bark: Function is [
-        super bark;
-        "ワンワン" println;
+    bark: Function = [
+        super.bark;
+        "ワンワン".println;
     ];

@@ -172,7 +172,7 @@ bool compile_compound_assignment(Compiler* c, ASTNode* node)
         ASTNode* rhs_expr = create_send_node(target, op_node, node->send.args);
 
         // 代入式: target[i] is rhs_expr
-        ASTNode* assign_node = create_send_node(target, create_identifier_node(sym_is), rhs_expr);
+        ASTNode* assign_node = create_send_node(target, create_identifier_node(sym_assign), rhs_expr);
         assign_node->loc = node->loc;
 
         // 既存の代入コンパイル (ケース 4: 添字代入) へ流す

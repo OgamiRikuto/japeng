@@ -1,20 +1,20 @@
 // 呼び出し対象の高階関数
-runner: Function(Function(Integer; String), Integer; String) is [
+runner: Function(Function(Integer; String), Integer; String) = [
     arg cb: Function(Integer; String), val: Integer;
     ret String;
     return cb(val);
 ];
 
 // [B-8] 正常系: 正しいシグネチャのコールバックを渡す
-good_cb: Function(Integer; String) is [
+good_cb: Function(Integer; String) = [
     arg n: Integer;
     ret String;
     return "Num";
 ];
-res: String is runner(good_cb, 10); // 正常通過！
+res: String = runner(good_cb, 10); // 正常通過！
 
 // [B-9] エラー系: 引数の型が違うコールバックを渡す (String 期待の関数を渡す)
-bad_arg_cb: Function(String; String) is [
+bad_arg_cb: Function(String; String) = [
     arg s: String;
     ret String;
     return s;
@@ -22,7 +22,7 @@ bad_arg_cb: Function(String; String) is [
 runner(bad_arg_cb, 10); // エラー！
 
 // [B-10] エラー系: 戻り値の型が違うコールバックを渡す (String でなく Boolean を返す)
-bad_ret_cb: Function(Integer; Boolean) is [
+bad_ret_cb: Function(Integer; Boolean) = [
     arg n: Integer;
     ret Boolean;
     return true;

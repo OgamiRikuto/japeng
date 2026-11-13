@@ -1,0 +1,41 @@
+"--- 1. 通常の with ---".println;
+with (Resource("Res1")) [
+    arg r: Resource;
+    r.work;
+];
+"--- 1 完了 ---".println;
+
+"--- 2. 静的ファクトリメソッド ---".println;
+with (Resource.create("Res2")) [
+    arg r: Resource;
+    r.work;
+];
+"--- 2 完了 ---".println;
+
+// 早期 return のテスト用関数
+test_early_return: Function = [
+    ret String;
+
+    with (Resource("Res3")) [
+        arg r: Resource;
+        r.work;
+        "途中で return します".println;
+        return "戻り値OK";
+    ];
+
+    return "ここには来ない";
+];
+
+"--- 3. 早期 return テスト ---".println;
+res: String = self.test_early_return;
+res.println;
+"--- 3 完了 ---".println;
+"--- 4. 複数リソースの同時 with ---".println;
+with (Resource("InFile"), Resource("OutFile")) [
+    arg fin: Resource, fout: Resource;
+    fin.work;
+    fout.work;
+];
+"--- 4 完了 ---".println;
+
+return 0;

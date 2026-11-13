@@ -1,26 +1,30 @@
 [EXIT: ERROR]
-[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_type_safety/test.je:23:26: [1;31mエラー:[0m[1m 型 'List String' の変数 'str_list' に型 'List Integer' の値を代入することはできません。[0m
-   23 | str_list: List String is int_list; // 型引数 (Integer vs String) を無視して通らないか？
-      |                          [1;31m^~~~~~~~[0m
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_type_safety/test.je:23:25: [1;31mエラー:[0m[1m 型 'List String' の変数 'str_list' に型 'List Integer' の値を代入することはできません。[0m
+   23 | str_list: List String = int_list; // 型引数 (Integer vs String) を無視して通らないか？
+      |                         [1;31m^~~~~~~~[0m
 
-[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_type_safety/test.je:30:26: [1;31mエラー:[0m[1m ビット演算子 '&' には整数型 (Integer) が必要ですが、'String' が渡されました。[0m
-   30 | bad_calc1: Integer is 10 & "text";
-      |                          [1;31m^[0m
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_type_safety/test.je:30:25: [1;31mエラー:[0m[1m ビット演算子 '&' には整数型 (Integer) が必要ですが、'String' が渡されました。[0m
+   30 | bad_calc1: Integer = 10 & "text";
+      |                         [1;31m^[0m
 
-[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_type_safety/test.je:31:30: [1;31mエラー:[0m[1m ビット演算子 '<<' には整数型 (Integer) が必要ですが、'String' が渡されました。[0m
-   31 | bad_calc2: Integer is "text" << 2;
-      |                              [1;31m^~[0m
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_type_safety/test.je:31:29: [1;31mエラー:[0m[1m ビット演算子 '<<' には整数型 (Integer) が必要ですが、'String' が渡されました。[0m
+   31 | bad_calc2: Integer = "text" << 2;
+      |                             [1;31m^~[0m
 
 [1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_type_safety/test.je:38:4: [1;31mエラー:[0m[1m メソッド 'println' に渡された引数の個数が一致しません (期待値: 0 個, 実際: 2 個)。[0m
-   38 | 10 println("余計な引数1", "余計な引数2");
+   38 | 10.println("余計な引数1", "余計な引数2");
       |    [1;31m^~~~~~~[0m
 
 [1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_type_safety/test.je:47:17: [1;31mエラー:[0m[1m 戻り値型が 'Void' (無型) の関数内では値を返せません ('Integer' が返されました)。[0m
    47 |     return 12345; // String を期待しているのに Integer を返している
       |                 [1;31m^[0m
 
-[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_type_safety/test.je:48:1: [1;31mエラー:[0m[1m 型 'Function(Integer; String)' の変数 'bad_fn' に型 'Function(Integer;)' の値を代入することはできません。[0m
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_type_safety/test.je:48:1: [1;31mエラー:[0m[1m 型 'Function(Integer; String)' の変数 'bad_fn' に型 'Function(Integer; Void)' の値を代入することはできません。[0m
    48 | ];
       | [1;31m^[0m
 
-[1;31m6 個のコンパイルエラーが検出されました。[0m
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_type_safety/test.je:61:53: [1;31mエラー:[0m[1m 関数 'run_callback' の第 1 引数の型が一致しません (期待される型: 'Function(Integer; String)', 実際の型: 'Function(String; String)')。[0m
+   61 | run_callback([ arg s: String; ret String; return s; ]);
+      |                                                     [1;31m^[0m
+
+[1;31m7 個のコンパイルエラーが検出されました。[0m

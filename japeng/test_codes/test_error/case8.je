@@ -4,6 +4,6 @@
  * 期待される出力
  * 実行時エラー: 加算 (OP_ADD) の型エラー: 数値同士である必要があります。
  */
-s: String is "abc";
-n: Integer is 10;
-x: Integer is s + n;
+s: String = "abc";
+n: Integer = 10;
+x: Integer = s + n;
