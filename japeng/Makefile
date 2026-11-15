@@ -32,7 +32,7 @@ TARGET_COMPILER = jpenc         # コンパイラ本体
 TARGET_RUN      = jpen          # VM ランタイム
 TARGET_PARSE    = jpen-parse    # パーサー単体テスト
 
-BUILTIN_CD      = lib/builtins.cd lib/Fraction.cd
+BUILTIN_CD      = lib/builtin/builtins.cd lib/builtin/Fraction.cd
 
 PREFIX  ?= /usr/local
 BINDIR  ?= $(PREFIX)/bin
