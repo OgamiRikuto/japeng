@@ -1,6 +1,6 @@
 // test_bench.je
 size: Integer = 10000;
-arr: List Integer = 0;
+arr: List<Integer> = 0;
 
 // 1. 10000 要素の配列を準備
 size.repeat [

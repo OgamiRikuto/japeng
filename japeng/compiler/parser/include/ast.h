@@ -76,6 +76,7 @@ struct ASTNode {
             ASTNode* receiver;
             ASTNode* message;
             ASTNode* args;
+            ASTNode* type_args;
         } send;
 
         struct {
@@ -90,6 +91,7 @@ struct ASTNode {
             ASTNode* identifier;
             ASTNode* type;
             ASTNode* default_val;
+            ASTNode* type_params;
         } var_decl;
         
         struct {

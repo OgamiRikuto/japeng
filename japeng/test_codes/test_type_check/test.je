@@ -60,7 +60,7 @@ add(10, "二十");
 // ==========================================
 
 // Integer を入れる Box を作成
-int_box: Box Integer;
+int_box: Box<Integer>;
 int_box.set(100);
 
 // auto 型推論テスト (get の戻り値 T が Integer に置換され、val は Integer になる！)

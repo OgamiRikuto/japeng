@@ -274,20 +274,6 @@ static void collect_block_arg_info(Compiler* c, ASTNode* node,
     }
 }
 
-// ブロックの引数型を収集する再帰ヘルパー
-// static void collect_block_arg_types(ASTNode* node, TypeInfo** list, int* count) 
-// {
-//     if (node == NULL) return;
-//     if (node->kind == AST_STMT) {
-//         collect_block_arg_types(node->stmt.left, list, count);
-//         collect_block_arg_types(node->stmt.right, list, count);
-//         return;
-//     }
-//     if (node->kind == AST_VAR_DECL) {
-//         list[(*count)++] = build_type_info(c, node->var_decl.type);
-//     }
-// }
-
 // 型情報の中の target_sym (sym_Auto) を replacement (具象型) に再帰置換する汎用関数
 static TypeInfo* replace_type_param(TypeInfo* type, Symbol* target_sym, TypeInfo* replacement)
 {
@@ -377,6 +363,45 @@ TypeInfo* build_function_type_from_block(Compiler* c, ASTNode* block_node)
     return fn_type;
 }
 
+static bool is_func_type_param(TypeInfo* fn_type, Symbol* sym) 
+{
+    for (int i = 0; i < fn_type->func_type_param_count; i++) {
+        if (fn_type->func_type_params[i] == sym) return true;
+    }
+    return false;
+}
+
+static void bind_inferred_type(TypeEnv* env, Symbol* param, TypeInfo* actual) 
+{
+    if (actual == NULL || actual->name == sym_Auto || actual->name == sym_Error) return;
+    for (int i = 0; i < env->count; i++) {
+        if (env->params[i] == param) return; // 既にバインド済みなら維持
+    }
+    if (env->count < MAX_TYPE_PARAMS) {
+        env->params[env->count] = param;
+        env->args[env->count]   = actual;
+        env->count++;
+    }
+}
+
+// 仮引数型 (formal) と実引数型 (actual) を再帰照合して TypeEnv に型引数を推論登録する
+static void infer_func_type_env(TypeInfo* fn_type, TypeInfo* formal, TypeInfo* actual, TypeEnv* env) 
+{
+    if (formal == NULL || actual == NULL) return;
+
+    if (is_func_type_param(fn_type, formal->name)) {
+        bind_inferred_type(env, formal->name, actual);
+        return;
+    }
+
+    if (formal->name == actual->name && formal->type_arg_count > 0 &&
+        formal->type_arg_count == actual->type_arg_count) {
+        for (int i = 0; i < formal->type_arg_count; i++) {
+            infer_func_type_env(fn_type, formal->type_args[i], actual->type_args[i], env);
+        }
+    }
+}
+
 // ASTやシグネチャ内の型変数を、実型に再帰置換する (上部に配置)
 TypeInfo* substitute_type(TypeInfo* formal, TypeEnv* env) 
 {
@@ -418,17 +443,6 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
     if (send_node == NULL || rec_type == NULL) return new_type_info(sym_Error, 0);
 
     Symbol* msg = resolve_name_alias(c, send_node->send.message->identifier.name);
-
-    // 辞書にあればメッセージ名を本名に変換！
-    // for (Compiler* comp = c; comp != NULL; comp = comp->enclosing) {
-    //     if (comp->dict_aliases != NULL) {
-    //         Value real_msg_val;
-    //         if (table_get(comp->dict_aliases, msg, &real_msg_val)) {
-    //             msg = (Symbol*)as_obj(real_msg_val);
-    //             break;
-    //         }
-    //     }
-    // }
 
     // 1. すでにエラーが出ている場合は、連鎖エラーを出さずに黙って Error を返す
     if (rec_type->name == sym_Error) {
@@ -509,7 +523,7 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
         return new_type_info(sym_Error, 0);
     }
 
-    // 3. 型環境のバインド (仮型引数 -> 実型引数)
+    // 3. 型環境のバインド (クラスの仮型引数 -> 実型引数)
     TypeEnv env;
     env.count = 0;
     if (klass->type != NULL) {
@@ -520,18 +534,14 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
         }
     }
 
-    // 4. シグネチャの完全置換
-    TypeInfo* concrete_fn_type = substitute_type(formal_fn_type, &env);
-
-    // 5. 引数の個数チェック
-    int min_argc = concrete_fn_type->min_param_count;
-    int max_argc = concrete_fn_type->param_count;
+    // 4. 引数の個数チェック
+    int min_argc = formal_fn_type->min_param_count;
+    int max_argc = formal_fn_type->param_count;
 
     ASTNode* args[16];
     int actual_argc = 0;
     collect_args(send_node->send.args, args, &actual_argc, 16);
 
-    // 引数個数が範囲外の場合にエラー
     if (actual_argc < min_argc || actual_argc > max_argc) {
         if (min_argc == max_argc) {
             error_compile(send_node, ERR_METHOD_ARITY_MISMATCH, msg->chars, max_argc, actual_argc);
@@ -541,23 +551,65 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
         return new_type_info(sym_Error, 0);
     }
 
+    // 5. 実引数の評価と型収集
+    TypeInfo* arg_types[16] = {0};
     for (int i = 0; i < actual_argc; i++) {
-        TypeInfo* arg_type = compile_expression(c, args[i]);
-        TypeInfo* expected_arg_type = concrete_fn_type->type_args[i];
+        arg_types[i] = compile_expression(c, args[i]);
+    }
 
-        if (expected_arg_type == NULL || !is_assignable(c, expected_arg_type, arg_type)) {
-            error_compile(args[i], ERR_METHOD_ARG_TYPE_MISMATCH, msg->chars, i + 1,
-                          type_to_string(expected_arg_type),
-                          type_to_string(arg_type));
+    // 5.5 メソッド固有の型パラメータ解決 (例: list.map<String>[...] または list.map[...])
+    if (formal_fn_type->func_type_param_count > 0) {
+        if (send_node->send.type_args != NULL) {
+            ASTNode* targ_nodes[MAX_TYPE_PARAMS];
+            int targ_count = 0;
+            collect_args(send_node->send.type_args, targ_nodes, &targ_count, MAX_TYPE_PARAMS);
+
+            if (targ_count != formal_fn_type->func_type_param_count) {
+                error_compile(send_node, ERR_GENERIC_TYPE_ARG_COUNT_MISMATCH,
+                              msg->chars, formal_fn_type->func_type_param_count, targ_count);
+            } else {
+                for (int k = 0; k < targ_count; k++) {
+                    env.params[env.count] = formal_fn_type->func_type_params[k];
+                    env.args[env.count]   = build_type_info(c, targ_nodes[k]);
+                    env.count++;
+                }
+            }
+        } else {
+            // 型引数省略時：実引数の型から推論
+            for (int i = 0; i < actual_argc && i < formal_fn_type->param_count; i++) {
+                infer_func_type_env(formal_fn_type, formal_fn_type->type_args[i], arg_types[i], &env);
+            }
+            for (int k = 0; k < formal_fn_type->func_type_param_count; k++) {
+                Symbol* tp = formal_fn_type->func_type_params[k];
+                bool found = false;
+                for (int e = 0; e < env.count; e++) {
+                    if (env.params[e] == tp) { found = true; break; }
+                }
+                if (!found) {
+                    error_compile(send_node, ERR_GENERIC_TYPE_INFERENCE_FAILED, tp->chars, msg->chars);
+                }
+            }
         }
     }
 
-    // 6. 省略されたデフォルト引数をスタックに補完する！
+    // 6. シグネチャの完全置換と実引数の型チェック
+    TypeInfo* concrete_fn_type = substitute_type(formal_fn_type, &env);
+
+    for (int i = 0; i < actual_argc; i++) {
+        TypeInfo* expected_arg_type = concrete_fn_type->type_args[i];
+        if (expected_arg_type == NULL || !is_assignable(c, expected_arg_type, arg_types[i])) {
+            error_compile(args[i], ERR_METHOD_ARG_TYPE_MISMATCH, msg->chars, i + 1,
+                          type_to_string(expected_arg_type),
+                          type_to_string(arg_types[i]));
+        }
+    }
+
+    // 7. 省略されたデフォルト引数をスタックに補完する！
     for (int i = actual_argc; i < max_argc; i++) {
         emit_constant(c, concrete_fn_type->default_values[i]);
     }
 
-    // 7. 最大引数数 (max_argc) で OP_SEND 発行！
+    // 8. 最大引数数 (max_argc) で OP_SEND 発行！
     ClassDef* rec_class = resolve_class(c, rec_type->name);
 
     if (is_class_receiver) {
@@ -744,7 +796,7 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                         fn_type = resolve_upvalue_type(c, msg);
                     }
 
-                    // 引数を集めてスタックに積む
+                    // 引数を集める
                     ASTNode* args[16];
                     int actual_argc = 0;
                     collect_args(node->send.args, args, &actual_argc, 16);
@@ -772,45 +824,90 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                     if (var_slot != -1) emit_inst(c, OP_GET_LOCAL, (uint32_t)var_slot);
                     else emit_inst(c, OP_GET_UPVALUE, (uint32_t)upval_slot);
 
-                    // 実引数の評価
+                    // 実引数を評価してスタックに積みつつ、型を記録する
+                    TypeInfo* arg_types[16] = {0};
                     for (int i = 0; i < actual_argc; i++) {
-                        TypeInfo* arg_type = compile_expression(c, args[i]);
+                        arg_types[i] = compile_expression(c, args[i]);
+                    }
 
-                        if (fn_type != NULL && fn_type->name == sym_Function && fn_type->type_arg_count > 0) {
-                            int expected_argc = fn_type->type_arg_count - 1;
-                            if (i < expected_argc) {
-                                TypeInfo* expected_arg_type = fn_type->type_args[i];
-                                if (expected_arg_type != NULL && !is_assignable(c, expected_arg_type, arg_type)) {
-                                    error_compile(args[i], ERR_FUNC_ARG_TYPE_MISMATCH, msg->chars, i + 1,
-                                                  type_to_string(expected_arg_type),
-                                                  type_to_string(arg_type));
+                    // ★ 関数ジェネリクスの型引数解決（明示指定または実引数からの型推論）
+                    TypeInfo* concrete_fn_type = fn_type;
+                    if (fn_type != NULL && fn_type->func_type_param_count > 0) {
+                        TypeEnv env;
+                        env.count = 0;
+
+                        if (node->send.type_args != NULL) {
+                            ASTNode* targ_nodes[MAX_TYPE_PARAMS];
+                            int targ_count = 0;
+                            collect_args(node->send.type_args, targ_nodes, &targ_count, MAX_TYPE_PARAMS);
+
+                            if (targ_count != fn_type->func_type_param_count) {
+                                error_compile(node, ERR_GENERIC_TYPE_ARG_COUNT_MISMATCH,
+                                              msg->chars, fn_type->func_type_param_count, targ_count);
+                            } else {
+                                for (int k = 0; k < targ_count; k++) {
+                                    env.params[env.count] = fn_type->func_type_params[k];
+                                    env.args[env.count]   = build_type_info(c, targ_nodes[k]);
+                                    env.count++;
+                                }
+                            }
+                        } else {
+                            // 型引数省略時：実引数型から仮引数型へ照合して自動推論
+                            for (int i = 0; i < actual_argc && i < fn_type->param_count; i++) {
+                                infer_func_type_env(fn_type, fn_type->type_args[i], arg_types[i], &env);
+                            }
+                            // 推論できなかった型パラメータがあればエラー
+                            for (int k = 0; k < fn_type->func_type_param_count; k++) {
+                                Symbol* tp = fn_type->func_type_params[k];
+                                bool found = false;
+                                for (int e = 0; e < env.count; e++) {
+                                    if (env.params[e] == tp) { found = true; break; }
+                                }
+                                if (!found) {
+                                    error_compile(node, ERR_GENERIC_TYPE_INFERENCE_FAILED, tp->chars, msg->chars);
                                 }
                             }
                         }
-                    }
 
-                    if (fn_type != NULL && fn_type->name == sym_Function) {
-                        for (int i = actual_argc; i < fn_type->param_count; i++) {
-                            emit_constant(c, fn_type->default_values[i]);
+                        if (env.count > 0) {
+                            concrete_fn_type = substitute_type(fn_type, &env);
                         }
                     }
 
-                    int call_argc = (fn_type && fn_type->name == sym_Function && fn_type->param_count > actual_argc)
-                                    ? fn_type->param_count : actual_argc;
+                    // 実引数の型チェック（具象化済みシグネチャで照合）
+                    if (concrete_fn_type != NULL && concrete_fn_type->name == sym_Function && concrete_fn_type->type_arg_count > 0) {
+                        int expected_argc = concrete_fn_type->param_count;
+                        for (int i = 0; i < actual_argc && i < expected_argc; i++) {
+                            TypeInfo* expected_arg_type = concrete_fn_type->type_args[i];
+                            if (expected_arg_type != NULL && expected_arg_type->name != sym_ellipsis &&
+                                !is_assignable(c, expected_arg_type, arg_types[i])) {
+                                error_compile(args[i], ERR_FUNC_ARG_TYPE_MISMATCH, msg->chars, i + 1,
+                                              type_to_string(expected_arg_type),
+                                              type_to_string(arg_types[i]));
+                            }
+                        }
+                    }
+
+                    if (concrete_fn_type != NULL && concrete_fn_type->name == sym_Function) {
+                        for (int i = actual_argc; i < concrete_fn_type->param_count; i++) {
+                            emit_constant(c, concrete_fn_type->default_values[i]);
+                        }
+                    }
+
+                    int call_argc = (concrete_fn_type && concrete_fn_type->name == sym_Function && concrete_fn_type->param_count > actual_argc)
+                                    ? concrete_fn_type->param_count : actual_argc;
                     emit_inst(c, OP_CALL, (uint32_t)call_argc);
 
-                    // 関数の戻り値型を返す（Function型の末尾が戻り値型）
-                    if (fn_type != NULL && fn_type->type_arg_count > 0) {
-                        int ret_count = fn_type->type_arg_count - fn_type->param_count;
+                    // 関数の戻り値型を返す
+                    if (concrete_fn_type != NULL && concrete_fn_type->type_arg_count > 0) {
+                        int ret_count = concrete_fn_type->type_arg_count - concrete_fn_type->param_count;
                         if (ret_count == 1) {
-                            return fn_type->type_args[fn_type->param_count];
+                            return concrete_fn_type->type_args[concrete_fn_type->param_count];
                         } else if (ret_count > 1) {
-                            // 多値戻り値型 (__multi__) としてパッケージ化して返す
                             TypeInfo* multi_ret = new_type_info(sym___multi__, ret_count);
                             for (int i = 0; i < ret_count; i++) {
-                                multi_ret->type_args[i] = fn_type->type_args[fn_type->param_count + i];
+                                multi_ret->type_args[i] = concrete_fn_type->type_args[concrete_fn_type->param_count + i];
                             }
-                            // スタック上には 2 つ以上の値が残るので、スタック深さを補正
                             c->stack_depth += (ret_count - 1);
                             return multi_ret;
                         }
@@ -1360,10 +1457,12 @@ static void type_to_string_rec(TypeInfo* type, char* out, size_t max_len)
     // 2. ジェネリクス・クラス型の場合 (例: List Integer)
     if (type->type_arg_count > 0) {
         strncat(out, type->name ? type->name->chars : "unknown", max_len - strlen(out) - 1);
+        strncat(out, "<", max_len - strlen(out) - 1);
         for (int i = 0; i < type->type_arg_count; i++) {
-            strncat(out, " ", max_len - strlen(out) - 1);
+            if (i > 0) strncat(out, ", ", max_len - strlen(out) - 1);
             type_to_string_rec(type->type_args[i], out, max_len);
         }
+        strncat(out, ">", max_len - strlen(out) - 1);
         return;
     }
 

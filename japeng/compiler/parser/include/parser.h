@@ -63,7 +63,7 @@ ASTNode* parse_member(Parser* p);
 ASTNode* parse_type(Parser* p);
 ASTNode* parse_type_arg_list(Parser* p);
 ASTNode* parse_type_list_comma(Parser* p);
-ASTNode* parse_type_list_commma_opt(Parser* p);
+ASTNode* parse_type_list_comma_opt(Parser* p);
 ASTNode* parse_statement(Parser* p);
 ASTNode* parse_identifier_decl(Parser* p);
 ASTNode* parse_multi_identifier(Parser* p);

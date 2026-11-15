@@ -1,14 +1,11 @@
 #include "module_loader.h"
+#include "preprocessor.h"
+#include "builtin_convert.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/stat.h>
 #include <dirent.h>
-
-#if defined(__APPLE__)
-#include <mach-o/dyld.h>
-#endif
 
 // ファイルが存在し、ディレクトリでないかを確認
 static bool file_exists(const char* path) 
@@ -22,56 +19,6 @@ static bool dir_exists(const char* path)
 {
     struct stat st;
     return (stat(path, &st) == 0 && S_ISDIR(st.st_mode));
-}
-
-// 前後の空白・改行・タブを除去
-static char* trim_whitespace(char* str) 
-{
-    while (*str == ' ' || *str == '\t' || *str == '\r' || *str == '\n') str++;
-    if (*str == '\0') return str;
-    char* end = str + strlen(str) - 1;
-    while (end > str && (*end == ' ' || *end == '\t' || *end == '\r' || *end == '\n')) {
-        *end = '\0';
-        end--;
-    }
-    return str;
-}
-
-// 実行ファイル (bin/jpenc) の場所から ../lib を特定
-static void get_std_lib_dir(char* out_buf, size_t buf_size) 
-{
-    char exe_path[1024] = {0};
-#if defined(__APPLE__)
-    uint32_t size = sizeof(exe_path);
-    if (_NSGetExecutablePath(exe_path, &size) != 0) {
-        snprintf(out_buf, buf_size, "./lib");
-        return;
-    }
-#else
-    ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
-    if (len == -1) {
-        snprintf(out_buf, buf_size, "./lib");
-        return;
-    }
-    exe_path[len] = '\0';
-#endif
-    char* slash = strrchr(exe_path, '/');
-    if (slash) *slash = '\0';
-
-    snprintf(out_buf, buf_size, "%s/../lib", exe_path);
-    struct stat st;
-    if (stat(out_buf, &st) != 0 || !S_ISDIR(st.st_mode)) {
-        snprintf(out_buf, buf_size, "./lib");
-    }
-}
-
-static const char* get_lang_code_from_ext(const char* filename) 
-{
-    if (!filename) return "en";
-    const char* dot = strrchr(filename, '.');
-    if (!dot) return "en";
-    if (strcmp(dot, ".jje") == 0 || strcmp(dot, ".jcd") == 0) return "ja";
-    return "en";
 }
 
 static bool try_resolve_candidate(char* out, size_t out_size, 
@@ -102,8 +49,9 @@ static bool try_resolve_candidate(char* out, size_t out_size,
 const char* resolve_module_file_path(const char* mod_name_arg, const char* cur_filename) 
 {
     static char resolved[1024];
-    const char* cur_lang = get_lang_code_from_ext(cur_filename);
-    const char* ext = (strcmp(cur_lang, "ja") == 0) ? ".jcd" : ".cd";
+    LanguageFrontend* fe = find_frontend_by_filename(cur_filename);
+    char ext[16];
+    snprintf(ext, sizeof(ext), ".%s", fe ? fe->ext_class : "cd");
 
     const char* slash = strrchr(mod_name_arg, '/');
     const char* file_name = slash ? slash + 1 : mod_name_arg;
@@ -122,10 +70,10 @@ const char* resolve_module_file_path(const char* mod_name_arg, const char* cur_f
 
     // 3. 標準ライブラリ
     char lib_dir[1024];
-    get_std_lib_dir(lib_dir, sizeof(lib_dir));
+    get_japeng_lib_dir_buf(lib_dir, sizeof(lib_dir));
 
     if (try_resolve_candidate(resolved, sizeof(resolved), lib_dir, mod_name_arg, file_name, ext)) return resolved;
-    
+
     char sub_dir[1024];
     snprintf(sub_dir, sizeof(sub_dir), "%s/std", lib_dir);
     if (try_resolve_candidate(resolved, sizeof(resolved), sub_dir, mod_name_arg, file_name, ext)) return resolved;
@@ -135,53 +83,40 @@ const char* resolve_module_file_path(const char* mod_name_arg, const char* cur_f
     return NULL;
 }
 
+static void register_module_alias_cb(const char* alias_str, const char* original_str, void* user_data)
+{
+    Compiler* c = (Compiler*)user_data;
+    if (c->dict_aliases == NULL) c->dict_aliases = new_table(16);
+    table_set(c->dict_aliases, intern_cstr(alias_str), make_obj((Obj*)intern_cstr(original_str)));
+}
+
 void load_module_dict(Compiler* c, const char* target_file, const char* cur_filename) 
 {
-    const char* cur_lang    = get_lang_code_from_ext(cur_filename);
-    const char* target_lang = get_lang_code_from_ext(target_file);
+    const char* cur_lang    = get_lang_code_from_filename(cur_filename);
+    const char* target_lang = get_lang_code_from_filename(target_file);
     if (strcmp(cur_lang, target_lang) == 0) return;
 
     char dir_part[1024];
     strncpy(dir_part, target_file, sizeof(dir_part) - 1);
+    dir_part[sizeof(dir_part) - 1] = '\0';
     char* slash = strrchr(dir_part, '/');
     const char* file_part = slash ? slash + 1 : target_file;
     if (slash) *slash = '\0';
 
     char base_name[128];
     strncpy(base_name, file_part, sizeof(base_name) - 1);
+    base_name[sizeof(base_name) - 1] = '\0';
     char* dot = strrchr(base_name, '.');
     if (dot) *dot = '\0';
 
     char dict_path[1024];
-    FILE* fp = NULL;
-
     if (slash) {
         snprintf(dict_path, sizeof(dict_path), "%s/dict/%s.dict.%s", dir_part, base_name, cur_lang);
-        fp = fopen(dict_path, "r");
+        if (parse_dict_file(dict_path, register_module_alias_cb, c)) return;
     }
-    if (!fp) {
-        snprintf(dict_path, sizeof(dict_path), "%s/%s.dict.%s", dir_part, base_name, cur_lang);
-        fp = fopen(dict_path, "r");
-    }
-    if (!fp) return;
 
-    if (c->dict_aliases == NULL) c->dict_aliases = new_table(16);
-
-    char line[256];
-    while (fgets(line, sizeof(line), fp)) {
-        char* trimmed = trim_whitespace(line);
-        if (trimmed[0] == '\0' || (trimmed[0] == '/' && trimmed[1] == '/') || trimmed[0] == '#') continue;
-
-        char* colon = strchr(trimmed, ':');
-        if (!colon) continue;
-
-        *colon = '\0';
-        char* alias_str    = trim_whitespace(trimmed);
-        char* original_str = trim_whitespace(colon + 1);
-
-        table_set(c->dict_aliases, intern_cstr(alias_str), make_obj((Obj*)intern_cstr(original_str)));
-    }
-    fclose(fp);
+    snprintf(dict_path, sizeof(dict_path), "%s/%s.dict.%s", dir_part, base_name, cur_lang);
+    parse_dict_file(dict_path, register_module_alias_cb, c);
 }
 
 // ディレクトリ内のすべての .bcd / .cd を一括インポートするヘルパー

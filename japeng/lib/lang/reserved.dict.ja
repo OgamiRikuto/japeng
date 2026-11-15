@@ -1,0 +1,52 @@
+// 予約語・構文キーワード
+クラス: class
+インターフェース: interface
+実装元は: implements
+基は: based
+委譲元は: from
+静的な: static
+親: super
+返り値: return
+返値: return
+自身: self
+引数: arg
+返す型: ret
+脱出: break
+ループ再開: continue
+もし: if
+またもし: elif
+その他なら: else
+繰り返す: repeat
+分岐: switch
+場合: case
+その他: default
+各々: each
+ウィズ: with
+導入: import
+導入元: from
+アズ: as
+かつ: and
+または: or
+真: true
+偽: false
+無: null
+
+// 制御構文の接続語（空白化）
+なら:
+ならば:
+の間:
+つつ:
+は:
+
+// 助詞・回数指定（ドット化）
+回繰り返す: .repeat
+から: .
+より: .
+まで: .
+して: .
+が: .
+に: .
+へ: .
+で: .
+を: .
+の: .

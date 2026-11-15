@@ -6,7 +6,7 @@ p.println;
 (p.x).println;
 (p.y).println;
 
-arr: List Integer = 0, 1, 2;
+arr: List<Integer> = 0, 1, 2;
 
 arr_print: Function = [
     arg n: Integer;

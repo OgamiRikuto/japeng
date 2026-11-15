@@ -1,5 +1,5 @@
 // 1. ジェネリックな Box クラスの定義
-class Box T:
+class Box<T>:
     value: T;
 
     set: Function = [

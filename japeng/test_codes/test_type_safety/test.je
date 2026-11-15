@@ -19,8 +19,8 @@ if (100) [
 // 【実験 2】異型ジェネリクス代入（型引数の照合スルー）
 // 期待される挙動: List String に List Integer は代入不可
 // -----------------------------------------------------------------------------
-int_list: List Integer = 1, 2, 3;
-str_list: List String = int_list; // 型引数 (Integer vs String) を無視して通らないか？
+int_list: List<Integer> = 1, 2, 3;
+str_list: List<String> = int_list; // 型引数 (Integer vs String) を無視して通らないか？
 
 
 // -----------------------------------------------------------------------------

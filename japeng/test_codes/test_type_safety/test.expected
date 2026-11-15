@@ -1,7 +1,7 @@
 [EXIT: ERROR]
-[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_type_safety/test.je:23:25: [1;31mエラー:[0m[1m 型 'List String' の変数 'str_list' に型 'List Integer' の値を代入することはできません。[0m
-   23 | str_list: List String = int_list; // 型引数 (Integer vs String) を無視して通らないか？
-      |                         [1;31m^~~~~~~~[0m
+[1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_type_safety/test.je:23:26: [1;31mエラー:[0m[1m 型 'List<String>' の変数 'str_list' に型 'List<Integer>' の値を代入することはできません。[0m
+   23 | str_list: List<String> = int_list; // 型引数 (Integer vs String) を無視して通らないか？
+      |                          [1;31m^~~~~~~~[0m
 
 [1m/Users/tamp/Desktop/JapEng/japeng/test_codes/test_type_safety/test.je:30:25: [1;31mエラー:[0m[1m ビット演算子 '&' には整数型 (Integer) が必要ですが、'String' が渡されました。[0m
    30 | bad_calc1: Integer = 10 & "text";

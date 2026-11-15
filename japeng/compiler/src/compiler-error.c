@@ -330,6 +330,18 @@ static const char* const error_table[ERR_COUNT][LANG_COUNT] = {
         [LANG_EN] = "Module '%s' not found.",
         [LANG_JA] = "モジュール '%s' が見つかりません。"
     },
+    [ERR_VAR_NAME_CONFLICTS_WITH_CLASS] = {
+        [LANG_EN] = "Variable name '%s' conflicts with an existing class name.",
+        [LANG_JA] = "変数名 '%s' は既存のクラス名と重複しているため宣言できません。"
+    },
+    [ERR_GENERIC_TYPE_ARG_COUNT_MISMATCH] = {
+        [LANG_EN] = "Generic function '%1$s' expects %2$d type argument(s), but got %3$d.",
+        [LANG_JA] = "ジェネリック関数 '%1$s' には %2$d 個の型引数が必要ですが、%3$d 個指定されました。"
+    },
+    [ERR_GENERIC_TYPE_INFERENCE_FAILED] = {
+        [LANG_EN] = "Cannot infer type parameter '%1$s' for generic function '%2$s'; specify type arguments explicitly.",
+        [LANG_JA] = "ジェネリック関数 '%2$s' の型パラメータ '%1$s' を推論できません。型引数を明示してください。"
+    },
 
     // // --- 実行時エラー ---
     // [ERR_UNDEFINED_GLOBAL] = {

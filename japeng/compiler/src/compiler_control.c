@@ -335,7 +335,8 @@ static void compile_block_args(Compiler* c, ASTNode* args_node, int* arity)
     }
 }
 
-ObjFunction* compile_block(Compiler* parent, ASTNode* block_node)
+ObjFunction* compile_block_with_type_params(Compiler* parent, ASTNode* block_node,
+                                            Symbol** type_params, int type_param_count)
 {
     Chunk* fn_chunk = (Chunk*)malloc(sizeof(Chunk));
     init_chunk(fn_chunk);
@@ -346,26 +347,30 @@ ObjFunction* compile_block(Compiler* parent, ASTNode* block_node)
     block_compiler.filename = parent ? parent->filename : NULL;
     block_compiler.imported_classes = parent ? parent->imported_classes : NULL;
     block_compiler.dict_aliases = parent ? parent->dict_aliases : NULL;
-    block_compiler.current_class = parent->current_class;
-    block_compiler.defined_class = parent->defined_class;
+    block_compiler.current_class = parent ? parent->current_class : NULL;
+    block_compiler.defined_class = parent ? parent->defined_class : NULL;
     block_compiler.is_static_method = parent ? parent->is_static_method : false;
+
+    // 関数ジェネリクスの型パラメータをセット
+    for (int i = 0; i < type_param_count && i < MAX_TYPE_PARAMS; i++) {
+        block_compiler.type_params[block_compiler.type_param_count++] = type_params[i];
+    }
 
     block_compiler.expected_ret_count = 0;
     if (block_node->block.rets != NULL) {
-        // AST_STMT で並んでいる ret の型ツリーをフラットに集める
-        collect_ret_types_from_ast(parent, block_node->block.rets, 
+        // &block_compiler を渡すことで ret 型の中の型パラメータも認識させる
+        collect_ret_types_from_ast(&block_compiler, block_node->block.rets, 
                                    block_compiler.expected_ret_types, 
                                    &block_compiler.expected_ret_count);
     } else {
-        // rets 省略時は Void 1個扱い
         block_compiler.expected_ret_types[0] = new_type_info(sym_Void, 0);
         block_compiler.expected_ret_count = 1;
     }
 
     if (parent != NULL && parent->current_class != NULL && parent->enclosing == NULL) {
         block_compiler.is_method = true;
-        block_compiler.locals[0].name  = sym_self; // または sym_self
-        block_compiler.locals[0].type  = parent->current_class->type; // クラスの型情報
+        block_compiler.locals[0].name  = sym_self;
+        block_compiler.locals[0].type  = parent->current_class->type;
         block_compiler.locals[0].depth = 0;
         block_compiler.local_count     = 1;
     } else {
@@ -386,16 +391,14 @@ ObjFunction* compile_block(Compiler* parent, ASTNode* block_node)
     Chunk* chunk = block_compiler.chunk;
     if (chunk->count == 0 || chunk->code[chunk->count - 1] != OP_RETURN) {
         if (block_compiler.is_method) {
-            // メソッドなら self (スロット 0) を積んでからリターン (Smalltalk流!)
             emit_inst(&block_compiler, OP_GET_LOCAL, 0);
         } else {
-            // 通常のブロックなら 0 や nil を積んでからリターン
             emit_constant(&block_compiler, make_int(0));
         }
         emit_inst(&block_compiler, OP_RETURN, 1);
     }
 
-    ObjFunction* fn =  new_function(fn_chunk, arity);
+    ObjFunction* fn = new_function(fn_chunk, arity);
 
     fn->upvalue_count = block_compiler.upvalue_count;
     if (fn->upvalue_count > 0) {
@@ -409,6 +412,11 @@ ObjFunction* compile_block(Compiler* parent, ASTNode* block_node)
     }
 
     return fn;
+}
+
+ObjFunction* compile_block(Compiler* parent, ASTNode* block_node)
+{
+    return compile_block_with_type_params(parent, block_node, NULL, 0);
 }
 
 void compile_switch(Compiler* c, ASTNode* node)

@@ -46,6 +46,15 @@ static TypeInfo* read_type_info(FILE* fp, Symbol** pool) {
     t->param_count = (int)param_count;
     t->min_param_count = (int)min_param_count;
 
+    uint8_t func_tp_count = 0;
+    fread(&func_tp_count, sizeof(uint8_t), 1, fp);
+    t->func_type_param_count = (int)func_tp_count;
+    for (int i = 0; i < t->func_type_param_count; i++) {
+        uint32_t tp_id = 0;
+        fread(&tp_id, sizeof(uint32_t), 1, fp);
+        t->func_type_params[i] = pool[tp_id];
+    }
+
     // デフォルト引数値の復元（簡易スキップまたは復元）
     for (int i = 0; i < t->param_count; i++) {
         uint8_t tag;

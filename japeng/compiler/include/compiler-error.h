@@ -102,6 +102,9 @@ typedef enum {
     ERR_WITH_REQUIRES_CLOSE,        // Close インターフェース未実装
     ERR_WITH_SYNTAX,                // 式またはブロックの不足
     ERR_MODULE_NOT_FOUND,
+    ERR_VAR_NAME_CONFLICTS_WITH_CLASS,
+    ERR_GENERIC_TYPE_ARG_COUNT_MISMATCH,
+    ERR_GENERIC_TYPE_INFERENCE_FAILED,
     
 
     // // --- 実行時エラー ---

@@ -139,13 +139,14 @@ ClassDef* resolve_class(Compiler* c, Symbol* name)
         }
     }
 
-    // 5. システム組み込みキャッシュ (Object, String 等の暗黙型のみ！)
-    // ★ is_builtin の場合だけ lib/.je_cache を見に行く（File 等の横取りを完全遮断）
+    // 5. システム組み込みキャッシュ
     if (is_builtin(name)) {
         const char* stdlib_dir = get_japeng_lib_dir();
+        char builtin_dir[1024];
+        snprintf(builtin_dir, sizeof(builtin_dir), "%s/builtin", stdlib_dir);
         char builtin_bcd[1024];
-        get_cache_filepath(stdlib_dir, name->chars, "bcd", builtin_bcd, sizeof(builtin_bcd));
-        if (is_cache_fresh(builtin_bcd, stdlib_dir)) {
+        get_cache_filepath(builtin_dir, name->chars, "bcd", builtin_bcd, sizeof(builtin_bcd));
+        if (is_cache_fresh(builtin_bcd, builtin_dir)) {
             ClassDef* loaded = load_class_type_from_bcd(c, builtin_bcd);
             if (loaded) return loaded;
         }
@@ -451,6 +452,33 @@ static void reserve_class_vtable_slots(Compiler* c, ClassDef* klass, ASTNode* no
     }
 }
 
+static TypeInfo* build_method_type_with_params(Compiler* c, ASTNode* block_node, ASTNode* type_params_node)
+{
+    Symbol* tparams[MAX_TYPE_PARAMS];
+    int tp_count = 0;
+    if (type_params_node != NULL) {
+        ASTNode* tp_nodes[MAX_TYPE_PARAMS];
+        collect_identifiers(type_params_node, tp_nodes, &tp_count);
+        for (int i = 0; i < tp_count; i++) {
+            tparams[i] = tp_nodes[i]->identifier.name;
+        }
+    }
+
+    int prev_tp_count = c->type_param_count;
+    for (int i = 0; i < tp_count && c->type_param_count < MAX_TYPE_PARAMS; i++) {
+        c->type_params[c->type_param_count++] = tparams[i];
+    }
+
+    TypeInfo* fn_type = build_function_type_from_block(c, block_node);
+    c->type_param_count = prev_tp_count;
+
+    fn_type->func_type_param_count = tp_count;
+    for (int i = 0; i < tp_count; i++) {
+        fn_type->func_type_params[i] = tparams[i];
+    }
+    return fn_type;
+}
+
 static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
 {
     if (node == NULL) return;
@@ -611,7 +639,6 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
         }
     }
 
-
     if (node->kind == AST_SEND) {
         Symbol* msg_sym = node->send.message->identifier.name;
         if (msg_sym != sym_assign) return;
@@ -622,6 +649,7 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
         Symbol* target_name = NULL;
         ASTNode* type_node   = NULL;
         ASTNode* from_node   = NULL;
+        ASTNode* type_params_node = NULL;
         bool is_static       = false;
 
         if (receiver->kind == AST_FIELD_DECL) {
@@ -630,9 +658,10 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
             from_node   = receiver->field_decl.from_class;
             is_static   = receiver->var_decl.is_static;
         } else if (receiver->kind == AST_VAR_DECL) {
-            target_name = receiver->var_decl.identifier->identifier.name;
-            type_node   = receiver->var_decl.type;
-            is_static   = receiver->var_decl.is_static;
+            target_name      = receiver->var_decl.identifier->identifier.name;
+            type_node        = receiver->var_decl.type;
+            type_params_node = receiver->var_decl.type_params;
+            is_static        = receiver->var_decl.is_static;
         } else if (receiver->kind == AST_IDENTIFIER) {
             target_name = receiver->identifier.name;
         }
@@ -657,13 +686,23 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
         }
 
         if (args && args->kind == AST_BLOCK) {
-            add_method_type(klass, target_name, build_function_type_from_block(c, args));
+            add_method_type(klass, target_name, build_method_type_with_params(c, args, type_params_node));
 
             if (args->block.body != NULL || !is_builtin(klass->name)) {
+                Symbol* tparams[MAX_TYPE_PARAMS];
+                int tp_count = 0;
+                if (type_params_node != NULL) {
+                    ASTNode* tp_nodes[MAX_TYPE_PARAMS];
+                    collect_identifiers(type_params_node, tp_nodes, &tp_count);
+                    for (int i = 0; i < tp_count; i++) {
+                        tparams[i] = tp_nodes[i]->identifier.name;
+                    }
+                }
+
                 c->current_class = klass;
                 c->is_method = true;
                 c->is_static_method = is_static;
-                ObjFunction* method_fn = compile_block(c, args);
+                ObjFunction* method_fn = compile_block_with_type_params(c, args, tparams, tp_count);
                 c->current_class = NULL;
                 c->is_method = false;
                 c->is_static_method = false;
@@ -872,18 +911,24 @@ static void declare_class_member_signatures(Compiler* c, ClassDef* klass, ASTNod
         ASTNode* args = node->send.args;
         Symbol* target_name = NULL;
         ASTNode* type_node = NULL;
+        ASTNode* type_params_node = NULL;
         bool is_static = false;
 
         if (receiver->kind == AST_IDENTIFIER) target_name = receiver->identifier.name;
-        else if (receiver->kind == AST_FIELD_DECL || receiver->kind == AST_VAR_DECL) {
+        else if (receiver->kind == AST_FIELD_DECL) {
             target_name = receiver->var_decl.identifier->identifier.name;
             type_node   = receiver->var_decl.type;
             is_static   = receiver->var_decl.is_static;
+        } else if (receiver->kind == AST_VAR_DECL) {
+            target_name      = receiver->var_decl.identifier->identifier.name;
+            type_node        = receiver->var_decl.type;
+            type_params_node = receiver->var_decl.type_params;
+            is_static        = receiver->var_decl.is_static;
         }
 
         // メソッドの場合
         if (target_name && args && args->kind == AST_BLOCK) {
-            add_method_type(klass, target_name, build_function_type_from_block(c, args));
+            add_method_type(klass, target_name, build_method_type_with_params(c, args, type_params_node));
             if (is_static) {
                 add_static_method(klass, target_name, make_nil());
             }

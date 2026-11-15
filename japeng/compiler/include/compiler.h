@@ -64,6 +64,9 @@ typedef struct compiler {
     Table* defined_class;
     int with_slots[MAX_WITH_DEPTH];
     int with_depth;
+
+    Symbol* type_params[MAX_TYPE_PARAMS];
+    int type_param_count;
 } Compiler;
 
 void init_compiler_symbols(void);

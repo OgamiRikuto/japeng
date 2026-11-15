@@ -6,8 +6,8 @@ bad_expr_default: Function(Integer; Void) = [
 ];
 
 // [C-4] 空リスト生成 (List new や []) をデフォルト値に指定
-bad_list_default: Function(List Integer; Void) = [
-    arg l: List Integer = 1;
+bad_list_default: Function(List<Integer>; Void) = [
+    arg l: List<Integer> = 1;
     ret Void;
     return;
 ];

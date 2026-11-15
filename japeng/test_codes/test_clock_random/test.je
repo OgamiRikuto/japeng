@@ -8,7 +8,7 @@ dt: Float = clk.restart;
 ("経過時間: " + (dt.toString) + " 秒").println;
 
 // 2. Random & shuffle テスト
-nums: List Integer = L[0, 1, 2, 3, 4, 5, 6];
+nums: List<Integer> = L[0, 1, 2, 3, 4, 5, 6];
 Random.shuffle(nums);
 nums.println;
 

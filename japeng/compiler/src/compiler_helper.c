@@ -29,6 +29,7 @@ void init_compiler(Compiler* compiler, Chunk* chunk)
     compiler->current_class = NULL;
     compiler->defined_class = NULL; // shared_classedをあとで渡される
     compiler->with_depth = 0;
+    compiler->type_param_count = 0;
 }
 
 void emit_inst(Compiler* c, Opcode op, uint32_t operand) {
@@ -459,4 +460,21 @@ Symbol* resolve_name_alias(Compiler* c, Symbol* name)
     }
 
     return name;
+}
+
+bool is_type_parameter(Compiler* c, Symbol* name)
+{
+    if (name == NULL || c == NULL) return false;
+
+    for (Compiler* comp = c; comp != NULL; comp = comp->enclosing) {
+        for (int i = 0; i < comp->type_param_count; i++) {
+            if (comp->type_params[i] == name) return true;
+        }
+        if (comp->current_class != NULL && comp->current_class->type != NULL) {
+            for (int i = 0; i < comp->current_class->type->type_arg_count; i++) {
+                if (comp->current_class->type->type_args[i]->name == name) return true;
+            }
+        }
+    }
+    return false;
 }

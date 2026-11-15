@@ -32,6 +32,9 @@ typedef enum {
     L_BLACKET,
     R_BLACKET,
     L_LIST_BLACKET,
+    GT,
+    LT,
+    SHR,
     UNKNOWN,
 
     // 識別子・リテラル

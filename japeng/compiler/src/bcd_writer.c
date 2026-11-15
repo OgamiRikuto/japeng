@@ -32,6 +32,9 @@ static uint32_t pool_add(BcdStringPool* pool, Symbol* str) {
 static void pool_collect_type_names(BcdStringPool* pool, TypeInfo* t) {
     if (t == NULL) return;
     pool_add(pool, t->name);
+    for (int i = 0; i < t->func_type_param_count; i++) {
+        pool_add(pool, t->func_type_params[i]);
+    }
     for (int i = 0; i < t->param_count; i++) {
         Value val = t->default_values[i];
         if (is_obj_type(val, OBJ_STRING)) {
@@ -193,6 +196,13 @@ static void write_type_info(FILE* fp, TypeInfo* t, BcdStringPool* pool) {
     fwrite(&type_arg_count, sizeof(uint16_t), 1, fp);
     fwrite(&param_count, sizeof(uint8_t), 1, fp);
     fwrite(&min_param_count, sizeof(uint8_t), 1, fp);
+
+    uint8_t func_tp_count = (uint8_t)t->func_type_param_count;
+    fwrite(&func_tp_count, sizeof(uint8_t), 1, fp);
+    for (int i = 0; i < t->func_type_param_count; i++) {
+        uint32_t tp_id = pool_add(pool, t->func_type_params[i]);
+        fwrite(&tp_id, sizeof(uint32_t), 1, fp);
+    }
 
     // デフォルト引数値の書き出し
     for (int i = 0; i < t->param_count; i++) {

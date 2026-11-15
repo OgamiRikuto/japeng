@@ -122,8 +122,8 @@ static Symbol* resolve_and_intern(const char* text) {
 "%"					{ yylval.symbol = sym_rem; return SP_IDENTIFIER; }
 "=="					{ yylval.symbol = sym_equal; return SP_IDENTIFIER; }
 "!="				{ yylval.symbol = sym_nequal; return SP_IDENTIFIER; }
-">"					{ yylval.symbol = sym_gt; return SP_IDENTIFIER; }
-"<"					{ yylval.symbol = sym_less; return SP_IDENTIFIER; }
+">"					{ yylval.symbol = sym_gt; return GT; }
+"<"					{ yylval.symbol = sym_less; return LT; }
 ">="				{ yylval.symbol = sym_nless; return SP_IDENTIFIER; }
 "<="				{ yylval.symbol = sym_ngt; return SP_IDENTIFIER; }
 "+="				{ yylval.symbol = sym_plus_eq; return SP_IDENTIFIER; }
@@ -136,7 +136,7 @@ static Symbol* resolve_and_intern(const char* text) {
 "<<="				{ yylval.symbol = sym_shl_eq; return SP_IDENTIFIER; }
 ">>="				{ yylval.symbol = sym_shr_eq; return SP_IDENTIFIER; }
 "<<"				{ yylval.symbol = sym_shl; return SP_IDENTIFIER; }
-">>"				{ yylval.symbol = sym_shr; return SP_IDENTIFIER; }
+">>"				{ yylval.symbol = sym_shr; return SHR; }
 "&"					{ yylval.symbol = sym_band;  return SP_IDENTIFIER; }
 "|"					{ yylval.symbol = sym_bor;   return SP_IDENTIFIER; }
 "^"					{ yylval.symbol = sym_bxor;  return SP_IDENTIFIER; }

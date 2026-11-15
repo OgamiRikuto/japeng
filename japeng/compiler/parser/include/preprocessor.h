@@ -6,7 +6,8 @@
 
 // 各自然言語フロントエンドが満たすべき共通インターフェース
 typedef struct {
-    OutputLang  lang;              // LANG_JA, LANG_DE など
+    OutputLang  lang;
+    const char* lang_code;
     const char* ext_script;
     const char* ext_class;
 
@@ -15,12 +16,13 @@ typedef struct {
     void        (*reset)(void);
     const char* (*lookup_symbol)(const char* placeholder);
 
-    // 外部モジュール辞書の動的登録
     void        (*register_module_dict)(const char* canonical_name, const char* localized_name);
 } LanguageFrontend;
 
 // --- ハブ API ---
 LanguageFrontend* find_frontend_by_ext(const char* ext);
+LanguageFrontend* find_frontend_by_filename(const char* filename);
+const char*       get_lang_code_from_filename(const char* filename);
 void set_active_frontend(LanguageFrontend* frontend);
 LanguageFrontend* get_active_frontend(void);
 

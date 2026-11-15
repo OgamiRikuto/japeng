@@ -1,0 +1,10 @@
+// 分数クラスとメソッド
+分数型: Fraction
+累乗: pow
+最小公倍数: gcd
+分子: num
+分母: den
+正の数か: isPositive
+整数か: isInteger
+ゼロか: isZero
+逆数: reciprocal

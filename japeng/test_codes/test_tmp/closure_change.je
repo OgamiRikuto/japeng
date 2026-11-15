@@ -1,4 +1,4 @@
-list: List Integer;
+list: List<Integer>;
 list.println;
 
 

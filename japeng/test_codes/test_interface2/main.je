@@ -2,14 +2,14 @@ c1: Circle = Circle(Point(0, 0), 1);
 r1: Rectangle = Rectangle(Point(0, 0), Point(1, 1));
 t1: Triangle = Triangle(Point(0, 0), Point(1, 1), Point(2, 2));
 
-objects: List Shape = c1, r1, t1;
+objects: List<Shape> = c1, r1, t1;
 
 objects.each [
     arg item: Shape;
     item.draw;
 ];
 
-objects2: List Draw = c1, r1, t1;
+objects2: List<Draw> = c1, r1, t1;
 
 objects2.each [
     arg item: Draw;

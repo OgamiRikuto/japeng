@@ -122,27 +122,33 @@ Token consume(Parser* p, int expected_type) {
     return bad_tok;
 }
 
-// 文法エラー発生時、次の文の開始位置 (セミコロンの直後や制御構文の先頭) まで読み飛ばす
 void synchronize(Parser* p) {
     p->panic_mode = false;
+    int bracket_depth = 0;
 
     if (peek_type(p, 0) != TOK_EOF) {
+        if (peek_type(p, 0) == L_BLACKET) bracket_depth++;
         advance(p);
     }
     while (peek_type(p, 0) != TOK_EOF) {
-        // 直前が ';' だったなら、すでに次の文の先頭に立っている
-        if (previous(p).type == SEMICOLON) return;
+        int prev_t = previous(p).type;
+        if (prev_t == SEMICOLON && bracket_depth == 0) return;
 
-        // 次の文の先頭になり得る主要なキーワードが来たら再開
-        switch (peek_type(p, 0)) {
-            case CLASS:
-            case INTERFACE:
-            case RETURN:
-            case BREAK:
-            case CONTINUE:
-                return;
-            default:
-                break;
+        int cur_t = peek_type(p, 0);
+        if (cur_t == L_BLACKET) bracket_depth++;
+        else if (cur_t == R_BLACKET && bracket_depth > 0) bracket_depth--;
+
+        if (bracket_depth == 0) {
+            switch (cur_t) {
+                case CLASS:
+                case INTERFACE:
+                case RETURN:
+                case BREAK:
+                case CONTINUE:
+                    return;
+                default:
+                    break;
+            }
         }
 
         advance(p);
@@ -152,9 +158,72 @@ void synchronize(Parser* p) {
 // ==================
 // パーサー本体
 // ==================
-static inline ASTNode* with_loc(ASTNode* node, Location loc) {
-    if (node) node->loc = loc;
-    return node;
+static Token consume_gt(Parser* p) 
+{
+    if (check(p, GT)) {
+        return advance(p);
+    }
+    if (check(p, SHR)) {
+        Token tok = p->tokens[p->pos];
+        p->tokens[p->pos].type   = GT;
+        p->tokens[p->pos].symbol = sym_gt;
+        tok.type   = GT;
+        tok.symbol = sym_gt;
+        return tok;
+    }
+    return consume(p, GT);
+}
+
+static bool has_generic_params_followed_by(Parser* p, int start_dist, int follow_tok) 
+{
+    if (peek_type(p, start_dist) != LT) return false;
+    int d = start_dist + 1;
+    int depth = 1;
+    while (peek_type(p, d) != TOK_EOF) {
+        int t = peek_type(p, d);
+        if (t == LT) {
+            depth++;
+        } else if (t == GT) {
+            depth--;
+            if (depth == 0) {
+                return peek_type(p, d + 1) == follow_tok;
+            }
+        } else if (t == SHR) {
+            depth -= 2;
+            if (depth <= 0) {
+                // depth == 0 なら ">>" の2つ目でちょうど閉じたので次を確認
+                return (depth == 0) && (peek_type(p, d + 1) == follow_tok);
+            }
+        } else if (t == SEMICOLON || t == L_BLACKET || t == R_BLACKET || t == R_PAR) {
+            return false;
+        }
+        d++;
+    }
+    return false;
+}
+
+static ASTNode* parse_type_param_list(Parser* p) 
+{
+    consume(p, LT);
+    ASTNode* root = NULL;
+    while (!check(p, TOK_EOF)) {
+        Token param_tok;
+        if (check(p, CLASS_NAME)) {
+            param_tok = consume(p, CLASS_NAME);
+        } else if (check(p, IDENTIFIER)) {
+            param_tok = consume(p, IDENTIFIER);
+        } else {
+            consume(p, CLASS_NAME);
+            break;
+        }
+        ASTNode* id_node = create_identifier_node(param_tok.symbol);
+        id_node->loc = param_tok.loc;
+        root = (root == NULL) ? id_node : create_stmt_node(root, id_node);
+
+        if (!match(p, COMMA)) break;
+    }
+    consume_gt(p);
+    return root;
 }
 
 ASTNode* parse_program(Parser* p)
@@ -402,21 +471,13 @@ ASTNode* parse_type(Parser* p)
         return create_class_node(name, NULL);
     }
 
-    // 2. 括弧で囲まれた型
-    if (match(p, L_PAR)) {
-        ASTNode* inner_type = parse_type(p);
-        consume(p, R_PAR);
-        return inner_type;
-    }
-
-    // 3. クラス名から始まる型
+    // 2. クラス名から始まる型
     if (check(p, CLASS_NAME)) {
         Token name_tok = consume(p, CLASS_NAME);
         ASTNode* name_node = create_identifier_node(name_tok.symbol);
 
-        // 3-A. 関数型シグネチャ
+        // 2-A. 関数型シグネチャ: Function(Arg1, Arg2; Ret1)
         if (check(p, L_PAR)) {
-            // 先読みしてジェネリクス括弧ではなく関数シグネチャか確認
             int d = 1;
             bool is_func_sig = false;
             while (peek_type(p, d) != TOK_EOF && peek_type(p, d) != R_PAR) {
@@ -429,21 +490,22 @@ ASTNode* parse_type(Parser* p)
 
             if (is_func_sig) {
                 consume(p, L_PAR);
-                ASTNode* args = parse_type_list_commma_opt(p);
+                ASTNode* args = parse_type_list_comma_opt(p);
                 consume(p, SEMICOLON);
-                ASTNode* rets = parse_type_list_commma_opt(p);
+                ASTNode* rets = parse_type_list_comma_opt(p);
                 consume(p, R_PAR);
                 return create_func_type_node(args, rets);
             }
         }
 
-        // 3-B. ジェネリクス型引数
-        if (check(p, CLASS_NAME) || check(p, L_PAR)) {
-            ASTNode* type_args = parse_type_arg_list(p);
+        // 2-B. ジェネリクス型引数: List<Integer>, List<List<Integer>>
+        if (match(p, LT)) {
+            ASTNode* type_args = parse_type_list_comma(p);
+            consume_gt(p);
             return create_class_node(name_node, type_args);
         }
 
-        // 3-C. 単独のクラス型
+        // 2-C. 単独のクラス型
         return create_class_node(name_node, NULL);
     }
 
@@ -479,7 +541,7 @@ ASTNode* parse_type_list_comma(Parser* p)
     return root;
 }
 
-ASTNode* parse_type_list_commma_opt(Parser* p)
+ASTNode* parse_type_list_comma_opt(Parser* p)
 {
     if (check(p, CLASS_NAME) || check(p, L_PAR) || check(p, ELLIPSIS)) {
         return parse_type_list_comma(p);
@@ -557,11 +619,12 @@ ASTNode* parse_statement(Parser* p)
         }
     }
 
-    // 4. 単一変数宣言
-    if ((check(p, IDENTIFIER) || check(p, SP_IDENTIFIER)) && peek_type(p, 1) == COLON) {
+    // 4. 単一変数宣言 (x: Type または func<T>: Function)
+    if ((check(p, IDENTIFIER) || check(p, SP_IDENTIFIER)) &&
+        (peek_type(p, 1) == COLON || has_generic_params_followed_by(p, 1, COLON))) {
         ASTNode* decl = parse_identifier_decl(p);
 
-        // x: Integer is 10;
+        // x: Integer = 10;
         if (match(p, ASSIGN_IDENTIFIER)) {
             Token op = previous(p);
             ASTNode* vals = parse_expr_list(p);
@@ -605,18 +668,29 @@ ASTNode* parse_statement(Parser* p)
 ASTNode* parse_identifier_decl(Parser* p)
 {
     Token id_tok;
-    if (check(p, IDENTIFIER)) {
-        id_tok = consume(p, IDENTIFIER);
-    } else if (check(p, SP_IDENTIFIER)) {
-        id_tok = consume(p, SP_IDENTIFIER);
+    Symbol* id_sym = NULL;
+    if (check(p, IDENTIFIER) || check(p, SP_IDENTIFIER) ||
+        check(p, LT) || check(p, GT) || check(p, SHR)) {
+        id_tok = advance(p);
+        id_sym = id_tok.symbol;
+        if (id_tok.type == LT)  id_sym = sym_less;
+        if (id_tok.type == GT)  id_sym = sym_gt;
+        if (id_tok.type == SHR) id_sym = sym_shr;
     } else {
         consume(p, IDENTIFIER);
         return NULL;
     }
 
+    ASTNode* type_params = NULL;
+    if (check(p, LT)) {
+        type_params = parse_type_param_list(p);
+    }
+
     consume(p, COLON);
     ASTNode* type_node = parse_type(p);
-    return create_vardecl_node(create_identifier_node(id_tok.symbol), type_node);
+    ASTNode* decl = create_vardecl_node(create_identifier_node(id_sym), type_node);
+    decl->var_decl.type_params = type_params;
+    return decl;
 }
 
 ASTNode* parse_multi_identifier(Parser* p)
@@ -658,10 +732,15 @@ ASTNode* parse_expression(Parser* p)
 {
     ASTNode* left = parse_unary(p);
 
-    // 二項演算子 (+, -, *, /, ==, !=, and, or など)
-    while (check(p, SP_IDENTIFIER)) {
-        Token op_tok = consume(p, SP_IDENTIFIER);
-        ASTNode* op_node = create_identifier_node(op_tok.symbol);
+    // 二項演算子 (+, -, *, /, ==, !=, <, >, >>, and, or など)
+    while (check(p, SP_IDENTIFIER) || check(p, LT) || check(p, GT) || check(p, SHR)) {
+        Token op_tok = advance(p);
+        Symbol* op_sym = op_tok.symbol;
+        if (op_tok.type == LT)  op_sym = sym_less;
+        if (op_tok.type == GT)  op_sym = sym_gt;
+        if (op_tok.type == SHR) op_sym = sym_shr;
+
+        ASTNode* op_node = create_identifier_node(op_sym);
         op_node->loc = op_tok.loc;
 
         ASTNode* right = parse_message(p);
@@ -676,7 +755,8 @@ ASTNode* parse_expression(Parser* p)
 
 ASTNode* parse_receiver(Parser* p)
 {
-    if ((check(p, IDENTIFIER) || check(p, SP_IDENTIFIER)) && peek_type(p, 1) == COLON) {
+    if ((check(p, IDENTIFIER) || check(p, SP_IDENTIFIER)) &&
+        (peek_type(p, 1) == COLON || has_generic_params_followed_by(p, 1, COLON))) {
         return parse_identifier_decl(p);
     }
     return parse_primary(p);
@@ -729,11 +809,19 @@ ASTNode* parse_message(Parser* p)
         }
     }
 
-    // 2. 暗黙の self メソッド呼び出し: foo(...)
+    // 2. 暗黙の self メソッド呼び出し: foo(...) または foo<Integer>(...)
     ASTNode* node = NULL;
-    if (check(p, IDENTIFIER) && peek_type(p, 1) == L_PAR) {
+    if (check(p, IDENTIFIER) &&
+        (peek_type(p, 1) == L_PAR || has_generic_params_followed_by(p, 1, L_PAR))) {
         Token msg_tok = consume(p, IDENTIFIER);
         Location call_loc = msg_tok.loc;
+
+        ASTNode* type_args = NULL;
+        if (match(p, LT)) {
+            type_args = parse_type_list_comma(p);
+            consume_gt(p);
+        }
+
         consume(p, L_PAR);
         ASTNode* args = NULL;
         if (!check(p, R_PAR)) {
@@ -746,20 +834,27 @@ ASTNode* parse_message(Parser* p)
         ASTNode* msg = create_identifier_node(msg_tok.symbol);
         msg->loc = call_loc;
         node = create_send_node(self_node, msg, args);
+        node->send.type_args = type_args;
         node->loc = call_loc;
     } else {
         // 3. 通常のレシーバー取得
         node = parse_receiver(p);
     }
 
-    // メソッド呼び出しやメソッドチェーンのループ
+    // メソッド呼び出しやメソッドチェーンのループ（ドット '.' 必須）
     while (true) {
-        // A. ドット付きメソッド呼出: node.method(...) または node.+ expr
         if (match(p, DOT)) {
             if (check(p, IDENTIFIER)) {
                 Token msg_tok = consume(p, IDENTIFIER);
                 ASTNode* msg_node = create_identifier_node(msg_tok.symbol);
                 msg_node->loc = msg_tok.loc;
+
+                ASTNode* type_args = NULL;
+                if (has_generic_params_followed_by(p, 0, L_PAR)) {
+                    consume(p, LT);
+                    type_args = parse_type_list_comma(p);
+                    consume_gt(p);
+                }
 
                 ASTNode* args = NULL;
                 if (match(p, L_PAR)) {
@@ -771,6 +866,7 @@ ASTNode* parse_message(Parser* p)
                     args = (args == NULL) ? blk : create_stmt_node(args, blk);
                 }
                 ASTNode* send = create_send_node(node, msg_node, args);
+                send->send.type_args = type_args;
                 send->loc = msg_tok.loc;
                 node = send;
             } else if (check(p, SP_IDENTIFIER)) {
@@ -783,13 +879,11 @@ ASTNode* parse_message(Parser* p)
                 send->loc = op_tok.loc;
                 node = send;
             } else {
-                // '.' の直後に識別子も演算子も来なかった場合
                 consume(p, IDENTIFIER);
             }
             continue;
         }
 
-        // B. 添字アクセス: node[expr]
         if (match(p, L_BLACKET)) {
             ASTNode* index_expr = parse_expression(p);
             consume(p, R_BLACKET);
@@ -916,28 +1010,15 @@ ASTNode* parse_primary(Parser* p)
     else if (match(p, IDENTIFIER)) {
         node = create_identifier_node(previous(p).symbol);
     }
-    // 6. クラスインスタンス化: ClassName(...) または ClassName TypeArgs(...) または クラスオブジェクト単体
-   else if (check(p, CLASS_NAME)) {
+    // 6. クラスインスタンス化: ClassName(...) または ClassName<TypeArgs>(...)
+    else if (check(p, CLASS_NAME)) {
         Token name_tok = consume(p, CLASS_NAME);
         ASTNode* name_node = create_identifier_node(name_tok.symbol);
         ASTNode* type_args = NULL;
 
-        if (check(p, CLASS_NAME)) {
-            // 型引数の後ろにコンストラクタ呼び出し '(' があるか確認
-            int d = 1;
-            while (peek_type(p, d) != TOK_EOF && peek_type(p, d) != L_PAR && peek_type(p, d) != SEMICOLON) d++;
-            if (peek_type(p, d) == L_PAR) {
-                int l_par_pos = p->pos + d;
-                
-                // '(' の手前までだけ型引数としてパースする
-                ASTNode* root = NULL;
-                while (p->pos < l_par_pos && check(p, CLASS_NAME)) {
-                    Token tok = consume(p, CLASS_NAME);
-                    ASTNode* item = create_class_node(create_identifier_node(tok.symbol), NULL);
-                    root = (root == NULL) ? item : create_stmt_node(root, item);
-                }
-                type_args = root;
-            }
+        if (match(p, LT)) {
+            type_args = parse_type_list_comma(p);
+            consume_gt(p);
         }
 
         ASTNode* klass = create_class_node(name_node, type_args);

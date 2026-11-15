@@ -76,6 +76,7 @@ ASTNode* create_send_node(ASTNode* receiver, ASTNode* message, ASTNode* args)
     node->send.receiver = receiver;
     node->send.message = message;
     node->send.args = args;
+    node->send.type_args = NULL;
     return node;
 }
 
@@ -96,6 +97,7 @@ ASTNode* create_vardecl_node(ASTNode* identifier, ASTNode* type)
     node->var_decl.identifier = identifier;
     node->var_decl.type = type;
     node->var_decl.default_val = NULL;
+    node->var_decl.type_params = NULL;
     return node;
 }
 

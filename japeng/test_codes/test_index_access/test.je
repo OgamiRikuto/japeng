@@ -1,6 +1,6 @@
 // test_index.je
-list: List Integer = L[10, 20, 30];
-arr: List (List Integer) = L[list];
+list: List<Integer> = L[10, 20, 30];
+arr: List <List<Integer>> = L[list];
 
 arr[0][1].println;
 

@@ -54,6 +54,7 @@ Value parse_ast_literal_with_expected(ASTNode* node, TypeInfo* expected_type, Ty
 void collect_args(ASTNode* node, ASTNode** list, int* count, int max);
 void collect_ret_types_from_ast(Compiler* c, ASTNode* node, TypeInfo** list, int* count);
 void collect_identifiers(ASTNode* node, ASTNode** list, int* count);
+bool is_type_parameter(Compiler* c, Symbol* name);
 
 // 基本構文コンパイル関数
 bool compile_compound_assignment(Compiler* c, ASTNode* node);
@@ -74,6 +75,7 @@ void compile_switch(Compiler* c, ASTNode* node);
 void compile_each(Compiler* c, ASTNode* node);
 void emit_close_resource(Compiler* c, int slot);
 void compile_with(Compiler* c, ASTNode* node);
+ObjFunction* compile_block_with_type_params(Compiler* parent, ASTNode* block_node, Symbol** type_params, int type_param_count);
 
 // クラスコンパイル関数
 TypeInfo* build_type_info(Compiler* c, ASTNode* node);

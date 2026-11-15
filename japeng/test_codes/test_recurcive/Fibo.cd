@@ -19,7 +19,7 @@ class Fibo:
     run3: Function = [
         arg n: Integer;
         ret Integer;
-        arr: List Integer = 0, 1;
+        arr: List<Integer> = 0, 1;
         n.repeat [
             arg i: Integer;
             n1: Integer = arr[i];
@@ -32,7 +32,7 @@ class Fibo:
     run4: Function = [
         arg n: Integer;
         ret Integer;
-        arr: List Integer = 0, 1;
+        arr: List<Integer> = 0, 1;
         n.repeat [
             arg i: Integer;
             n1: Integer = arr.get(i);

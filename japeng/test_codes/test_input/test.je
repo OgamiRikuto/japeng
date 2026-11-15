@@ -1,9 +1,9 @@
 string: String = input("前後に空白込みで入力：").trim;
 string.println;
-list: List String = input("カンマ区切りで入力：").split(",");
+list: List<String> = input("カンマ区切りで入力：").split(",");
 list.println;
 
-arr: List String = input("カンマ区切りで入力").split (",").map [ arg s: String; ret String; return s.trim;];
+arr: List<String> = input("カンマ区切りで入力").split (",").map [ arg s: String; ret String; return s.trim;];
 arr.println;
 
 a: Integer = 0;

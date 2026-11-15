@@ -1,163 +1,205 @@
 #include "builtin_convert.h"
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <dirent.h>
+#include <sys/stat.h>
 
-// 予約語・構文キーワードテーブル
-static const KeywordDef keyword_table[] = {
-    // 既存の lex トークンに対応するもの
-    { "class ",   "クラス" },
-    { "interface ", "インターフェース" },
-    { "implements ", "実装元は" },
-    //{ "class ",   "型定義" },
-    { "based ",   "基は"   },
-    { "from ",    "委譲元は" },
-    { "super ",    "親"     },   
-    { "return ",    "返値は" },
-    { "return ",  "返値"   },
-    { "self ",    "自身"   },
-    { "arg ",      "引数"   },
-    { "ret ",      "返す型" },
-    { "break ",    "脱出"   },
-    { "continue ", "ループ再開" },
-    { "if ",       "もし"},
-    { "elif ",     "またもし"},
-    { "else ",     "その他なら"},
-    { "repeat ",   "繰り返す"},
-    { "switch",     "分岐"},
-    { "case",       "場合"},
-    { "default",    "その他"},
-    { "each",       "各々"},
-    { "with",       "ウィズ"}, 
-    { "import",     "導入"}, 
-    { "as",         "アズ"},
-    { "and",       "かつ"},
-    { "or",        "または"},
-    { "true",      "真"},
-    { "false",     "偽"},
-    { "null",      "無"},
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 
-    // プリプロセスで構文展開・正規化される独自予約語
-    { " is ",     "は"     },
+#define MAX_DICT_ENTRIES 1024
 
-    { NULL, NULL } // 番兵
-};
+static DictEntry builtin_entries[MAX_DICT_ENTRIES];
+static int builtin_count = 0;
 
-static const BuiltinDef builtin_table[] = {
-    // --- 組み込み型 (BUILTIN_TYPE) ---
-    { "Function",     "関数型",       BUILTIN_TYPE },
-    { "Object",       "オブジェクト型", BUILTIN_TYPE },
-    { "Integer",      "整数型",       BUILTIN_TYPE },
-    { "SmallInteger", "小整数型",     BUILTIN_TYPE },
-    { "BigInteger",   "大整数型",     BUILTIN_TYPE },
-    { "Float",        "実数型",       BUILTIN_TYPE },
-    { "SmallFloat",   "小実数型",     BUILTIN_TYPE },
-    { "BigFloat",     "大実数型",     BUILTIN_TYPE },
-    { "String",       "文字列型",     BUILTIN_TYPE },
-    { "List",         "リスト型",     BUILTIN_TYPE },
-    { "Boolean",      "論理型",       BUILTIN_TYPE },
-    { "Void",         "無型",         BUILTIN_TYPE },
-    
-    // --- 組み込みメソッド (BUILTIN_METHOD) ---
-    { "print",        "出力",         BUILTIN_METHOD },
-    { "println",      "行出力",       BUILTIN_METHOD },
-    { "input",        "入力",         BUILTIN_METHOD },
-    { "pow",          "累乗",         BUILTIN_METHOD },
-    { "gcd",          "最小公倍数",    BUILTIN_METHOD },
-    { "init",         "初期化",       BUILTIN_METHOD },
-    { "destroy",      "破棄",         BUILTIN_METHOD }, 
-    { "get",          "取得",         BUILTIN_METHOD },
-    { "length",       "長さ",         BUILTIN_METHOD },
-    { "split",        "区切る",       BUILTIN_METHOD },
-    { "trim",         "トリム",       BUILTIN_METHOD },
-    { "push",         "追加",         BUILTIN_METHOD },
-    { "set",          "変更",         BUILTIN_METHOD },
-    { "swap",         "入れ替え",     BUILTIN_METHOD },
-    { "map",          "マップ",       BUILTIN_METHOD },
-    
-    { NULL, NULL, 0 }
-};
+static DictEntry keyword_entries[MAX_DICT_ENTRIES];
+static int keyword_count = 0;
 
-static const char* get_localized_name(const BuiltinDef* def, OutputLang lang) {
+static char loaded_lang_code[32] = {0};
+
+const char* output_lang_to_code(OutputLang lang) {
     switch (lang) {
-        case LANG_JA: return def->ja;
-        case LANG_EN: default: return def->canonical_en;
+        case LANG_JA: return "ja";
+        case LANG_EN:
+        default:      return "en";
     }
 }
 
-const char* builtin_to_canonical(const char* name, size_t len, OutputLang lang, BuiltinKind* out_kind) {
-    for (int i = 0; builtin_table[i].canonical_en != NULL; i++) {
-        const char* loc_name = get_localized_name(&builtin_table[i], lang);
-        if (loc_name && strlen(loc_name) == len && strncmp(name, loc_name, len) == 0) {
-            if (out_kind) *out_kind = builtin_table[i].kind;
-            return builtin_table[i].canonical_en;
+void get_japeng_lib_dir_buf(char* out_buf, size_t buf_size) {
+    char exe_path[1024] = {0};
+#if defined(__APPLE__)
+    uint32_t size = sizeof(exe_path);
+    if (_NSGetExecutablePath(exe_path, &size) == 0) {
+        char* slash = strrchr(exe_path, '/');
+        if (slash) *slash = '\0';
+        snprintf(out_buf, buf_size, "%s/../lib", exe_path);
+        struct stat st;
+        if (stat(out_buf, &st) == 0 && S_ISDIR(st.st_mode)) return;
+    }
+#endif
+    snprintf(out_buf, buf_size, "./lib");
+}
+
+static char* trim_ws(char* str) {
+    while (*str == ' ' || *str == '\t' || *str == '\r' || *str == '\n') str++;
+    if (*str == '\0') return str;
+    char* end = str + strlen(str) - 1;
+    while (end > str && (*end == ' ' || *end == '\t' || *end == '\r' || *end == '\n')) {
+        *end = '\0';
+        end--;
+    }
+    return str;
+}
+
+bool parse_dict_file(const char* filepath, DictEntryCallback callback, void* user_data) {
+    FILE* fp = fopen(filepath, "r");
+    if (!fp) return false;
+
+    char line[512];
+    while (fgets(line, sizeof(line), fp)) {
+        char* trimmed = trim_ws(line);
+        if (trimmed[0] == '\0' || (trimmed[0] == '/' && trimmed[1] == '/') || trimmed[0] == '#') {
+            continue;
+        }
+        char* colon = strchr(trimmed, ':');
+        if (!colon) continue;
+
+        *colon = '\0';
+        char* key = trim_ws(trimmed);
+        char* val = trim_ws(colon + 1);
+        if (key[0] == '\0') continue;
+
+        callback(key, val, user_data);
+    }
+    fclose(fp);
+    return true;
+}
+
+typedef struct {
+    DictEntry* table;
+    int* count;
+} DictArrayCtx;
+
+static void append_dict_entry(const char* key, const char* val, void* user_data) {
+    DictArrayCtx* ctx = (DictArrayCtx*)user_data;
+    if (*(ctx->count) >= MAX_DICT_ENTRIES) return;
+    ctx->table[*(ctx->count)].localized    = strdup(key);
+    ctx->table[*(ctx->count)].canonical_en = strdup(val);
+    (*(ctx->count))++;
+}
+
+static void clear_dict_table(DictEntry* table, int* count) {
+    for (int i = 0; i < *count; i++) {
+        free(table[i].localized);
+        free(table[i].canonical_en);
+    }
+    *count = 0;
+}
+
+static void ensure_dicts_loaded(const char* lang_code) {
+    if (!lang_code || lang_code[0] == '\0' || strcmp(lang_code, "en") == 0) return;
+    if (strcmp(loaded_lang_code, lang_code) == 0) return;
+
+    clear_dict_table(builtin_entries, &builtin_count);
+    clear_dict_table(keyword_entries, &keyword_count);
+    strncpy(loaded_lang_code, lang_code, sizeof(loaded_lang_code) - 1);
+
+    char lib_dir[1024];
+    get_japeng_lib_dir_buf(lib_dir, sizeof(lib_dir));
+
+    // 1. 予約語・助詞辞書のロード (lib/lang/reserved.dict.<lang_code>)
+    char reserved_path[1024];
+    snprintf(reserved_path, sizeof(reserved_path), "%s/lang/reserved.dict.%s", lib_dir, lang_code);
+    DictArrayCtx kw_ctx = { keyword_entries, &keyword_count };
+    parse_dict_file(reserved_path, append_dict_entry, &kw_ctx);
+
+    // 2. 組み込みクラス辞書のロード (lib/builtin/dict/*.dict.<lang_code>)
+    char suffix[64];
+    snprintf(suffix, sizeof(suffix), ".dict.%s", lang_code);
+    size_t suffix_len = strlen(suffix);
+
+    char builtin_dict_dir[1024];
+    snprintf(builtin_dict_dir, sizeof(builtin_dict_dir), "%s/builtin/dict", lib_dir);
+    DIR* dir = opendir(builtin_dict_dir);
+    if (dir) {
+        DictArrayCtx bi_ctx = { builtin_entries, &builtin_count };
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != NULL) {
+            size_t name_len = strlen(entry->d_name);
+            if (name_len > suffix_len && strcmp(entry->d_name + name_len - suffix_len, suffix) == 0) {
+                char full_path[1024];
+                snprintf(full_path, sizeof(full_path), "%s/%s", builtin_dict_dir, entry->d_name);
+                parse_dict_file(full_path, append_dict_entry, &bi_ctx);
+            }
+        }
+        closedir(dir);
+    }
+}
+
+const char* builtin_to_canonical(const char* name, size_t len, OutputLang lang) {
+    const char* lang_code = output_lang_to_code(lang);
+    if (strcmp(lang_code, "en") == 0) return NULL;
+    ensure_dicts_loaded(lang_code);
+
+    for (int i = 0; i < builtin_count; i++) {
+        const char* loc = builtin_entries[i].localized;
+        if (loc && strlen(loc) == len && strncmp(name, loc, len) == 0) {
+            return builtin_entries[i].canonical_en;
         }
     }
     return NULL;
 }
 
-const BuiltinDef* builtin_match_prefix(const char* src, OutputLang lang, size_t* out_matched_len) {
-    const BuiltinDef* best_match = NULL;
+const DictEntry* builtin_match_prefix(const char* src, const char* lang_code, size_t* out_matched_len) {
+    if (!lang_code || strcmp(lang_code, "en") == 0) return NULL;
+    ensure_dicts_loaded(lang_code);
+
+    const DictEntry* best = NULL;
     size_t max_len = 0;
-
-    for (int i = 0; builtin_table[i].canonical_en != NULL; i++) {
-        const char* loc_name = get_localized_name(&builtin_table[i], lang);
-        if (!loc_name) continue;
-
-        size_t len = strlen(loc_name);
-        if (strncmp(src, loc_name, len) == 0) {
-            if (len > max_len) {
-                max_len = len;
-                best_match = &builtin_table[i];
-            }
+    for (int i = 0; i < builtin_count; i++) {
+        const char* loc = builtin_entries[i].localized;
+        if (!loc) continue;
+        size_t len = strlen(loc);
+        if (strncmp(src, loc, len) == 0 && len > max_len) {
+            max_len = len;
+            best = &builtin_entries[i];
         }
     }
-
-    if (best_match && out_matched_len) {
-        *out_matched_len = max_len;
-    }
-    return best_match;
+    if (best && out_matched_len) *out_matched_len = max_len;
+    return best;
 }
 
 const char* builtin_from_canonical(const char* canonical_en, OutputLang lang) {
     if (!canonical_en) return "";
-    if (lang == LANG_EN) return canonical_en;
+    const char* lang_code = output_lang_to_code(lang);
+    if (strcmp(lang_code, "en") == 0) return canonical_en;
+    ensure_dicts_loaded(lang_code);
 
-    for (int i = 0; builtin_table[i].canonical_en != NULL; i++) {
-        if (strcmp(canonical_en, builtin_table[i].canonical_en) == 0) {
-            const char* loc_name = get_localized_name(&builtin_table[i], lang);
-            return loc_name ? loc_name : canonical_en;
+    for (int i = 0; i < builtin_count; i++) {
+        if (strcmp(canonical_en, builtin_entries[i].canonical_en) == 0) {
+            return builtin_entries[i].localized;
         }
     }
     return canonical_en;
 }
 
+const DictEntry* keyword_match_prefix(const char* src, const char* lang_code, size_t* out_matched_len) {
+    if (!lang_code || strcmp(lang_code, "en") == 0) return NULL;
+    ensure_dicts_loaded(lang_code);
 
-static const char* get_keyword_localized(const KeywordDef* def, OutputLang lang) {
-    switch (lang) {
-        case LANG_JA: return def->ja;
-        case LANG_EN: default: return def->replacement;
-    }
-}
-
-// 予約語の最長一致検索
-const KeywordDef* keyword_match_prefix(const char* src, OutputLang lang, size_t* out_matched_len) {
-    const KeywordDef* best_match = NULL;
+    const DictEntry* best = NULL;
     size_t max_len = 0;
-
-    for (int i = 0; keyword_table[i].replacement != NULL; i++) {
-        const char* kw = get_keyword_localized(&keyword_table[i], lang);
-        if (!kw) continue;
-
-        size_t len = strlen(kw);
-        if (strncmp(src, kw, len) == 0) {
-            if (len > max_len) {
-                max_len = len;
-                best_match = &keyword_table[i];
-            }
+    for (int i = 0; i < keyword_count; i++) {
+        const char* loc = keyword_entries[i].localized;
+        if (!loc) continue;
+        size_t len = strlen(loc);
+        if (strncmp(src, loc, len) == 0 && len > max_len) {
+            max_len = len;
+            best = &keyword_entries[i];
         }
     }
-
-    if (best_match && out_matched_len) {
-        *out_matched_len = max_len;
-    }
-    return best_match;
+    if (best && out_matched_len) *out_matched_len = max_len;
+    return best;
 }

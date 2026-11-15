@@ -248,18 +248,9 @@ bool compile_compound_assignment(Compiler* c, ASTNode* node)
 
 void compile_var_decl(Compiler* c, ASTNode* node)
 {
-    TypeInfo* t_info     = build_type_info(c, node->var_decl.type);
+    TypeInfo* t_info  = build_type_info(c, node->var_decl.type);
     Symbol* type_name = t_info ? t_info->name : get_type_name(c, node->var_decl.type);
-
-    bool is_type_param = false;
-    if (c->current_class != NULL && c->current_class->type != NULL) {
-        for (int i = 0; i < c->current_class->type->type_arg_count; i++) {
-            if (c->current_class->type->type_args[i]->name == type_name) {
-                is_type_param = true;
-                break;
-            }
-        }
-    }
+    bool is_type_param = is_type_parameter(c, type_name);
     
     ASTNode* vars[MAX_ARGS];
     int var_count = 0;
@@ -267,6 +258,7 @@ void compile_var_decl(Compiler* c, ASTNode* node)
 
     for (int i = 0; i < var_count; i++) {
         Symbol* var_name = vars[i]->identifier.name;
+
         int slot = add_local(c, var_name, t_info);
 
         if (is_integer_type(type_name)) {
@@ -276,8 +268,6 @@ void compile_var_decl(Compiler* c, ASTNode* node)
         } else if (is_decimal_type(type_name)) {
             ObjDecimal* zero_dec = new_decimal_from_i64(0);
             emit_constant(c, make_obj((Obj*)zero_dec));
-        // } else if (is_list_type(type_name)) {
-        //     emit_constant(c, make_obj((Obj*)new_list()));
         } else if (is_string_type(type_name)) {
             emit_constant(c, make_obj((Obj*)new_string("", 0)));
         } else if (is_boolean_type(type_name)) {
@@ -290,7 +280,6 @@ void compile_var_decl(Compiler* c, ASTNode* node)
             emit_inst(c, OP_NEW_INSTANCE, 0);
         }
         emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
-        // emit_inst(c, OP_POP, 0);
     }
 }
 
@@ -334,7 +323,6 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
                         var_type = actual_type;
                     }
                 }
-
                 int slot = add_local(c, vars[i]->identifier.name, var_type);
                 emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
             }
@@ -342,7 +330,7 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
         }
 
         // ---------------------------------------------------------
-        // パターン 2: 【retの壁】右辺が単一の式（多値関数呼び出し）の場合
+        // パターン 2: 右辺が単一の式（多値関数呼び出し）の場合
         // ---------------------------------------------------------
         if (expr_count == 1) {
             TypeInfo* rhs_type = compile_expression(c, exprs[0]);
@@ -520,23 +508,51 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
     }
 
     // =========================================================
-    // ケース 1: 変数宣言と初期化 (例: a: Integer is 10; / dog: Dog is "ポチ";)
+    // ケース 1: 変数宣言と初期化 (例: a: Integer = 10; / id<T>: Function = [...];)
     // =========================================================
     if (node->send.receiver->kind == AST_VAR_DECL) {
         ASTNode* decl = node->send.receiver;
         Symbol* var_name  = decl->var_decl.identifier->identifier.name;
+
+        // ★ 関数ジェネリクス定義: id<T>: Function = [ arg x: T; ret T; return x; ];
+        if (decl->var_decl.type_params != NULL &&
+            node->send.args != NULL && node->send.args->kind == AST_BLOCK) {
+
+            ASTNode* tp_nodes[MAX_TYPE_PARAMS];
+            int tp_count = 0;
+            collect_identifiers(decl->var_decl.type_params, tp_nodes, &tp_count);
+
+            Symbol* tparams[MAX_TYPE_PARAMS];
+            for (int i = 0; i < tp_count; i++) {
+                tparams[i] = tp_nodes[i]->identifier.name;
+            }
+
+            // 型パラメータを有効にした状態でブロックをコンパイル
+            ObjFunction* fn = compile_block_with_type_params(c, node->send.args, tparams, tp_count);
+            uint32_t fn_idx = add_constant(c->chunk, make_obj((Obj*)fn));
+            emit_inst(c, (fn->upvalue_count > 0) ? OP_CLOSURE : OP_CONSTANT, fn_idx);
+
+            // 型パラメータスコープを一時的に積んで関数型を構築
+            int prev_tp_count = c->type_param_count;
+            for (int i = 0; i < tp_count && c->type_param_count < MAX_TYPE_PARAMS; i++) {
+                c->type_params[c->type_param_count++] = tparams[i];
+            }
+            TypeInfo* fn_type = build_function_type_from_block(c, node->send.args);
+            c->type_param_count = prev_tp_count;
+
+            fn_type->func_type_param_count = tp_count;
+            for (int i = 0; i < tp_count; i++) {
+                fn_type->func_type_params[i] = tparams[i];
+            }
+
+            int slot = add_local(c, var_name, fn_type);
+            emit_inst(c, OP_SET_LOCAL, (uint32_t)slot);
+            return fn_type;
+        }
+
         Symbol* type_name = get_type_name(c, decl->var_decl.type);
         TypeInfo* declared_type = build_type_info(c, decl->var_decl.type);
-
-        bool is_type_param = false;
-        if (c->current_class != NULL && c->current_class->type != NULL) {
-            for (int i = 0; i < c->current_class->type->type_arg_count; i++) {
-                if (c->current_class->type->type_args[i]->name == type_name) {
-                    is_type_param = true;
-                    break;
-                }
-            }
-        }
+        bool is_type_param = is_type_parameter(c, type_name);
 
         bool is_null_literal = (node->send.args != NULL && 
                                 node->send.args->kind == AST_LITERAL && 

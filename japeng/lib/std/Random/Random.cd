@@ -9,8 +9,8 @@ class Random based Object:
         return Random.randfloat < probability;
     ];
 
-    static shuffle: Function = [
-        arg list: List Auto;
+    static shuffle<Type>: Function = [
+        arg list: List<Type>;
         i: Integer = list.length - 1;
         repeat (i > 0) [
             j: Integer = Random.randint(0, i);

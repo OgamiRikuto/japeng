@@ -5,34 +5,30 @@
 #include <stddef.h>
 #include "language.h"
 
-typedef enum {
-    BUILTIN_TYPE,    // クラス・型名（Flexで CLASS_NAME 扱い）
-    BUILTIN_METHOD,  // メソッド名（Flexで IDENTIFIER 扱い）
-    BUILTIN_FIELD,   // フィールド名
-    BUILTIN_MAX
-} BuiltinKind;
-
 typedef struct {
-    const char* canonical_en; // 内部の正準名（String, println など）
-    const char* ja;           // 日本語名（文字列型, 行出力 など）
-    BuiltinKind kind;
-} BuiltinDef;
+    char* canonical_en;
+    char* localized;
+} DictEntry;
 
-// --- 予約語・構文キーワード ---
-typedef struct {
-    const char* replacement; // 置換後の文字列（例: " is ", "class ", "return "）
-    const char* ja;          // 日本語キーワード（例: "は", "クラス", "返す"）
-} KeywordDef;
+typedef void (*DictEntryCallback)(const char* key, const char* value, void* user_data);
 
-// 1. 各言語の名称から「内部英語名」を取得（完全一致）
-const char* builtin_to_canonical(const char* name, size_t len, OutputLang lang, BuiltinKind* out_kind);
+// 共通ヘルパー（他ファイルからも利用）
+bool parse_dict_file(const char* filepath, DictEntryCallback callback, void* user_data);
+void get_japeng_lib_dir_buf(char* out_buf, size_t buf_size);
 
-// 2. テキスト先頭から最長一致する組み込み単語を検索（プリプロセッサ用）
-const BuiltinDef* builtin_match_prefix(const char* src, OutputLang lang, size_t* out_matched_len);
+// OutputLang から言語コード文字列 ("en", "ja" 等) を取得
+const char* output_lang_to_code(OutputLang lang);
 
-// 3. 内部英語名から「表示用ローカライズ名」を取得（エラー表示・ログ用）
+// 1. ローカライズ名から内部英語名を取得（完全一致
 const char* builtin_from_canonical(const char* canonical_en, OutputLang lang);
 
-// 予約語検索（プリプロセッサ用）
-const KeywordDef* keyword_match_prefix(const char* src, OutputLang lang, size_t* out_matched_len);
+// 2. テキスト先頭から最長一致する組み込み単語を検索（プリプロセッサ用）
+const DictEntry* builtin_match_prefix(const char* src, const char* lang_code, size_t* out_matched_len);
+
+// 3. 内部英語名から表示用ローカライズ名を取得（エラー表示用）
+const char* builtin_from_canonical(const char* canonical_en, OutputLang lang);
+
+// 4. 予約語・助詞ルールの最長一致検索（プリプロセッサ用）
+const DictEntry* keyword_match_prefix(const char* src, const char* lang_code, size_t* out_matched_len);
+
 #endif

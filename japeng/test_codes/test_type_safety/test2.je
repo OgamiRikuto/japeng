@@ -9,7 +9,7 @@ if ("文字列") [
 ];
 
 // 3..each の添字型と要素型の不一致
-num_list: List Integer = 1, 2, 3;
+num_list: List<Integer> = 1, 2, 3;
 num_list.each [ arg i: String, n: String;
     "NG".println;
 ];

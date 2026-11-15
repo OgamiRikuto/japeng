@@ -15,6 +15,8 @@ typedef struct typeInfo {
     int param_count;
     int min_param_count;
     Value default_values[16];
+    int func_type_param_count;
+    Symbol* func_type_params[8];
     struct typeInfo* type_args[];
 } TypeInfo;
 

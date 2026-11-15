@@ -1,8 +1,8 @@
-row1: List Integer = 10, 20;
-row2: List Integer = 30, 40;
+row1: List<Integer> = 10, 20;
+row2: List<Integer> = 30, 40;
 
 // 2. 行を詰めて 2次元配列を作成
-arr: List (List Integer) = row1, row2;
+arr: List<List<Integer>> = row1, row2;
 a: Integer = 1;
 
 // 3. 二次元添字アクセス！

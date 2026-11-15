@@ -12,6 +12,7 @@ static LanguageFrontend* g_active_frontend = NULL;
 
 LanguageFrontend* find_frontend_by_ext(const char* ext) {
     if (!ext) return NULL;
+    if (*ext == '.') ext++;
     for (int i = 0; g_frontends[i] != NULL; i++) {
         if (strcmp(ext, g_frontends[i]->ext_script) == 0 ||
             strcmp(ext, g_frontends[i]->ext_class) == 0) {
@@ -19,6 +20,17 @@ LanguageFrontend* find_frontend_by_ext(const char* ext) {
         }
     }
     return NULL;
+}
+
+LanguageFrontend* find_frontend_by_filename(const char* filename) {
+    if (!filename) return NULL;
+    const char* dot = strrchr(filename, '.');
+    return dot ? find_frontend_by_ext(dot + 1) : NULL;
+}
+
+const char* get_lang_code_from_filename(const char* filename) {
+    LanguageFrontend* fe = find_frontend_by_filename(filename);
+    return fe ? fe->lang_code : "en";
 }
 
 void set_active_frontend(LanguageFrontend* frontend) {
