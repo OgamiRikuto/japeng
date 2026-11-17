@@ -1,38 +1,47 @@
-// lib/gui/Graphics/Rectangle.cd
-import "gui/Window";
 import "std/Math/Point";
-import "gui/Graphics/Drawable";
+import "gui/Graphics/Shape";
 
-class Rectangle based Object implements Drawable:
+class Rectangle based Shape:
     pos: Point;
     width: Float;
     height: Float;
-    color: Integer;
+    cachedVertices: List<Point>;
 
     init: Function = [
-        arg x: Float, y: Float, w: Float, h: Float, c: Integer = 16777215;
+        arg x: Float, y: Float, w: Float, h: Float, c: Integer = 16777215, isFilled: Boolean = true;
+        super.init(c, isFilled);
         pos = Point(x, y);
         width = w;
         height = h;
-        color = c;
+        self.updateVertices;
+    ];
+
+    updateVertices: Function = [
+        x: Float = pos.x;
+        y: Float = pos.y;
+        cachedVertices = L[
+            Point(x, y),
+            Point(x + width, y),
+            Point(x + width, y + height),
+            Point(x, y + height)
+        ];
     ];
 
     move: Function = [
         arg dx: Float, dy: Float;
-        pos.move(dx, dy);
+        pos.x = pos.x + dx;
+        pos.y = pos.y + dy;
+        self.updateVertices;
     ];
 
     moveTo: Function = [
         arg x: Float, y: Float;
-        pos.change(x, y);
+        pos.x = x;
+        pos.y = y;
+        self.updateVertices;
     ];
 
-    setColor: Function = [
-        arg c: Integer;
-        color = c;
-    ];
-
-    draw: Function = [
-        arg win: Window;
-        win.fillRect(pos x, pos y, width, height, color);
+    vertices: Function = [
+        ret List<Point>;
+        return cachedVertices;
     ];

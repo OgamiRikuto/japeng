@@ -1,0 +1,20 @@
+import "gui/Window";
+import "std/Math/Point";
+import "gui/Graphics/Drawable";
+
+class Line based Object implements Drawable:
+    start: Point;
+    end: Point;
+    color: Integer;
+
+    init: Function = [
+        arg x1: Float, y1: Float, x2: Float, y2: Float, c: Integer = 16777215;
+        start = Point(x1, y1);
+        end = Point(x2, y2);
+        color = c;
+    ];
+
+    draw: Function = [
+        arg win: Window;
+        win.drawLine(start.x, start.y, end.x, end.y, color);
+    ];

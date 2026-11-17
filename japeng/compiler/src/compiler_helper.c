@@ -7,6 +7,8 @@
 void init_compiler(Compiler* compiler, Chunk* chunk)
 {
     compiler->filename = NULL;
+    compiler->project_dir = ".";
+    compiler->class_bindings = NULL;
     compiler->imported_classes = NULL;
     compiler->dict_aliases = NULL;
     compiler->enclosing = NULL;
@@ -310,7 +312,8 @@ bool is_builtin(Symbol* name)
             name == sym_Boolean ||
             name == sym_Void ||
             name == sym_Fraction ||
-            name == sym_Close
+            name == sym_Close ||
+            name == sym_Iterable
             ;
 }
 
@@ -431,30 +434,18 @@ Value parse_ast_literal_with_expected(ASTNode* node, TypeInfo* expected_type, Ty
             return make_nil();
     }
 }
-// 名前（シンボル）からエイリアスおよび辞書マッピングを走査して正準シンボルを返す
+
+// 名前（シンボル）から辞書マッピングを走査して正準シンボルを返す
 Symbol* resolve_name_alias(Compiler* c, Symbol* name)
 {
     if (name == NULL || c == NULL) return name;
 
+    // 辞書エイリアステーブルを走査 (ファイル型 -> File, 開く -> open など)
     for (Compiler* comp = c; comp != NULL; comp = comp->enclosing) {
-        // 1. importエイリアステーブルを走査 (as Alias で束縛された本名)
-        if (comp->imported_classes != NULL) {
-            Value val;
-            if (table_get(comp->imported_classes, name, &val)) {
-                ClassDef* klass = (ClassDef*)as_obj(val);
-                if (klass && klass->name) {
-                    name = klass->name;
-                    break;
-                }
-            }
-        }
-
-        // 2. 辞書エイリアステーブルを走査 (ファイル型 -> File, 開く -> open など)
         if (comp->dict_aliases != NULL) {
             Value val;
             if (table_get(comp->dict_aliases, name, &val)) {
-                name = (Symbol*)as_obj(val);
-                break;
+                return (Symbol*)as_obj(val);
             }
         }
     }

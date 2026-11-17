@@ -35,6 +35,10 @@ static const char* const error_table[ERR_COUNT][LANG_COUNT] = {
         [LANG_EN] = "No target files provided.",
         [LANG_JA] = "対象ファイルが指定されていません。"
     },
+    [MSG_CACHE_OUTDATED_RECOMPILE] = {
+        [LANG_EN] = "Cache version mismatch for '%1$s' (v%2$u -> v%3$u); recompiling.",
+        [LANG_JA] = "'%1$s' のキャッシュバージョンが古いため再コンパイルします (v%2$u -> v%3$u)。"
+    },
 
     // // --- 構文エラー ---
     // [ERR_SYNTAX_GENERIC] = {

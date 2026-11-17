@@ -32,6 +32,7 @@ static uint32_t pool_add(BcdStringPool* pool, Symbol* str) {
 static void pool_collect_type_names(BcdStringPool* pool, TypeInfo* t) {
     if (t == NULL) return;
     pool_add(pool, t->name);
+    pool_add(pool, t->canonical_id);
     for (int i = 0; i < t->func_type_param_count; i++) {
         pool_add(pool, t->func_type_params[i]);
     }
@@ -188,7 +189,9 @@ static void write_type_info(FILE* fp, TypeInfo* t, BcdStringPool* pool) {
     fwrite(&is_present, sizeof(uint8_t), 1, fp);
 
     uint32_t name_id = pool_add(pool, t->name);
+    uint32_t cid_id  = pool_add(pool, t->canonical_id);
     fwrite(&name_id, sizeof(uint32_t), 1, fp);
+    fwrite(&cid_id, sizeof(uint32_t), 1, fp);
 
     uint16_t type_arg_count = (uint16_t)t->type_arg_count;
     uint8_t  param_count     = (uint8_t)t->param_count;
@@ -250,8 +253,13 @@ bool write_class_bcd(const char* base_dir, ClassDef* klass, const char* source_f
     BcdStringPool pool;
     pool_init(&pool);
 
+    if (klass->type != NULL && klass->type->canonical_id == NULL) {
+        klass->type->canonical_id = klass->canonical_id;
+    }
+
     // 文字列プール先行収集
     pool_add(&pool, klass->name);
+    pool_add(&pool, klass->canonical_id);
     if (klass->superclass) pool_add(&pool, klass->superclass->name);
     for (int i = 0; i < klass->delegate_count; i++) {
         if (klass->delegates[i]) pool_add(&pool, klass->delegates[i]->name);
@@ -291,8 +299,13 @@ bool write_class_bcd(const char* base_dir, ClassDef* klass, const char* source_f
         }
         pool_collect_type_names(&pool, find_method_type(klass, klass->static_method_names[i]));
     }
+
+    TypeInfo* super_type_to_write = klass->superclass_type
+                                    ? klass->superclass_type
+                                    : (klass->superclass ? klass->superclass->type : NULL);
     pool_collect_type_names(&pool, klass->type);
-    pool_collect_type_names(&pool, klass->superclass_type);
+    pool_collect_type_names(&pool, super_type_to_write);
+
     for (int i = 0; i < klass->field_count; i++) {
         pool_collect_type_names(&pool, klass->field_infos[i].type);
     }
@@ -300,10 +313,17 @@ bool write_class_bcd(const char* base_dir, ClassDef* klass, const char* source_f
         pool_collect_type_names(&pool, find_method_type(klass, klass->vtable_names[i]));
     }
     for (int i = 0; i < klass->delegate_count; i++) {
-        if (klass->delegate_types) pool_collect_type_names(&pool, klass->delegate_types[i]);
+        TypeInfo* dt = (klass->delegate_types && klass->delegate_types[i])
+                       ? klass->delegate_types[i]
+                       : (klass->delegates[i] ? klass->delegates[i]->type : NULL);
+        pool_collect_type_names(&pool, dt);
     }
     for (int i = 0; i < klass->interface_count; i++) {
         if (klass->interfaces[i]) pool_add(&pool, klass->interfaces[i]->name);
+        TypeInfo* it = (klass->interface_types && klass->interface_types[i])
+                       ? klass->interface_types[i]
+                       : (klass->interfaces[i] ? klass->interfaces[i]->type : NULL);
+        pool_collect_type_names(&pool, it);
     }
 
     // 1. 文字列プール
@@ -407,17 +427,24 @@ bool write_class_bcd(const char* base_dir, ClassDef* klass, const char* source_f
     fwrite(&is_iface_flag, sizeof(uint8_t), 1, fp);
 
     write_type_info(fp, klass->type, &pool);
-    write_type_info(fp, klass->superclass_type, &pool);
+    write_type_info(fp, super_type_to_write, &pool);
 
     // 委譲型リスト (個数 + 各型)
     fwrite(&del_count, sizeof(uint16_t), 1, fp);
     for (int i = 0; i < klass->delegate_count; i++) {
-        write_type_info(fp, klass->delegate_types ? klass->delegate_types[i] : NULL, &pool);
+        TypeInfo* dt = (klass->delegate_types && klass->delegate_types[i])
+                       ? klass->delegate_types[i]
+                       : (klass->delegates[i] ? klass->delegates[i]->type : NULL);
+        write_type_info(fp, dt, &pool);
     }
+
     // インターフェース型リスト
     fwrite(&iface_cnt, sizeof(uint16_t), 1, fp);
     for (int i = 0; i < klass->interface_count; i++) {
-        write_type_info(fp, klass->interface_types ? klass->interface_types[i] : NULL, &pool);
+        TypeInfo* it = (klass->interface_types && klass->interface_types[i])
+                       ? klass->interface_types[i]
+                       : (klass->interfaces[i] ? klass->interfaces[i]->type : NULL);
+        write_type_info(fp, it, &pool);
     }
 
     // フィールド型リスト (個数 + 各型)

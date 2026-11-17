@@ -1,0 +1,8 @@
+import "std/Math/Point";
+import "gui/Graphics/Polygon";
+
+class Triangle based Polygon:
+    init: Function = [
+        arg p1: Point, p2: Point, p3: Point, c: Integer = 16777215, isFilled: Boolean = true;
+        super.init(L[p1, p2, p3], c, isFilled);
+    ];

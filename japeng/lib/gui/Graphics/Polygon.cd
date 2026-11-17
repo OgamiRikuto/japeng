@@ -1,0 +1,16 @@
+import "std/Math/Point";
+import "gui/Graphics/Shape";
+
+class Polygon based Shape:
+    points: List<Point>;
+
+    init: Function = [
+        arg pts: List<Point>, c: Integer = 16777215, isFilled: Boolean = true;
+        super.init(c, isFilled);
+        points = pts;
+    ];
+
+    vertices: Function = [
+        ret List<Point>;
+        return points;
+    ];

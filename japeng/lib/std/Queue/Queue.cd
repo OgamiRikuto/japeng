@@ -1,5 +1,5 @@
-class Queue Type based Object:
-    queue: List Type;
+class Queue<Type> based Object implements Iterable<Type>:
+    queue: List<Type>;
     head: Integer = 0;
     tail: Integer = 0;
     count: Integer = 0;
@@ -52,7 +52,7 @@ class Queue Type based Object:
 
     resize: Function = [
         newCapa: Integer = capacity * 2;
-        newQueue: List Type = L[];
+        newQueue: List<Type> = L[];
 
         newCapa.repeat [ newQueue.push(null); ];
         count.repeat [
@@ -64,4 +64,16 @@ class Queue Type based Object:
         head = 0;
         tail = count;
         capacity = newCapa;
+    ];
+
+    iterator: Function = [
+        ret Function(; Type, Boolean);
+        idx: Integer = 0;
+        return [
+            ret Type, Boolean;
+            if (idx >= count) [ return null, false; ];
+            val: Type = self.peek(idx);
+            idx += 1;
+            return val, true;
+        ];
     ];

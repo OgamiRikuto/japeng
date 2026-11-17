@@ -27,3 +27,6 @@
 マップ: map
 文字列化: toString
 閉じる: close
+
+反復可能型: Iterable
+反復子: iterator

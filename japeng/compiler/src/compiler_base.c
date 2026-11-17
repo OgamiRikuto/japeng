@@ -656,7 +656,8 @@ TypeInfo* compile_assignment(Compiler* c, ASTNode* node)
         // -----------------------------------------------------
         // 1-B. ユーザー定義クラスの初期化・代入
         // -----------------------------------------------------
-        ClassDef* klass = resolve_class(c, type_name);
+        ClassDef* klass = declared_type ? resolve_class_from_type(c, declared_type)
+                                        : resolve_class(c, type_name);
         if (klass == NULL) {
             error_compile(decl, ERR_CLASS_NOT_REGISTERED, type_name->chars);
             return new_type_info(sym_Error, 0);

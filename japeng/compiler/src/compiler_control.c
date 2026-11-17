@@ -536,6 +536,25 @@ void compile_switch(Compiler* c, ASTNode* node)
     pop_locals_to(c, switch_locals);
 }
 
+static void emit_call_on_receiver(Compiler* c, ClassDef* rec_class, ClassDef* fallback_iface, Symbol* method_name)
+{
+    if (rec_class != NULL && !rec_class->is_interface) {
+        int vtable_idx = get_vtable_index(rec_class, method_name);
+        if (vtable_idx != -1) {
+            emit_inst(c, OP_INVOKE_VIRTUAL, make_call_operand(0, (uint16_t)vtable_idx));
+            return;
+        }
+    }
+
+    int iface_midx = fallback_iface ? get_vtable_index(fallback_iface, method_name) : 0;
+    if (iface_midx == -1) iface_midx = 0;
+
+    Symbol* iface_sym = fallback_iface ? fallback_iface->name : intern_cstr("Iterable");
+    ObjCallSite* cs = new_call_site(iface_sym, (uint16_t)iface_midx);
+    uint32_t cs_idx = add_constant(c->chunk, make_obj((Obj*)cs));
+    emit_inst(c, OP_IMPL_SEND, make_call_operand(0, (uint16_t)cs_idx));
+}
+
 void compile_each(Compiler* c, ASTNode* node)
 {
     if (node->send.args == NULL || node->send.args->kind != AST_BLOCK) {
@@ -556,54 +575,185 @@ void compile_each(Compiler* c, ASTNode* node)
 
     int each_locals = c->local_count;
 
-    // 2. レシーバ（リスト）を評価してスロットに保持 (スタック: +1)
+    // 2. レシーバを評価してスロットに保持 (スタック: +1)
     TypeInfo* rec_type = compile_expression(c, node->send.receiver);
+    if (rec_type == NULL || rec_type->name == sym_Error) return;
+
     bool is_collection = is_collection_type(rec_type->name);
-    bool is_string = is_string_type(rec_type->name);
-    if (rec_type != NULL && !is_collection && !is_string &&  
-        rec_type->name != sym_Auto && rec_type->name != sym_Error) {
-        error_compile(node->send.receiver, ERR_EACH_NOT_LIST, rec_type->name->chars);
-        return;
+    bool is_string     = is_string_type(rec_type->name);
+    TypeInfo* iter_elem_type = NULL;
+
+    if (!is_collection && !is_string && rec_type->name != sym_Auto) {
+        iter_elem_type = extract_iterable_element_type(c, rec_type);
+        if (iter_elem_type == NULL) {
+            error_compile(node->send.receiver, ERR_EACH_NOT_LIST, type_to_string(rec_type));
+            return;
+        }
     }
-    int list_slot = add_anonymous_local(c);
-    emit_inst(c, OP_SET_LOCAL, (uint32_t)list_slot);
+
+    int rec_slot = add_anonymous_local(c);
+    emit_inst(c, OP_SET_LOCAL, (uint32_t)rec_slot);
 
     TypeInfo* elem_type = NULL;
     if (is_string) {
         elem_type = new_type_info(sym_String, 0);
-    } else if (rec_type && rec_type->type_arg_count > 0) {
-        elem_type = rec_type->type_args[0];
+    } else if (is_collection || rec_type->name == sym_Auto) {
+        elem_type = (rec_type->type_arg_count > 0) ? rec_type->type_args[0] : new_type_info(sym_Auto, 0);
     } else {
-        elem_type = new_type_info(sym_Auto, 0);
+        elem_type = iter_elem_type;
     }
 
-    // 3. リストの長さ (length) を取得してスロットに保持 (スタック: +1)
-    Symbol* class_sym = is_string ? sym_String : sym_List;
-    ClassDef* rec_class = resolve_class(c, class_sym);
-    int len_vtable_idx = rec_class ? get_vtable_index(rec_class, sym_length) : -1;
-    if (len_vtable_idx == -1) {
+    // =========================================================================
+    // パターン A: 組み込み List / String（最速のインデックス直引きループ）
+    // =========================================================================
+    if (is_collection || is_string || rec_type->name == sym_Auto) {
+        Symbol* class_sym = is_string ? sym_String : sym_List;
+        ClassDef* rec_class = resolve_class(c, class_sym);
+        int len_vtable_idx = rec_class ? get_vtable_index(rec_class, sym_length) : -1;
+        if (len_vtable_idx == -1) {
+            error_compile(node, ERR_BUILTIN_CACHE);
+            return;
+        }
+
+        emit_inst(c, OP_GET_LOCAL, (uint32_t)rec_slot);
+        emit_inst(c, OP_INVOKE_VIRTUAL, make_call_operand(0, (uint16_t)len_vtable_idx));
+
+        int len_slot = add_anonymous_local(c);
+        emit_inst(c, OP_SET_LOCAL, (uint32_t)len_slot);
+
+        int i_slot = add_anonymous_local(c);
+        emit_constant(c, make_int(0));
+        emit_inst(c, OP_SET_LOCAL, (uint32_t)i_slot);
+
+        int idx_slot = -1;
+        int elem_slot = -1;
+
+        if (arg_count == 1) {
+            ASTNode* decl = arg_decls[0];
+            Symbol* name = decl->var_decl.identifier->identifier.name;
+            TypeInfo* declared_type = build_type_info(c, decl->var_decl.type);
+
+            if (declared_type != NULL && elem_type != NULL && elem_type->name != sym_Auto) {
+                if (!is_assignable(c, declared_type, elem_type)) {
+                    error_compile(decl, ERR_EACH_ELEMENT_TYPE,
+                                  type_to_string(elem_type),
+                                  type_to_string(declared_type));
+                    return;
+                }
+            }
+
+            elem_slot = add_local(c, name, declared_type ? declared_type : elem_type);
+            emit_constant(c, make_nil());
+            emit_inst(c, OP_SET_LOCAL, (uint32_t)elem_slot);
+        } else {
+            ASTNode* decl_i = arg_decls[0];
+            Symbol* name_i = decl_i->var_decl.identifier->identifier.name;
+            TypeInfo* idx_type = build_type_info(c, decl_i->var_decl.type);
+
+            if (idx_type != NULL && !is_integer_type(idx_type->name) && idx_type->name != sym_Auto) {
+                error_compile(decl_i, ERR_EACH_INDEX_TYPE, idx_type->name->chars);
+                return;
+            }
+
+            idx_slot = add_local(c, name_i, idx_type ? idx_type : new_type_info(sym_Integer, 0));
+            emit_constant(c, make_int(0));
+            emit_inst(c, OP_SET_LOCAL, (uint32_t)idx_slot);
+
+            ASTNode* decl_n = arg_decls[1];
+            Symbol* name_n = decl_n->var_decl.identifier->identifier.name;
+            TypeInfo* declared_elem_type = build_type_info(c, decl_n->var_decl.type);
+
+            if (declared_elem_type != NULL && elem_type != NULL && elem_type->name != sym_Auto) {
+                if (!is_assignable(c, declared_elem_type, elem_type)) {
+                    error_compile(decl_n, ERR_EACH_ELEMENT_TYPE,
+                                  type_to_string(elem_type),
+                                  type_to_string(declared_elem_type));
+                    return;
+                }
+            }
+
+            elem_slot = add_local(c, name_n, declared_elem_type ? declared_elem_type : elem_type);
+            emit_constant(c, make_nil());
+            emit_inst(c, OP_SET_LOCAL, (uint32_t)elem_slot);
+        }
+
+        int loop_start = c->chunk->count;
+        Loop loop;
+        start_loop(c, &loop, loop_start);
+        loop.loop_local_count = each_locals;
+        loop.body_local_count = c->local_count;
+
+        emit_inst(c, OP_GET_LOCAL, (uint32_t)i_slot);
+        emit_inst(c, OP_GET_LOCAL, (uint32_t)len_slot);
+        emit_inst(c, OP_LESS_INT, 0);
+
+        int exit_jump = emit_jump(c, OP_JUMP_IF_FALSE);
+        emit_inst(c, OP_POP, 0);
+
+        emit_inst(c, OP_GET_LOCAL, (uint32_t)rec_slot);
+        emit_inst(c, OP_GET_LOCAL, (uint32_t)i_slot);
+        emit_inst(c, OP_INDEX_GET, 0);
+        emit_inst(c, OP_SET_LOCAL, (uint32_t)elem_slot);
+        emit_inst(c, OP_POP, 0);
+
+        if (arg_count == 2) {
+            emit_inst(c, OP_GET_LOCAL, (uint32_t)i_slot);
+            emit_inst(c, OP_SET_LOCAL, (uint32_t)idx_slot);
+            emit_inst(c, OP_POP, 0);
+        }
+
+        compile_statement_node(c, block_node->block.body);
+        pop_locals_to(c, loop.body_local_count);
+
+        patch_continue_jumps(c, &loop);
+
+        emit_inst(c, OP_GET_LOCAL, (uint32_t)i_slot);
+        emit_constant(c, make_int(1));
+        emit_inst(c, OP_ADD_INT, 0);
+        emit_inst(c, OP_SET_LOCAL, (uint32_t)i_slot);
+        emit_inst(c, OP_POP, 0);
+
+        emit_loop(c, loop_start);
+
+        patch_jump(c, exit_jump);
+        c->stack_depth++;
+        emit_inst(c, OP_POP, 0);
+
+        pop_locals_to(c, each_locals);
+        end_loop(c, &loop);
+        return;
+    }
+
+    // =========================================================================
+    // パターン B: Iterable<T> 実装クラス・インターフェース（インライン展開）
+    // =========================================================================
+    ClassDef* iterable_iface = resolve_class(c, sym_Iterable);
+    if (iterable_iface == NULL) {
         error_compile(node, ERR_BUILTIN_CACHE);
         return;
     }
 
-    emit_inst(c, OP_GET_LOCAL, (uint32_t)list_slot);
-    uint32_t len_op = make_call_operand(0, len_vtable_idx);
-    emit_inst(c, OP_INVOKE_VIRTUAL, len_op);
+    // 1. next_fn = receiver.iterator() を取得して匿名スロットに格納
+    ClassDef* rec_class = resolve_class_from_type(c, rec_type);
+    emit_inst(c, OP_GET_LOCAL, (uint32_t)rec_slot);
+    emit_call_on_receiver(c, rec_class, iterable_iface, sym_iterator);
 
-    int len_slot = add_anonymous_local(c);
-    emit_inst(c, OP_SET_LOCAL, (uint32_t)len_slot);
+    int fn_slot = add_anonymous_local(c);
+    emit_inst(c, OP_SET_LOCAL, (uint32_t)fn_slot);
 
-    // 4. カウンタ変数 i = 0 (スタック: +1)
-    int i_slot = add_anonymous_local(c);
-    emit_constant(c, make_int(0));
-    emit_inst(c, OP_SET_LOCAL, (uint32_t)i_slot);
+    // 2. 2引数の場合のカウンタ (0 初期化)
+    int counter_slot = -1;
+    if (arg_count == 2) {
+        counter_slot = add_anonymous_local(c);
+        emit_constant(c, make_int(0));
+        emit_inst(c, OP_SET_LOCAL, (uint32_t)counter_slot);
+    }
 
-    // 5. ブロックの引数スロットを確保 & 静的型チェック
+    // 3. ブロック引数スロット確保 & 静的型チェック
     int idx_slot = -1;
     int elem_slot = -1;
 
     if (arg_count == 1) {
-        // [ arg n: Type; ] ➜ 要素のみ (スタック: +1)
         ASTNode* decl = arg_decls[0];
         Symbol* name = decl->var_decl.identifier->identifier.name;
         TypeInfo* declared_type = build_type_info(c, decl->var_decl.type);
@@ -620,9 +770,7 @@ void compile_each(Compiler* c, ASTNode* node)
         elem_slot = add_local(c, name, declared_type ? declared_type : elem_type);
         emit_constant(c, make_nil());
         emit_inst(c, OP_SET_LOCAL, (uint32_t)elem_slot);
-
     } else {
-        // [ arg i: Integer, n: Type; ] ➜ 添字と要素 (スタック: +2)
         ASTNode* decl_i = arg_decls[0];
         Symbol* name_i = decl_i->var_decl.identifier->identifier.name;
         TypeInfo* idx_type = build_type_info(c, decl_i->var_decl.type);
@@ -654,59 +802,59 @@ void compile_each(Compiler* c, ASTNode* node)
         emit_inst(c, OP_SET_LOCAL, (uint32_t)elem_slot);
     }
 
-    // 6. ループ先頭
+    // 4. インラインループ先頭
     int loop_start = c->chunk->count;
     Loop loop;
     start_loop(c, &loop, loop_start);
     loop.loop_local_count = each_locals;
     loop.body_local_count = c->local_count;
 
-    // 継続条件: i < len (スタック: +1)
-    emit_inst(c, OP_GET_LOCAL, (uint32_t)i_slot);   // stack: +1
-    emit_inst(c, OP_GET_LOCAL, (uint32_t)len_slot); // stack: +1
-    emit_inst(c, OP_LESS_INT, 0);                   // stack: -1 (真偽値が 1 個乗る)
+    // 5. elem, has_next = next_fn() を呼び出し（スタックに [elem, has_next] の2個が乗る）
+    emit_inst(c, OP_GET_LOCAL, (uint32_t)fn_slot);
+    emit_inst(c, OP_CALL, 0);
+    c->stack_depth += 1; // 多値戻り値（2個目）のスタック高さ補正
 
+    // トップの has_next (Boolean) で継続判定
     int exit_jump = emit_jump(c, OP_JUMP_IF_FALSE);
-    emit_inst(c, OP_POP, 0); // 真のパス: 条件値を pop してループ内へ
 
-    // 7. 要素の取り出し: list[i] ➜ elem_slot
-    emit_inst(c, OP_GET_LOCAL, (uint32_t)list_slot); // stack: +1
-    emit_inst(c, OP_GET_LOCAL, (uint32_t)i_slot);    // stack: +1
-    emit_inst(c, OP_INDEX_GET, 0);                   // stack: -1 (要素値が 1 個残る)
-    emit_inst(c, OP_SET_LOCAL, (uint32_t)elem_slot); // peek 代入
-    emit_inst(c, OP_POP, 0);                         // 要素値を pop してクリーンにする
+    // 真のパス: has_next を pop し、下の elem を elem_slot へ格納して pop
+    emit_inst(c, OP_POP, 0);
+    emit_inst(c, OP_SET_LOCAL, (uint32_t)elem_slot);
+    emit_inst(c, OP_POP, 0);
+    c->stack_depth += 1; // OP_JUMP_IF_FALSE の消費カウント分を補正
 
-    // 2引数の場合は添字もセット: i ➜ idx_slot
     if (arg_count == 2) {
-        emit_inst(c, OP_GET_LOCAL, (uint32_t)i_slot);
+        emit_inst(c, OP_GET_LOCAL, (uint32_t)counter_slot);
         emit_inst(c, OP_SET_LOCAL, (uint32_t)idx_slot);
         emit_inst(c, OP_POP, 0);
     }
 
-    // 8. 本体ブロックの実行 (文末の POP によりブロック終了時は stack 増減 0)
+    // 6. ブロック本体のインライン実行
     compile_statement_node(c, block_node->block.body);
     pop_locals_to(c, loop.body_local_count);
 
-    // continue の合流地点（カウンタ加算へジャンプしてくる）
+    // continue の合流地点
     patch_continue_jumps(c, &loop);
 
-    // 9. カウンタ加算: i = i + 1
-    emit_inst(c, OP_GET_LOCAL, (uint32_t)i_slot); // stack: +1
-    emit_constant(c, make_int(1));                // stack: +1
-    emit_inst(c, OP_ADD_INT, 0);                  // stack: -1
-    emit_inst(c, OP_SET_LOCAL, (uint32_t)i_slot); // peek 代入
-    emit_inst(c, OP_POP, 0);                      // 加算結果を pop
+    if (arg_count == 2) {
+        emit_inst(c, OP_GET_LOCAL, (uint32_t)counter_slot);
+        emit_constant(c, make_int(1));
+        emit_inst(c, OP_ADD_INT, 0);
+        emit_inst(c, OP_SET_LOCAL, (uint32_t)counter_slot);
+        emit_inst(c, OP_POP, 0);
+    }
 
-    // 10. ループ巻き戻し
+    // 7. ループ巻き戻し & 脱出パッチ
     emit_loop(c, loop_start);
 
-    // 偽の世界線（exit_jump）からの脱出合流地点
+    // 偽のパス: スタック上に残っている [elem, false] の 2 個を破棄
     patch_jump(c, exit_jump);
-    c->stack_depth++;        // 偽の世界線（条件値が 1 個乗っている状態）に合わせて補正！
-    emit_inst(c, OP_POP, 0); // 条件値を pop
+    c->stack_depth += 1;
+    emit_inst(c, OP_POP, 0);
+    emit_inst(c, OP_POP, 0);
 
     pop_locals_to(c, each_locals);
-    end_loop(c, &loop); // break はここへ脱出パッチされる
+    end_loop(c, &loop);
 }
 
 // ヘルパー: 指定スロットのリソースに対して close() 呼び出し命令を発行
@@ -716,7 +864,7 @@ void emit_close_resource(Compiler* c, int slot)
     emit_inst(c, OP_GET_LOCAL, (uint32_t)slot);
 
     TypeInfo* t = (slot < c->local_count) ? c->locals[slot].type : NULL;
-    ClassDef* klass = t ? resolve_class(c, t->name) : NULL;
+    ClassDef* klass = resolve_class_from_type(c, t);
 
     // パターン A: 具象クラスが分かっている場合は最速の vtable 直接呼び出し
     if (klass != NULL && !klass->is_interface) {

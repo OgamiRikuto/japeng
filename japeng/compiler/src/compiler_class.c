@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <limits.h>
 
 static Symbol* get_class_name_from_node(ASTNode* node)
 {
@@ -40,18 +41,34 @@ static ASTNode* find_class_ast(Symbol* name)
     return NULL;
 }
 
+static ASTNode* find_file_ast_by_path(const char* filename)
+{
+    if (filename == NULL) return NULL;
+    for (int i = 0; i < parsed_cd_count; i++) {
+        if (parsed_cd[i] != NULL && parsed_cd[i]->loc.filename != NULL &&
+            strcmp(parsed_cd[i]->loc.filename, filename) == 0) {
+            return parsed_cd[i];
+        }
+    }
+    return NULL;
+}
+
 static void get_dir_from_filename(const char* filepath, char* out_dir, size_t max_len)
 {
     if (!filepath || filepath[0] == '\0') {
-        strncpy(out_dir, ".", max_len - 1);
-        out_dir[max_len - 1] = '\0';
+        if (out_dir != filepath) {
+            strncpy(out_dir, ".", max_len - 1);
+            out_dir[max_len - 1] = '\0';
+        }
         return;
     }
     const char* slash = strrchr(filepath, '/');
     if (slash) {
-        size_t len = slash - filepath;
+        size_t len = (size_t)(slash - filepath);
         if (len >= max_len) len = max_len - 1;
-        strncpy(out_dir, filepath, len);
+        if (out_dir != filepath) {
+            memcpy(out_dir, filepath, len);
+        }
         out_dir[len] = '\0';
     } else {
         strncpy(out_dir, ".", max_len - 1);
@@ -59,100 +76,134 @@ static void get_dir_from_filename(const char* filepath, char* out_dir, size_t ma
     }
 }
 
+// 別ファイルの AST を、そのファイル自身のローカル名前空間 (class_bindings) で 4 パスコンパイルする
+static void compile_foreign_class_ast(Compiler* c, ASTNode* ast)
+{
+    if (ast == NULL) return;
+    const char* target_file = ast->loc.filename;
+    bool switch_context = (target_file != NULL &&
+                           (c->filename == NULL || strcmp(c->filename, target_file) != 0));
+
+    const char* saved_filename = c->filename;
+    Table* saved_bindings      = c->class_bindings;
+
+    if (switch_context) {
+        c->filename       = target_file;
+        c->class_bindings = new_table(16);
+        import_same_directory_classes(c, target_file);
+
+        ASTNode* file_ast = find_file_ast_by_path(target_file);
+        if (file_ast != NULL) {
+            run_file_imports(c, file_ast);
+            declare_class_skeleton(c, file_ast);
+        }
+    }
+
+    declare_class_skeleton(c, ast);
+    resolve_class_skeleton_relations(c, ast);
+    declare_class_signatures(c, ast);
+    compile_class_body(c, ast);
+
+    if (switch_context) {
+        c->class_bindings = saved_bindings;
+        c->filename       = saved_filename;
+    }
+}
+
+// グローバル台帳 (defined_class) から戸籍IDで検索
+static ClassDef* find_in_global_registry(Compiler* c, Symbol* canonical_id)
+{
+    if (c == NULL || canonical_id == NULL) return NULL;
+    for (Compiler* comp = c; comp != NULL; comp = comp->enclosing) {
+        if (comp->defined_class != NULL) {
+            Value val;
+            if (table_get(comp->defined_class, canonical_id, &val)) {
+                return (ClassDef*)as_obj(val);
+            }
+        }
+    }
+    return NULL;
+}
+
 ClassDef* resolve_class(Compiler* c, Symbol* name)
 {
     if (name == NULL) return NULL;
 
-    name = resolve_name_alias(c, name);
+    // 0. すでに戸籍ID ("proj:...", "lib:...", "builtin::...") が渡された場合
+    if (strstr(name->chars, "::") != NULL) {
+        ClassDef* reg = find_in_global_registry(c, name);
+        if (reg != NULL) return reg;
 
-    // import された名前（エイリアス含む）を最優先で探索
-    for (Compiler* comp = c; comp != NULL; comp = comp->enclosing) {
-        if (comp->imported_classes != NULL) {
-            Value val;
-            if (table_get(comp->imported_classes, name, &val)) {
-                return (ClassDef*)as_obj(val);
+        char bcd_path[PATH_MAX];
+        if (resolve_bcd_path_from_canonical_id(name->chars, c->project_dir, bcd_path, sizeof(bcd_path))) {
+            char cache_dir[PATH_MAX], cache_parent[PATH_MAX];
+            get_dir_from_filename(bcd_path, cache_dir, sizeof(cache_dir));
+            get_dir_from_filename(cache_dir, cache_parent, sizeof(cache_parent));
+            if (is_cache_fresh(bcd_path, cache_parent)) {
+                ClassDef* loaded = load_class_type_from_bcd(c, bcd_path);
+                if (loaded != NULL) {
+                    if (loaded->canonical_id == NULL) loaded->canonical_id = name;
+                    if (c->defined_class == NULL) c->defined_class = new_table(16);
+                    table_set(c->defined_class, name, make_obj((Obj*)loaded));
+                    return loaded;
+                }
             }
         }
+        return NULL;
     }
 
-    // 1. メモリ上のテーブル確認
-    for (Compiler* comp = c; comp != NULL; comp = comp->enclosing) {
-        if (comp->defined_class != NULL) {
-            Value val;
-            if (table_get(comp->defined_class, name, &val)) {
-                return (ClassDef*)as_obj(val);
-            }
+    // 1. 自ファイルの ClassBinding（import済み・同ディレクトリ暗黙バインド・自ファイル定義）
+    ClassBinding* binding = find_class_binding(c, name);
+    if (binding != NULL && binding->klass != NULL) {
+        return binding->klass;
+    }
+
+    // 2. 辞書エイリアス（日本語名など）を本名に変換して ClassBinding を再検索
+    Symbol* alias_target = resolve_name_alias(c, name);
+    if (alias_target != NULL && alias_target != name) {
+        binding = find_class_binding(c, alias_target);
+        if (binding != NULL && binding->klass != NULL) {
+            return binding->klass;
         }
+        name = alias_target;
     }
 
-    const char* base_dir = c->output_dir ? c->output_dir : ".";
-    char bcd_path[1024];
-    get_cache_filepath(base_dir, name->chars, "bcd", bcd_path, sizeof(bcd_path));
-
-    // 2. プロジェクトローカルのキャッシュ存在 ＆ 鮮度チェック
-    if (is_cache_fresh(bcd_path, base_dir)) {
-        ClassDef* loaded = load_class_type_from_bcd(c, bcd_path);
-        if (loaded) return loaded;
-    }
-
-    // 3. すでにパース済みの AST にある場合
-    ASTNode* existing_ast = find_class_ast(name);
-    if (existing_ast != NULL) {
-        declare_class_skeleton(c, existing_ast);
-        resolve_class_skeleton_relations(c, existing_ast);
-        declare_class_signatures(c, existing_ast);
-        compile_class_body(c, existing_ast);
-
-        for (Compiler* comp = c; comp != NULL; comp = comp->enclosing) {
-            if (comp->defined_class != NULL) {
-                Value val;
-                if (table_get(comp->defined_class, name, &val)) return (ClassDef*)as_obj(val);
-            }
-        }
-    }
-
-    // 4. プロジェクトディレクトリ内のソース探索（最優先）
-    char cd_path[1024];
-    bool found_source = false;
-    struct stat st;
-
-    snprintf(cd_path, sizeof(cd_path), "%s/%s.cd", base_dir, name->chars);
-    if (stat(cd_path, &st) == 0) {
-        found_source = true;
-    } else {
-        snprintf(cd_path, sizeof(cd_path), "%s/%s.jcd", base_dir, name->chars);
-        if (stat(cd_path, &st) == 0) {
-            found_source = true;
-        }
-    }
-
-    // ローカルで見つかった場合はパースしてコンパイル（compile_class_body 内でキャッシュも自動書き出し）
-    if (found_source && parse_file(cd_path)) {
-        ASTNode* ast = find_class_ast(name);
-        if (ast) {
-            declare_class_skeleton(c, ast);
-            resolve_class_skeleton_relations(c, ast);
-            declare_class_signatures(c, ast);
-            compile_class_body(c, ast);
-
-            return resolve_class(c, name);
-        }
-    }
-
-    // 5. システム組み込みキャッシュ
+    // 3. ビルトインクラス (Object, Integer, String, Iterable 等)
     if (is_builtin(name)) {
+        char cid_buf[256];
+        snprintf(cid_buf, sizeof(cid_buf), "builtin::%s", name->chars);
+        Symbol* cid_sym = intern_cstr(cid_buf);
+
+        ClassDef* reg = find_in_global_registry(c, cid_sym);
+        if (reg != NULL) return reg;
+
         const char* stdlib_dir = get_japeng_lib_dir();
-        char builtin_dir[1024];
+        char builtin_dir[PATH_MAX];
         snprintf(builtin_dir, sizeof(builtin_dir), "%s/builtin", stdlib_dir);
-        char builtin_bcd[1024];
+        char builtin_bcd[PATH_MAX];
         get_cache_filepath(builtin_dir, name->chars, "bcd", builtin_bcd, sizeof(builtin_bcd));
         if (is_cache_fresh(builtin_bcd, builtin_dir)) {
             ClassDef* loaded = load_class_type_from_bcd(c, builtin_bcd);
-            if (loaded) return loaded;
+            if (loaded != NULL) {
+                loaded->canonical_id = cid_sym;
+                if (c->defined_class == NULL) c->defined_class = new_table(16);
+                table_set(c->defined_class, cid_sym, make_obj((Obj*)loaded));
+                return loaded;
+            }
         }
     }
 
     return NULL;
+}
+
+ClassDef* resolve_class_from_type(Compiler* c, TypeInfo* type)
+{
+    if (type == NULL) return NULL;
+    if (type->canonical_id != NULL) {
+        ClassDef* klass = resolve_class(c, type->canonical_id);
+        if (klass != NULL) return klass;
+    }
+    return resolve_class(c, type->name);
 }
 
 static int count_classes(ASTNode* node)
@@ -260,14 +311,30 @@ static void add_interface_if_missing(ClassDef* target_class, ClassDef* iface, Ty
     target_class->interface_count++;
 }
 
-static void collect_all_ancestor_interfaces(ClassDef* target_class, ClassDef* iface) {
+static void collect_all_ancestor_interfaces(ClassDef* target_class, ClassDef* iface, TypeInfo* concrete_iface_type) {
     if (iface == NULL) return;
+
+    TypeEnv env;
+    env.count = 0;
+    if (iface->type != NULL && concrete_iface_type != NULL) {
+        for (int i = 0; i < iface->type->type_arg_count && i < concrete_iface_type->type_arg_count; i++) {
+            if (env.count < MAX_TYPE_PARAMS) {
+                env.params[env.count] = iface->type->type_args[i]->name;
+                env.args[env.count]   = concrete_iface_type->type_args[i];
+                env.count++;
+            }
+        }
+    }
+
     for (int i = 0; i < iface->interface_count; i++) {
         ClassDef* parent_iface = iface->interfaces[i];
-        TypeInfo* parent_type = iface->interface_types ? iface->interface_types[i] : NULL;
+        TypeInfo* raw_parent_type = iface->interface_types ? iface->interface_types[i] : NULL;
+        TypeInfo* concrete_parent_type = (raw_parent_type && env.count > 0)
+                                         ? substitute_type(raw_parent_type, &env)
+                                         : raw_parent_type;
         if (parent_iface != NULL) {
-            add_interface_if_missing(target_class, parent_iface, parent_type);
-            collect_all_ancestor_interfaces(target_class, parent_iface);
+            add_interface_if_missing(target_class, parent_iface, concrete_parent_type);
+            collect_all_ancestor_interfaces(target_class, parent_iface, concrete_parent_type);
         }
     }
 }
@@ -278,10 +345,12 @@ TypeInfo* build_type_info(Compiler* c, ASTNode* node)
 
     if (node->kind == AST_CLASS) {
         Symbol* raw_name = node->klass.classname->identifier.name;
-        Symbol* name = resolve_name_alias(c, raw_name);
+        ClassDef* resolved = resolve_class(c, raw_name);
+        Symbol* name = resolved ? resolved->name : resolve_name_alias(c, raw_name);
         int arg_count = count_type_args(node->klass.types);
 
         TypeInfo* t_info = new_type_info(name, arg_count);
+        if (resolved) t_info->canonical_id = resolved->canonical_id;
         if (arg_count > 0) {
             int idx = 0;
             fill_type_args(c, node->klass.types, t_info->type_args, &idx);
@@ -300,8 +369,11 @@ TypeInfo* build_type_info(Compiler* c, ASTNode* node)
 
     if (node->kind == AST_IDENTIFIER) {
         Symbol* raw_name = node->identifier.name;
-        Symbol* name = resolve_name_alias(c, raw_name);
-        return new_type_info(name, 0);
+        ClassDef* resolved = resolve_class(c, raw_name);
+        Symbol* name = resolved ? resolved->name : resolve_name_alias(c, raw_name);
+        TypeInfo* t_info = new_type_info(name, 0);
+        if (resolved) t_info->canonical_id = resolved->canonical_id;
+        return t_info;
     }
 
     return NULL;
@@ -515,7 +587,7 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
             if (from_class && from_class->state != CLASS_STATE_COMPILED) {
                 ASTNode* from_ast = find_class_ast(from_name);
                 if (from_ast != NULL) {
-                    compile_class_body(c, from_ast);
+                    compile_foreign_class_ast(c, from_ast);
                 }
             }
         }
@@ -680,7 +752,7 @@ static void compile_class_members(Compiler* c, ClassDef* klass, ASTNode* node)
             if (from_class && from_class->state != CLASS_STATE_COMPILED) {
                 ASTNode* from_ast = find_class_ast(from_name);
                 if (from_ast != NULL) {
-                    compile_class_body(c, from_ast);
+                    compile_foreign_class_ast(c, from_ast);
                 }
             }
         }
@@ -803,15 +875,31 @@ void declare_class_skeleton(Compiler* c, ASTNode* node)
 
     ASTNode* class_node = node->class_def.klass;
     Symbol* class_name = class_node->klass.classname->identifier.name;
+
+    const char* src_file = node->loc.filename ? node->loc.filename : c->filename;
+    char cid_buf[PATH_MAX];
+    make_canonical_id(c->project_dir, src_file, class_name->chars, is_builtin(class_name), cid_buf, sizeof(cid_buf));
+    Symbol* cid_sym = intern_cstr(cid_buf);
+
+    // すでに同じ戸籍IDがグローバル台帳にあれば、ローカルバインディングだけ張って戻る
+    ClassDef* existing = find_in_global_registry(c, cid_sym);
+    if (existing != NULL) {
+        register_class_binding(c, class_name, cid_sym, existing);
+        return;
+    }
+
     TypeInfo* class_type = build_type_info(c, class_node);
 
     ClassDef* klass = new_class(class_name, class_type, NULL, NULL, 0);
+    klass->canonical_id = cid_sym;
+    if (klass->type != NULL) klass->type->canonical_id = cid_sym;
     klass->is_interface = node->class_def.is_interface;
-    
+
     if (c->defined_class == NULL) {
         c->defined_class = new_table(16);
     }
-    table_set(c->defined_class, class_name, make_obj((Obj*)klass));
+    table_set(c->defined_class, cid_sym, make_obj((Obj*)klass));
+    register_class_binding(c, class_name, cid_sym, klass);
 }
 
 void resolve_class_skeleton_relations(Compiler* c, ASTNode* node)
@@ -1134,7 +1222,7 @@ void compile_class_body(Compiler* c, ASTNode* node)
     if (klass->superclass != NULL && klass->superclass->state != CLASS_STATE_COMPILED) {
         ASTNode* super_ast = find_class_ast(klass->superclass->name);
         if (super_ast != NULL) {
-            compile_class_body(c, super_ast);
+            compile_foreign_class_ast(c, super_ast);
         }
     }
 
@@ -1144,7 +1232,7 @@ void compile_class_body(Compiler* c, ASTNode* node)
         if (iface->state != CLASS_STATE_COMPILED) {
             ASTNode* iface_ast = find_class_ast(iface->name);
             if (iface_ast != NULL) {
-                compile_class_body(c, iface_ast);
+                compile_foreign_class_ast(c, iface_ast);
             }
         }
     }
@@ -1206,7 +1294,7 @@ void compile_class_body(Compiler* c, ASTNode* node)
         if (del_klass->state != CLASS_STATE_COMPILED) {
             ASTNode* del_ast = find_class_ast(del_klass->name);
             if (del_ast != NULL) {
-                compile_class_body(c, del_ast);
+                compile_foreign_class_ast(c, del_ast);
             }
         }
         
@@ -1274,7 +1362,8 @@ void compile_class_body(Compiler* c, ASTNode* node)
     if (!klass->is_interface && klass->interface_count > 0) {
         int initial_count = klass->interface_count;
         for (int i = 0; i < initial_count; i++) {
-            collect_all_ancestor_interfaces(klass, klass->interfaces[i]);
+            TypeInfo* iface_type = klass->interface_types ? klass->interface_types[i] : NULL;
+            collect_all_ancestor_interfaces(klass, klass->interfaces[i], iface_type);
         }
     }
 
@@ -1283,12 +1372,26 @@ void compile_class_body(Compiler* c, ASTNode* node)
             ClassDef* iface = klass->interfaces[i];
             if (iface == NULL || iface->method_types == NULL) continue;
 
+            TypeEnv env;
+            env.count = 0;
+            TypeInfo* impl_iface_type = (klass->interface_types) ? klass->interface_types[i] : NULL;
+            if (iface->type != NULL && impl_iface_type != NULL) {
+                for (int t = 0; t < iface->type->type_arg_count && t < impl_iface_type->type_arg_count; t++) {
+                    if (env.count < MAX_TYPE_PARAMS) {
+                        env.params[env.count] = iface->type->type_args[t]->name;
+                        env.args[env.count]   = impl_iface_type->type_args[t];
+                        env.count++;
+                    }
+                }
+            }
+
             for (int k = 0; k < iface->method_types->capacity; k++) {
                 HashEntry* entry = &iface->method_types->entries[k];
                 if (entry->status != OCCUPIED || entry->key == NULL) continue;
 
                 Symbol* req_method_name = entry->key;
-                TypeInfo* req_type = (TypeInfo*)as_obj(entry->value);
+                TypeInfo* raw_req_type = (TypeInfo*)as_obj(entry->value);
+                TypeInfo* req_type = (env.count > 0) ? substitute_type(raw_req_type, &env) : raw_req_type;
 
                 TypeInfo* actual_type = find_method_type(klass, req_method_name);
                 if (actual_type == NULL) {
@@ -1350,18 +1453,14 @@ void compile_class_def(Compiler* c, ASTNode* node)
     ASTNode* class_node = node->class_def.klass;
     Symbol* class_name = class_node->klass.classname->identifier.name;
 
-    ClassDef* existing = NULL;
-    for (Compiler* comp = c; comp != NULL; comp = comp->enclosing) {
-        if (comp->defined_class != NULL) {
-            Value val;
-            if (table_get(comp->defined_class, class_name, &val)) {
-                existing = (ClassDef*)as_obj(val);
-                break;
-            }
-        }
-    }
+    const char* src_file = node->loc.filename ? node->loc.filename : c->filename;
+    char cid_buf[PATH_MAX];
+    make_canonical_id(c->project_dir, src_file, class_name->chars, is_builtin(class_name), cid_buf, sizeof(cid_buf));
+    Symbol* cid_sym = intern_cstr(cid_buf);
 
+    ClassDef* existing = find_in_global_registry(c, cid_sym);
     if (existing != NULL && existing->state == CLASS_STATE_COMPILED) {
+        register_class_binding(c, class_name, cid_sym, existing);
         return;
     }
 
@@ -1374,7 +1473,7 @@ void compile_class_def(Compiler* c, ASTNode* node)
     compile_class_body(c, node);
 }
 
-static void run_file_imports(Compiler* c, ASTNode* node)
+void run_file_imports(Compiler* c, ASTNode* node)
 {
     if (node == NULL) return;
     if (node->kind == AST_IMPORT) {
@@ -1398,41 +1497,65 @@ ClassDef* resolve_class_from_file(Compiler* c, const char* file_path)
     if (dot) *dot = '\0';
     Symbol* class_sym = intern_cstr(class_name_buf);
 
-    char file_dir[1024];
+    char cid_buf[PATH_MAX];
+    make_canonical_id(c->project_dir, file_path, class_sym->chars, is_builtin(class_sym), cid_buf, sizeof(cid_buf));
+    Symbol* cid_sym = intern_cstr(cid_buf);
+
+    // 1. すでにグローバル台帳にロード済みなら即返却
+    ClassDef* already = find_in_global_registry(c, cid_sym);
+    if (already != NULL) {
+        return already;
+    }
+
+    char file_dir[PATH_MAX];
     get_dir_from_filename(file_path, file_dir, sizeof(file_dir));
 
-    // 1. キャッシュチェック
-    char bcd_path[1024];
+    // 2. .bcd キャッシュチェック
+    char bcd_path[PATH_MAX];
     get_cache_filepath(file_dir, class_sym->chars, "bcd", bcd_path, sizeof(bcd_path));
     if (is_cache_fresh(bcd_path, file_dir)) {
         ClassDef* loaded = load_class_type_from_bcd(c, bcd_path);
-        if (loaded) return loaded;
+        if (loaded != NULL) {
+            loaded->canonical_id = cid_sym;
+            if (c->defined_class == NULL) c->defined_class = new_table(16);
+            table_set(c->defined_class, cid_sym, make_obj((Obj*)loaded));
+            return loaded;
+        }
     }
 
-    // 2. パース実行
-    if (!parse_file(file_path)) {
-        return NULL;
+    // 3. キャッシュが無ければソースをパースしてファイル専用スコープでコンパイル
+    ASTNode* file_ast = find_file_ast_by_path(file_path);
+    if (file_ast == NULL) {
+        if (!parse_file(file_path)) {
+            return NULL;
+        }
+        file_ast = (parsed_cd_count > 0) ? parsed_cd[parsed_cd_count - 1] : NULL;
     }
 
-    // パースされたファイル全体の AST を取得
-    ASTNode* file_ast = (parsed_cd_count > 0) ? parsed_cd[parsed_cd_count - 1] : NULL;
-    ASTNode* ast = find_class_ast(class_sym);
+    ASTNode* ast = find_class_in_node(file_ast, class_sym);
+    if (!ast) ast = find_class_ast(class_sym);
     if (ast) {
         const char* saved_filename = c->filename;
-        Table* saved_imports = c->imported_classes;
-        c->filename = file_path;
-        c->imported_classes = new_table(8);
+        Table* saved_bindings      = c->class_bindings;
 
+        c->filename       = file_path;
+        c->class_bindings = new_table(16);
+
+        // 先に自ファイルの骨格をグローバル台帳に登録しておく（相互参照での無限再帰防止）
+        declare_class_skeleton(c, file_ast ? file_ast : ast);
+
+        import_same_directory_classes(c, file_path);
         run_file_imports(c, file_ast);
 
-        declare_class_skeleton(c, ast);
         resolve_class_skeleton_relations(c, ast);
         declare_class_signatures(c, ast);
         compile_class_body(c, ast);
 
-        c->imported_classes = saved_imports;
-        c->filename = saved_filename;
-        return resolve_class(c, class_sym);
+        ClassDef* result = find_in_global_registry(c, cid_sym);
+
+        c->class_bindings = saved_bindings;
+        c->filename       = saved_filename;
+        return result;
     }
     return NULL;
 }

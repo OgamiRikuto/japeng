@@ -4,7 +4,6 @@
 #include "common.h"
 #include "native.h"
 #include "builtins.h"
-#include "dispatch.h"
 #include <stdio.h>
 #include <string.h>
 

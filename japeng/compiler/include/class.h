@@ -11,6 +11,7 @@ typedef struct table Table;
 // 型データ (名前, 型, 型数)
 typedef struct typeInfo {
     Symbol* name;
+    Symbol* canonical_id;
     int type_arg_count;
     int param_count;
     int min_param_count;
@@ -42,6 +43,7 @@ typedef struct classDef {
     
     // クラスの情報
     Symbol* name;
+    Symbol* canonical_id;
     TypeInfo* type;
     bool is_interface;
 

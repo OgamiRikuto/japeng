@@ -38,8 +38,16 @@ typedef struct {
     int        count;
 } TypeEnv;
 
+typedef struct classBinding {
+    Symbol*   local_name;
+    Symbol*   canonical_id;
+    ClassDef* klass;
+} ClassBinding;
+
 typedef struct compiler {
     const char* filename;
+    const char* project_dir;
+    Table*      class_bindings;
     Table*      imported_classes;
     Table*      dict_aliases;
     struct compiler* enclosing;
@@ -81,6 +89,7 @@ void declare_class_signatures(Compiler* c, ASTNode* node);
 void compile_class_body(Compiler* c, ASTNode* node);
 void compile_class_def(Compiler* c, ASTNode* node);
 void compile_import(Compiler* c, ASTNode* node);
+void run_file_imports(Compiler* c, ASTNode* node);
 
 
 #endif

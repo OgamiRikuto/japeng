@@ -85,7 +85,13 @@ static TypeInfo* peek_identifier_type(Compiler* c, ASTNode* node) {
 bool type_equals(TypeInfo* a, TypeInfo* b) {
     if (a == NULL || b == NULL) return false;
     if (a == b) return true;
-    if (a->name != b->name) return false;
+
+    if (a->canonical_id != NULL && b->canonical_id != NULL) {
+        if (a->canonical_id != b->canonical_id) return false;
+    } else if (a->name != b->name) {
+        return false;
+    }
+
     if (a->type_arg_count != b->type_arg_count) return false;
 
     for (int i = 0; i < a->type_arg_count; i++) {
@@ -94,18 +100,114 @@ bool type_equals(TypeInfo* a, TypeInfo* b) {
     return true;
 }
 
-static bool class_implements_interface_rec(ClassDef* curr, Symbol* target_name) 
+static bool check_interface_assignable_rec(Compiler* c, ClassDef* curr_def, TypeInfo* curr_type, TypeInfo* target_iface_type) 
 {
-    while (curr != NULL) {
-        for (int i = 0; i < curr->interface_count; i++) {
-            ClassDef* iface = curr->interfaces[i];
-            if (iface == NULL) continue;
-            if (iface->name == target_name) return true;
-            if (class_implements_interface_rec(iface, target_name)) return true;
+    while (curr_def != NULL) {
+        TypeEnv env;
+        env.count = 0;
+        if (curr_def->type != NULL && curr_type != NULL) {
+            for (int i = 0; i < curr_def->type->type_arg_count && i < curr_type->type_arg_count; i++) {
+                if (env.count < MAX_TYPE_PARAMS) {
+                    env.params[env.count] = curr_def->type->type_args[i]->name;
+                    env.args[env.count]   = curr_type->type_args[i];
+                    env.count++;
+                }
+            }
         }
-        curr = curr->superclass;
+
+        for (int i = 0; i < curr_def->interface_count; i++) {
+            ClassDef* iface = curr_def->interfaces[i];
+            if (iface == NULL) continue;
+
+            TypeInfo* raw_iface_type = (curr_def->interface_types && curr_def->interface_types[i])
+                                       ? curr_def->interface_types[i]
+                                       : new_type_info(iface->name, 0);
+            TypeInfo* concrete_iface_type = (env.count > 0)
+                                            ? substitute_type(raw_iface_type, &env)
+                                            : raw_iface_type;
+
+            if (iface->name == target_iface_type->name) {
+                if (target_iface_type->type_arg_count == 0) return true;
+                if (is_assignable(c, target_iface_type, concrete_iface_type)) return true;
+            }
+
+            if (check_interface_assignable_rec(c, iface, concrete_iface_type, target_iface_type)) {
+                return true;
+            }
+        }
+
+        if (curr_def->superclass != NULL) {
+            TypeInfo* raw_super = curr_def->superclass_type
+                                  ? curr_def->superclass_type
+                                  : new_type_info(curr_def->superclass->name, 0);
+            curr_type = (env.count > 0) ? substitute_type(raw_super, &env) : raw_super;
+        }
+        curr_def = curr_def->superclass;
     }
     return false;
+}
+
+TypeInfo* extract_iterable_element_type(Compiler* c, TypeInfo* rec_type)
+{
+    if (rec_type == NULL) return NULL;
+    Symbol* sym_Iterable = intern_cstr("Iterable");
+
+    // 1. レシーバの型自体が Iterable<T> インターフェースの場合
+    if (rec_type->name == sym_Iterable) {
+        return (rec_type->type_arg_count > 0)
+               ? rec_type->type_args[0]
+               : new_type_info(sym_Auto, 0);
+    }
+
+    // 2. 具象クラスや別インターフェースが Iterable<T> を実装している場合
+    ClassDef* curr_def = resolve_class_from_type(c, rec_type);
+    TypeInfo* curr_type = rec_type;
+
+    while (curr_def != NULL) {
+        TypeEnv env;
+        env.count = 0;
+        if (curr_def->type != NULL && curr_type != NULL) {
+            for (int i = 0; i < curr_def->type->type_arg_count && i < curr_type->type_arg_count; i++) {
+                if (env.count < MAX_TYPE_PARAMS) {
+                    env.params[env.count] = curr_def->type->type_args[i]->name;
+                    env.args[env.count]   = curr_type->type_args[i];
+                    env.count++;
+                }
+            }
+        }
+
+        for (int i = 0; i < curr_def->interface_count; i++) {
+            ClassDef* iface = curr_def->interfaces[i];
+            if (iface == NULL) continue;
+
+            TypeInfo* raw_iface_type = (curr_def->interface_types && curr_def->interface_types[i])
+                                       ? curr_def->interface_types[i]
+                                       : new_type_info(iface->name, 0);
+            TypeInfo* concrete_iface_type = (env.count > 0)
+                                            ? substitute_type(raw_iface_type, &env)
+                                            : raw_iface_type;
+
+            if (iface->name == sym_Iterable) {
+                return (concrete_iface_type->type_arg_count > 0)
+                       ? concrete_iface_type->type_args[0]
+                       : new_type_info(sym_Auto, 0);
+            }
+
+            // 親インターフェース経由で Iterable<T> を継承している場合も再帰探索
+            TypeInfo* found = extract_iterable_element_type(c, concrete_iface_type);
+            if (found != NULL) return found;
+        }
+
+        if (curr_def->superclass != NULL) {
+            TypeInfo* raw_super = curr_def->superclass_type
+                                  ? curr_def->superclass_type
+                                  : new_type_info(curr_def->superclass->name, 0);
+            curr_type = (env.count > 0) ? substitute_type(raw_super, &env) : raw_super;
+        }
+        curr_def = curr_def->superclass;
+    }
+
+    return NULL;
 }
 
 // target 型に source 型を代入できるか判定
@@ -202,7 +304,7 @@ bool is_assignable(Compiler* c, TypeInfo* target, TypeInfo* source) {
     }
 
     // 5. 継承関係チェック
-    ClassDef* src_class = resolve_class(c, source->name);
+    ClassDef* src_class = resolve_class_from_type(c, source);
     ClassDef* curr = src_class;
     while (curr != NULL && curr->superclass != NULL) {
         if (curr->superclass->name == target->name) return true;
@@ -210,9 +312,9 @@ bool is_assignable(Compiler* c, TypeInfo* target, TypeInfo* source) {
     }
 
     // 6. インターフェース実装チェック
-    ClassDef* tgt_class = resolve_class(c, target->name);
+    ClassDef* tgt_class = resolve_class_from_type(c, target);
     if (tgt_class != NULL && tgt_class->is_interface) {
-        if (class_implements_interface_rec(src_class, target->name)) {
+        if (check_interface_assignable_rec(c, src_class, source, target)) {
             return true;
         }
     }
@@ -287,6 +389,7 @@ static TypeInfo* replace_type_param(TypeInfo* type, Symbol* target_sym, TypeInfo
     // 2. ジェネリクス型や Function 型の場合、型引数を再帰置換
     if (type->type_arg_count > 0) {
         TypeInfo* new_t = new_type_info(type->name, type->type_arg_count);
+        new_t->canonical_id = type->canonical_id;
         for (int i = 0; i < type->type_arg_count; i++) {
             new_t->type_args[i] = replace_type_param(type->type_args[i], target_sym, replacement);
         }
@@ -417,6 +520,7 @@ TypeInfo* substitute_type(TypeInfo* formal, TypeEnv* env)
     // 2. ジェネリクス型 / Function 型の中身を再帰置換
     if (formal->type_arg_count > 0) {
         TypeInfo* new_t = new_type_info(formal->name, formal->type_arg_count);
+        new_t->canonical_id = formal->canonical_id;
         for (int i = 0; i < formal->type_arg_count; i++) {
             new_t->type_args[i] = substitute_type(formal->type_args[i], env);
         }
@@ -464,9 +568,8 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
         return new_type_info(sym_Error, 0);
     }
 
-
     // 1. クラスの取得
-    ClassDef* klass = resolve_class(c, rec_type->name);
+    ClassDef* klass = resolve_class_from_type(c, rec_type);
     if (klass == NULL) {
         error_compile(send_node, ERR_CLASS_NOT_REGISTERED, rec_type->name->chars);
         return new_type_info(sym_Error, 0);
@@ -610,7 +713,7 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
     }
 
     // 8. 最大引数数 (max_argc) で OP_SEND 発行！
-    ClassDef* rec_class = resolve_class(c, rec_type->name);
+    ClassDef* rec_class = resolve_class_from_type(c, rec_type);
 
     if (is_class_receiver) {
        int static_slot = get_static_method_index(klass, msg);
@@ -635,7 +738,7 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
         uint32_t cs_const_idx = add_constant(c->chunk, make_obj((Obj*)cs));
 
         // 3. OP_IMPL_SEND 命令を発行 (argc と 定数インデックス)
-        uint32_t operand = make_call_operand(actual_argc, cs_const_idx);
+        uint32_t operand = make_call_operand((uint8_t)max_argc, cs_const_idx);
         emit_inst(c, OP_IMPL_SEND, operand);
 
     } else {
@@ -646,7 +749,7 @@ TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* re
             return new_type_info(sym_Error, 0);
         }
 
-        uint32_t operand = make_call_operand(actual_argc, vtable_idx);
+        uint32_t operand = make_call_operand((uint8_t)max_argc, vtable_idx);
         emit_inst(c, OP_INVOKE_VIRTUAL, operand);
     }
 
@@ -758,15 +861,17 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                     return c->current_class->field_infos[field_idx].type;
                 }
             }
-            Symbol* class_name = resolve_name_alias(c, node->identifier.name);
-            ClassDef* klass = resolve_class(c, class_name);
+            // Symbol* class_name = resolve_name_alias(c, node->identifier.name);
+            ClassDef* klass = resolve_class(c, node->identifier.name);
             if (klass != NULL) {
                 // クラスオブジェクトそのものをスタックに積む
                 uint32_t const_idx = add_constant(c->chunk, make_obj((Obj*)klass));
                 emit_inst(c, OP_CONSTANT, const_idx);
 
                 // 型としてそのクラス自身を返す
-                return new_type_info(klass->name, 0);
+                TypeInfo* t = new_type_info(klass->name, 0);
+                t->canonical_id = klass->canonical_id;
+                return t;
             }
             error_compile(node, ERR_UNDEFINED_VAR, node->identifier.name->chars);
             emit_constant(c, make_nil());
@@ -1080,7 +1185,7 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                 }
 
                 // ★ 自作クラス (Fraction 等) の演算子オーバーロード
-                ClassDef* klass = resolve_class(c, lhs->name);
+                ClassDef* klass = resolve_class_from_type(c, lhs);
                 if (klass == NULL) {
                     error_compile(node, ERR_CLASS_NOT_REGISTERED, lhs->name->chars);
                     return new_type_info(sym_Error, 0);
@@ -1170,7 +1275,7 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
                 }
 
                 // ★ 自作クラスの比較演算子オーバーロード
-                ClassDef* klass = resolve_class(c, lhs->name);
+                ClassDef* klass = resolve_class_from_type(c, lhs);
                 if (klass == NULL) {
                     error_compile(node, ERR_CLASS_NOT_REGISTERED, lhs->name->chars);
                     return new_type_info(sym_Error, 0);
@@ -1257,10 +1362,12 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node) {
             ClassDef* klass = resolve_class(c, name);
             if (klass == NULL) {
                 error_compile(node, ERR_CLASS_NOT_REGISTERED, class_name ? class_name->chars : "unknown");
+                emit_constant(c, make_nil());
                 return new_type_info(sym_Error, 0);
             }
             if (klass->is_interface) {
                 error_compile(node, ERR_CANNOT_INSTANTIATE_INTERFACE, class_name->chars);
+                emit_constant(c, make_nil());
                 return new_type_info(sym_Error, 0);
             }
             // 2. ジェネリクスを反映した具象型の構築 

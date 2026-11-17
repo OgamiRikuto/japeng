@@ -186,58 +186,6 @@ static bool native_window_set_title(VM* vm, uint8_t argc) {
     return true;
 }
 
-static bool native_window_fill_rect(VM* vm, uint8_t argc) {
-    (void)argc;
-    int32_t color     = as_int(pop(vm));
-    double  h         = as_float(pop(vm));
-    double  w         = as_float(pop(vm));
-    double  y         = as_float(pop(vm));
-    double  x         = as_float(pop(vm));
-    ObjInstance* self = (ObjInstance*)as_obj(pop(vm));
-    GLFWwindow* win   = get_window_ptr(self);
-
-    if (win) {
-        float r, g, b;
-        unpack_rgb(color, &r, &g, &b);
-        glColor3f(r, g, b);
-        glBegin(GL_QUADS);
-            glVertex2d(x,     y);
-            glVertex2d(x + w, y);
-            glVertex2d(x + w, y + h);
-            glVertex2d(x,     y + h);
-        glEnd();
-    }
-
-    push(vm, make_nil());
-    return true;
-}
-
-static bool native_window_draw_rect(VM* vm, uint8_t argc) {
-    (void)argc;
-    int32_t color     = as_int(pop(vm));
-    int32_t h         = as_int(pop(vm));
-    int32_t w         = as_int(pop(vm));
-    int32_t y         = as_int(pop(vm));
-    int32_t x         = as_int(pop(vm));
-    ObjInstance* self = (ObjInstance*)as_obj(pop(vm));
-    GLFWwindow* win   = get_window_ptr(self);
-
-    if (win) {
-        float r, g, b;
-        unpack_rgb(color, &r, &g, &b);
-        glColor3f(r, g, b);
-        glBegin(GL_QUADS);
-            glVertex2d((double)x,     (double)y);
-            glVertex2d((double)(x+w), (double)y);
-            glVertex2d((double)(x+w), (double)(y+h));
-            glVertex2d((double)x,     (double)(y+h));
-        glEnd();
-    }
-
-    push(vm, make_nil());
-    return true;
-}
-
 static bool native_window_draw_line(VM* vm, uint8_t argc) {
     (void)argc;
     int32_t color     = as_int(pop(vm));
@@ -262,6 +210,42 @@ static bool native_window_draw_line(VM* vm, uint8_t argc) {
     return true;
 }
 
+static double extract_coord(Value v) {
+    if (is_float(v)) return as_float(v);
+    if (is_int(v))   return (double)as_int(v);
+    return 0.0;
+}
+
+static bool native_window_fill_polygon(VM* vm, uint8_t argc) {
+    (void)argc;
+    int32_t color     = as_int(pop(vm));
+    Value   pts_val   = pop(vm);
+    ObjInstance* self = (ObjInstance*)as_obj(pop(vm));
+    GLFWwindow* win   = get_window_ptr(self);
+
+    if (win && is_obj_type(pts_val, OBJ_LIST)) {
+        ObjList* list = (ObjList*)as_obj(pts_val);
+        if (list->size >= 3) {
+            float r, g, b;
+            unpack_rgb(color, &r, &g, &b);
+            glColor3f(r, g, b);
+
+            glBegin(GL_TRIANGLE_FAN);
+            for (uint32_t i = 0; i < list->size; i++) {
+                Value item = list->elements[i];
+                if (is_obj_type(item, OBJ_INSTANCE)) {
+                    ObjInstance* pt = (ObjInstance*)as_obj(item);
+                    glVertex2d(extract_coord(pt->fields[0]), extract_coord(pt->fields[1]));
+                }
+            }
+            glEnd();
+        }
+    }
+
+    push(vm, make_nil());
+    return true;
+}
+
 void register_window_natives(ObjClass* klass) {
     vm_define_native(klass, "init",        native_window_init);
     vm_define_native(klass, "shouldClose", native_window_should_close);
@@ -274,7 +258,6 @@ void register_window_natives(ObjClass* klass) {
     vm_define_native(klass, "setSize",     native_window_set_size);
     vm_define_native(klass, "setPosition", native_window_set_position);
     vm_define_native(klass, "setTitle",    native_window_set_title);
-    vm_define_native(klass, "fillRect",    native_window_fill_rect);
-    vm_define_native(klass, "drawRect", native_window_draw_rect);
     vm_define_native(klass, "drawLine",    native_window_draw_line);
+    vm_define_native(klass, "fillPolygon", native_window_fill_polygon);
 }

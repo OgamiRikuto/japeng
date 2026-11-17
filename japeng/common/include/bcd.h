@@ -6,7 +6,7 @@
 #include <stdbool.h>
 
 #define BCD_MAGIC "JPEN"
-#define BCD_VERSION 1
+#define BCD_VERSION 2
 #define BCD_MAX_SOURCE_NAME 64
 
 typedef enum {
@@ -41,5 +41,10 @@ typedef enum {
 const char* get_japeng_lib_dir(void);
 void encode_cache_name(const char* name, char* out, size_t max_len);
 void get_cache_filepath(const char* base_dir, const char* name, const char* ext, char* out, size_t max_len);
+void make_canonical_id(const char* project_dir, const char* file_path,
+                       const char* class_name, bool is_builtin_class,
+                       char* out, size_t max_len);
+bool resolve_bcd_path_from_canonical_id(const char* canonical_id, const char* project_dir,
+                                        char* out_bcd_path, size_t max_len);
 
 #endif

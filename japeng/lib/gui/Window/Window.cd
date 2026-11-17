@@ -20,6 +20,5 @@ class Window based Object implements Close:
     setTitle:    Function = [ arg title: String; ];
 
     // プリミティブ描画
-    fillRect:    Function = [ arg x: Float, y: Float, w: Float, h: Float, color: Integer; ];
-    drawRect:    Function = [ arg x: Integer, y: Integer, w: Integer, h: Integer, color: Integer; ];
     drawLine:    Function = [ arg x1: Float, y1: Float, x2: Float, y2: Float, color: Integer; ];
+    fillPolygon: Function = [ arg points: List<Point>, color: Integer; ];

@@ -1,8 +1,39 @@
-class Circle:
-    pos: Point;
+import "std/Math/Point";
+import "gui/Graphics/Shape";
+
+class Circle based Shape:
+    center: Point;
     radius: Float;
-    color: Integer;
-    intersects: Function = [
-        arg other: Circle;
-        ret Boolean;
+    cachedVertices: List<Point>;
+
+    init: Function = [
+        arg x: Float, y: Float, r: Float, c: Integer = 16777215, isFilled: Boolean = true;
+        super.init(c, isFilled);
+        center = Point(x, y);
+        radius = r;
+        self.updateVertices;
+    ];
+
+    updateVertices: Function = [
+        segments: Integer = 36;
+        cosStep: Float = 0.98480775;
+        sinStep: Float = 0.17364818;
+
+        pts: List<Point> = L[];
+        dx: Float = radius;
+        dy: Float = 0.0;
+
+        segments.repeat [
+            pts.push(Point(center.x + dx, center.y + dy));
+            nextDx: Float = (dx * cosStep) - (dy * sinStep);
+            nextDy: Float = (dx * sinStep) + (dy * cosStep);
+            dx = nextDx;
+            dy = nextDy;
+        ];
+        cachedVertices = pts;
+    ];
+
+    vertices: Function = [
+        ret List<Point>;
+        return cachedVertices;
     ];

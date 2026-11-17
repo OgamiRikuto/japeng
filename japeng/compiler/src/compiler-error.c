@@ -35,6 +35,10 @@ static const char* const error_table[ERR_COUNT][LANG_COUNT] = {
         [LANG_EN] = "No target files provided.",
         [LANG_JA] = "対象ファイルが指定されていません。"
     },
+    [MSG_CACHE_OUTDATED_RECOMPILE] = {
+        [LANG_EN] = "Cache version mismatch for '%1$s' (v%2$u -> v%3$u); recompiling.",
+        [LANG_JA] = "'%1$s' のキャッシュバージョンが古いため再コンパイルします (v%2$u -> v%3$u)。"
+    },
 
     // --- 構文エラー ---
     [ERR_SYNTAX_GENERIC] = {
@@ -223,8 +227,8 @@ static const char* const error_table[ERR_COUNT][LANG_COUNT] = {
         [LANG_JA] = "回数指定ループ 'repeat' (繰り返す) の回数には整数型 (Integer) が必要ですが、'%s' が渡されました。"
     },
     [ERR_EACH_NOT_LIST] = {
-        [LANG_EN] = "'each' can only be applied to a List, but got '%s'.",
-        [LANG_JA] = "'each' (各々) はリスト型 (List) にのみ適用できますが、'%s' が渡されました。"
+        [LANG_EN] = "'each' can only be applied to a List, String, or Iterable, but got '%s'.",
+        [LANG_JA] = "'each' (各々) はリスト型 (List)、文字列型 (String)、または Iterable を実装した型にのみ適用できますが、'%s' が渡されました。"
     },
     [ERR_EACH_ARITY] = {
         [LANG_EN] = "Block for 'each' must take 1 (element) or 2 (index, element) arguments, but got %d.",

@@ -99,6 +99,11 @@ void compile_statement_node(Compiler* c, ASTNode* node)
 void compile(Compiler* c, ASTNode* node)
 {
     if (node == NULL) return;
+
+    if (c->enclosing == NULL && c->class_bindings == NULL && c->filename != NULL) {
+        c->class_bindings = new_table(16);
+        import_same_directory_classes(c, c->filename);
+    }
 #if DEBUG_COMPILE_KIND
     fprintf(stderr, "[COMPILE] kind=%d\n", node->kind);
 #endif

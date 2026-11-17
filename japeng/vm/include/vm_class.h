@@ -17,6 +17,7 @@ typedef struct {
 typedef struct ObjClass {
     Obj              header;
     Symbol*          name;
+    Symbol*          canonical_id;
     struct ObjClass* superclass;
     
     // フィールド情報

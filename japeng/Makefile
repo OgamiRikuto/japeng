@@ -48,7 +48,7 @@ COMMON_OBJS = $(COMMON_SRCS:.c=.o)
 
 # vm (純粋な実行エンジン)
 VM_SRCS     = $(wildcard vm/src/*.c) \
-              $(wildcard vm/src/builtin_functions/*.c) \
+              $(wildcard vm/src/builtin_functions/builtin/*.c) \
               $(wildcard vm/src/builtin_functions/std/*.c) \
               $(wildcard vm/src/builtin_functions/gui/*.c)
 VM_OBJS     = $(VM_SRCS:.c=.o)

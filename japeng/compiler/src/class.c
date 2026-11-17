@@ -146,6 +146,7 @@ void print_class(ClassDef* klass)
 TypeInfo* new_type_info(Symbol* name, int type_arg_count) {
     TypeInfo* t = (TypeInfo*)malloc(sizeof(TypeInfo) + sizeof(TypeInfo*) * type_arg_count);
     t->name = name;
+    t->canonical_id = NULL;
     t->type_arg_count = type_arg_count;
     t->param_count = 0;
     t->min_param_count = 0;
@@ -199,6 +200,7 @@ ClassDef* new_class(Symbol* name, TypeInfo* type,
     ClassDef* klass = (ClassDef*)malloc(sizeof(ClassDef));
     klass->header.type = OBJ_CLASS;
     klass->name = name;
+    klass->canonical_id = NULL;
     klass->type = type;
     klass->is_interface = false;
     klass->superclass = superclass;

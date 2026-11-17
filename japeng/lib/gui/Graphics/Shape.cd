@@ -1,1 +1,47 @@
-interface Shape based Drawable:
+import "gui/Window";
+import "std/Math/Point";
+import "gui/Graphics/Drawable";
+
+class Shape based Object implements Drawable:
+    color: Integer;
+    filled: Boolean;
+
+    init: Function = [
+        arg c: Integer = 16777215, isFilled: Boolean = true;
+        color = c;
+        filled = isFilled;
+    ];
+
+    setColor: Function = [
+        arg c: Integer;
+        color = c;
+    ];
+
+    setFilled: Function = [
+        arg isFilled: Boolean;
+        filled = isFilled;
+    ];
+
+    vertices: Function = [
+        ret List<Point>;
+        return L[];
+    ];
+
+    draw: Function = [
+        arg win: Window;
+        pts: List<Point> = self.vertices;
+        len: Integer = pts.length;
+        if (len < 2) [ return; ];
+
+        if (filled and len >= 3) [
+            win.fillPolygon(pts, color);
+            return;
+        ];
+
+        len.repeat [
+            arg i: Integer;
+            p1: Point = pts[i];
+            p2: Point = pts[(i + 1) % len];
+            win.drawLine(p1.x, p1.y, p2.x, p2.y, color);
+        ];
+    ];

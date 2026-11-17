@@ -37,3 +37,6 @@ class List<Type> based Object:
 
 interface Close:
     close: Function(;);
+
+interface Iterable<Type>:
+    iterator: Function(; Function(; Type, Boolean));

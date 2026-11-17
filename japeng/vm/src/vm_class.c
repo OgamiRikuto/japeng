@@ -8,6 +8,7 @@ ObjClass* vm_new_class(Symbol* name, ObjClass* superclass)
     ObjClass* klass = (ObjClass*)malloc(sizeof(ObjClass));
     klass->header.type = OBJ_CLASS;
     klass->name = name;
+    klass->canonical_id = NULL;
     klass->superclass = superclass;
 
     // 1. 親クラスのフィールドを継承

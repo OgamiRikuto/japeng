@@ -32,17 +32,19 @@ static TypeInfo* read_type_info(FILE* fp, Symbol** pool) {
         return NULL;
     }
 
-    uint32_t name_id;
+    uint32_t name_id, cid_id;
     uint16_t type_arg_count;
     uint8_t  param_count, min_param_count;
 
     fread(&name_id, sizeof(uint32_t), 1, fp);
+    fread(&cid_id, sizeof(uint32_t), 1, fp);
     fread(&type_arg_count, sizeof(uint16_t), 1, fp);
     fread(&param_count, sizeof(uint8_t), 1, fp);
     fread(&min_param_count, sizeof(uint8_t), 1, fp);
 
     Symbol* type_name = pool[name_id];
     TypeInfo* t = new_type_info(type_name, (int)type_arg_count);
+    t->canonical_id = (cid_id != 0xFFFFFFFF) ? pool[cid_id] : NULL;
     t->param_count = (int)param_count;
     t->min_param_count = (int)min_param_count;
 
@@ -63,6 +65,8 @@ static TypeInfo* read_type_info(FILE* fp, Symbol** pool) {
         else if (tag == BCD_VAL_BOOL) { uint8_t val; fread(&val, sizeof(uint8_t), 1, fp); t->default_values[i] = make_bool(val != 0); }
         else if (tag == BCD_VAL_FLOAT) { double val; fread(&val, sizeof(double), 1, fp); t->default_values[i] = make_float(val); }
         else if (tag == BCD_VAL_STRING) { uint32_t sid; fread(&sid, sizeof(uint32_t), 1, fp); t->default_values[i] = make_obj((Obj*)pool[sid]); }
+        else if (tag == BCD_VAL_CLASS_REF || tag == BCD_VAL_BIGINT) { uint32_t dummy; fread(&dummy, sizeof(uint32_t), 1, fp); t->default_values[i] = make_nil(); }
+        else if (tag == BCD_VAL_DECIMAL) { uint32_t d1; int32_t d2; fread(&d1, sizeof(uint32_t), 1, fp); fread(&d2, sizeof(int32_t), 1, fp); t->default_values[i] = make_nil(); }
         else { t->default_values[i] = make_nil(); }
     }
 
@@ -85,6 +89,17 @@ ClassDef* load_class_type_from_bcd(Compiler* c, const char* bcd_path)
         return NULL;
     }
 
+    if (header.version != BCD_VERSION) {
+        fclose(fp);
+        if (strstr(bcd_path, "builtin") != NULL) {
+            Location loc = { bcd_path, 0, 0, 0 };
+            error_at(loc, ERR_BUILTIN_CACHE);
+        } else {
+            report_warning(MSG_CACHE_OUTDATED_RECOMPILE, bcd_path, header.version, BCD_VERSION);
+        }
+        return NULL;
+    }
+    
     // 文字列プールを復元
     uint32_t pool_count = 0;
     Symbol** pool = load_string_pool(fp, &pool_count);
@@ -100,19 +115,33 @@ ClassDef* load_class_type_from_bcd(Compiler* c, const char* bcd_path)
     Symbol* class_name = class_type ? class_type->name : NULL;
     if (!class_name) { free(pool); fclose(fp); return NULL; }
 
-    // ② 親クラス型
+    // ② 親クラス型（canonical_id 経由で親の .bcd も芋づる式に自動ロード）
     TypeInfo* super_type = read_type_info(fp, pool);
-    ClassDef* superclass = super_type ? resolve_class(c, super_type->name) : NULL;
+    ClassDef* superclass = super_type ? resolve_class_from_type(c, super_type) : NULL;
 
     ClassDef* klass = new_class(class_name, class_type, superclass, super_type, 0);
+    klass->canonical_id = class_type->canonical_id;
     klass->is_interface = (is_iface != 0);
+
+    // 先にグローバル台帳へ仮登録（相互参照・再帰ロード防止）
+    if (klass->canonical_id != NULL) {
+        if (c->defined_class == NULL) c->defined_class = new_table(16);
+        table_set(c->defined_class, klass->canonical_id, make_obj((Obj*)klass));
+    }
 
     // 委譲型リストの完全復元
     uint16_t del_count = 0;
     fread(&del_count, sizeof(uint16_t), 1, fp);
-    for (int i = 0; i < del_count; i++) {
-        TypeInfo* dt = read_type_info(fp, pool);
-        (void)dt; // 必要に応じて klass->delegate_types にセット
+    klass->delegate_count = del_count;
+    if (del_count > 0) {
+        klass->delegates      = (ClassDef**)malloc(sizeof(ClassDef*) * del_count);
+        klass->delegate_types = (TypeInfo**)malloc(sizeof(TypeInfo*) * del_count);
+        for (int i = 0; i < del_count; i++) {
+            klass->delegate_types[i] = read_type_info(fp, pool);
+            klass->delegates[i] = klass->delegate_types[i]
+                ? resolve_class_from_type(c, klass->delegate_types[i])
+                : NULL;
+        }
     }
 
     // インターフェースの型復元
@@ -124,9 +153,8 @@ ClassDef* load_class_type_from_bcd(Compiler* c, const char* bcd_path)
         klass->interface_types = (TypeInfo**)malloc(sizeof(TypeInfo*) * iface_cnt);
         for (int i = 0; i < iface_cnt; i++) {
             klass->interface_types[i] = read_type_info(fp, pool);
-            // インターフェースの ClassDef 実体は名前から引いて接続
-            klass->interfaces[i] = klass->interface_types[i] 
-                ? resolve_class(c, klass->interface_types[i]->name) 
+            klass->interfaces[i] = klass->interface_types[i]
+                ? resolve_class_from_type(c, klass->interface_types[i])
                 : NULL;
         }
     }
@@ -194,8 +222,10 @@ ClassDef* load_class_type_from_bcd(Compiler* c, const char* bcd_path)
 
     klass->state = CLASS_STATE_COMPILED;
 
-    if (c->defined_class == NULL) c->defined_class = new_table(16);
-    table_set(c->defined_class, class_name, make_obj((Obj*)klass));
+    if (klass->canonical_id != NULL) {
+        if (c->defined_class == NULL) c->defined_class = new_table(16);
+        table_set(c->defined_class, klass->canonical_id, make_obj((Obj*)klass));
+    }
 
     free(pool);
     fclose(fp);

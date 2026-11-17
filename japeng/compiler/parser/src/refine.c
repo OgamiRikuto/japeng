@@ -75,19 +75,6 @@ static bool is_binary_op_send(const ASTNode* node) {
 // -----------------------------------------------------------------------------
 // 2. 木の回転と優先順位の補正
 // -----------------------------------------------------------------------------
-
-// 単項演算子ノード (!A や ~A) かどうか判定
-static bool is_unary_op_send(const ASTNode* node) {
-    if (!node || node->kind != AST_SEND) return false;
-    if (!node->send.receiver || !node->send.message) return false;
-    // 単項演算子は引数が NULL
-    if (node->send.args != NULL) return false;
-    if (node->send.message->kind != AST_IDENTIFIER) return false;
-
-    Symbol* op = node->send.message->identifier.name;
-    return (op == sym_not || op == sym_bnot);
-}
-
 // 二項演算ノードの木を優先順位に従って回転・組み替えるコア関数
 static ASTNode* rotate_binary_op(ASTNode* node) {
     if (!is_binary_op_send(node)) return node;

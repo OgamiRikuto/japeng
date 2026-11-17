@@ -74,6 +74,8 @@ typedef struct symbol {
     X(Fraction,     "Fraction") \
     X(Close,        "Close") \
     X(close,        "close") \
+    X(Iterable,     "Iterable") \
+    X(iterator,     "iterator") \
     X(Null,         "Null") \
     X(__multi__,    "__multi__") \
     X(Void,         "Void") \

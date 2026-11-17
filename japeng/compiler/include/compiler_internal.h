@@ -3,6 +3,7 @@
 
 #include "compiler.h"
 #include "bcd_writer.h"
+#include "module_loader.h"
 #include "common.h"
 
 #define DEBUG_CHUNK_WRITE 0
@@ -82,6 +83,7 @@ TypeInfo* build_type_info(Compiler* c, ASTNode* node);
 void compile_class_def(Compiler* c, ASTNode* node);
 int count_type_args(ASTNode* node);
 ClassDef* resolve_class(Compiler* c, Symbol* name);
+ClassDef* resolve_class_from_type(Compiler* c, TypeInfo* type);
 ClassDef* resolve_class_from_file(Compiler* c, const char* file_path);
 
 // 型チェック関数
@@ -94,6 +96,7 @@ TypeInfo* compile_expression(Compiler* c, ASTNode* node);
 TypeInfo* substitute_type(TypeInfo* formal, TypeEnv* env) ;
 TypeInfo* resolve_method_call_type(Compiler* c, ASTNode* send_node, TypeInfo* rec_type);
 char* type_to_string(TypeInfo* type);
+TypeInfo* extract_iterable_element_type(Compiler* c, TypeInfo* rec_type);
 
 // モジュール用
 // void compile_import(Compiler* c, ASTNode* node);

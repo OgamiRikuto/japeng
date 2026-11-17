@@ -184,18 +184,33 @@ static void collect_freshness_targets(ASTNode* node, ASTNode** targets, int* tar
     }
 }
 
+static void run_file_imports_only(Compiler* c, ASTNode* node) {
+    if (!node) return;
+    if (node->kind == AST_IMPORT) {
+        compile_import(c, node);
+    } else if (node->kind == AST_STMT) {
+        run_file_imports_only(c, node->stmt.left);
+        run_file_imports_only(c, node->stmt.right);
+    }
+}
+
+static ASTNode* find_file_ast_by_filename(const char* filename) {
+    if (!filename) return NULL;
+    for (int i = 0; i < parsed_cd_count; i++) {
+        if (parsed_cd[i] && parsed_cd[i]->loc.filename &&
+            strcmp(parsed_cd[i]->loc.filename, filename) == 0) {
+            return parsed_cd[i];
+        }
+    }
+    return NULL;
+}
+
 static void prepare_classes(Compiler* c, ASTNode* node, ASTNode** targets, int* target_count) {
     if (!node) return;
 
     if (node->kind == AST_STMT) {
         prepare_classes(c, node->stmt.left, targets, target_count);
         prepare_classes(c, node->stmt.right, targets, target_count);
-        return;
-    }
-
-    if (node->kind == AST_IMPORT) {
-        c->filename = node->loc.filename;
-        compile_import(c, node);
         return;
     }
 
@@ -327,28 +342,30 @@ int main(int argc, char** argv) {
             }
 
             if (target_count > 0) {
-                // スケルトン宣言
+                // 1. スケルトン宣言（プロジェクト内の全クラス名を先に確定）
                 for (int i = 0; i < target_count; i++) {
                     cd_compiler.filename = compile_targets[i]->loc.filename;
-                    // fprintf(stderr, "declare_class_skeleton: %s\n", cd_compiler.filename);
                     declare_class_skeleton(&cd_compiler, compile_targets[i]);
                 }
-                // 関係性解決
+                // 2. 関係性解決（各ファイル固有の import を有効化して解決）
                 for (int i = 0; i < target_count; i++) {
                     cd_compiler.filename = compile_targets[i]->loc.filename;
-                    // fprintf(stderr, "resolve_class_skeleton_relations: %s\n", cd_compiler.filename);
+                    cd_compiler.imported_classes = new_table(8);
+                    run_file_imports_only(&cd_compiler, find_file_ast_by_filename(cd_compiler.filename));
                     resolve_class_skeleton_relations(&cd_compiler, compile_targets[i]);
                 }
-                // シグネチャ先行登録
+                // 3. シグネチャ先行登録
                 for (int i = 0; i < target_count; i++) {
                     cd_compiler.filename = compile_targets[i]->loc.filename;
-                    // fprintf(stderr, "declare_class_signatures: %s\n", cd_compiler.filename);
+                    cd_compiler.imported_classes = new_table(8);
+                    run_file_imports_only(&cd_compiler, find_file_ast_by_filename(cd_compiler.filename));
                     declare_class_signatures(&cd_compiler, compile_targets[i]);
                 }
-                // クラス本体のコンパイル
+                // 4. クラス本体のコンパイル
                 for (int i = 0; i < target_count; i++) {
                     cd_compiler.filename = compile_targets[i]->loc.filename;
-                    // fprintf(stderr, "compile_class_body: %s\n", cd_compiler.filename);
+                    cd_compiler.imported_classes = new_table(8);
+                    run_file_imports_only(&cd_compiler, find_file_ast_by_filename(cd_compiler.filename));
                     compile_class_body(&cd_compiler, compile_targets[i]);
                 }
             }

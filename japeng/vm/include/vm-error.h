@@ -27,6 +27,7 @@ typedef enum {
     ERR_SYS_INVALID_SOURCE_FILE,     // 対象外のソースファイル
     ERR_SYS_TOO_MANY_FILES,          // ファイル数上限超過
     ERR_SYS_NO_TARGET_FILE,          // 対象ファイル未指定
+    MSG_CACHE_OUTDATED_RECOMPILE,
 
     // // --- 構文エラー ---
     // ERR_SYNTAX_GENERIC,
